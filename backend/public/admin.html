@@ -107,6 +107,11 @@
   </div>
   <div id="clients"></div>
 
+  <div class="section" style="margin-top:18px">
+    <h2>Dispositivos sin cliente</h2>
+  </div>
+  <div id="orphans"></div>
+
   <div class="toast" id="toast"></div>
 
   <div class="modal" id="modal">
@@ -256,9 +261,74 @@
     });
   }
 
+  function renderOrphans(list) {
+    var c = document.getElementById('orphans');
+    if (!list.length) {
+      c.innerHTML = '<div class="muted" style="padding:6px 0">Sin dispositivos huérfanos.</div>';
+      return;
+    }
+    c.innerHTML = list.map(function (d) {
+      var dl = daysLeft(d.expiresAt);
+      var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null ? ' (' + dl + ' d)' : '') : (d.status === 'grace' ? 'gracia hasta ' + fmtDate(d.graceUntil) : (d.status === 'expired' ? 'vencida' : 'sin licencia'));
+      var last = d.lastSeen ? new Date(d.lastSeen).toLocaleString('es-DO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+      return '<div class="dev">' +
+        '<div style="flex:1;min-width:140px"><div class="dev-alias">' + d.deviceId + '</div><div class="dev-id">última vez: ' + last + '</div></div>' +
+        '<span class="chip ' + d.status + '">' + d.label + '</span>' +
+        '<span class="exp">' + exp + '</span>' +
+        '<div class="dev-actions">' +
+          (d.status === 'active' || d.status === 'grace'
+            ? '<button class="btn small yellow" onclick="renOrphan(\'' + d.deviceId + '\')">Renovar</button>' +
+              '<button class="btn small red" onclick="blkOrphan(\'' + d.deviceId + '\')">Bloquear</button>'
+            : '<button class="btn small green" onclick="actOrphan(\'' + d.deviceId + '\')">Activar</button>') +
+          '<button class="btn small secondary" onclick="linkOrphan(\'' + d.deviceId + '\')">+ Cliente</button>' +
+          '<button class="btn small secondary" onclick="delOrphan(\'' + d.deviceId + '\')">✕</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function actOrphan(deviceId) { activateDevice(deviceId, function () { loadOrphans(); }); }
+
+  function renOrphan(deviceId) { activateDevice(deviceId, function () { loadOrphans(); }); }
+
+  function blkOrphan(deviceId) {
+    if (!confirm('¿Bloquear este dispositivo?')) return;
+    api('/api/admin/device/' + encodeURIComponent(deviceId) + '/block', { method: 'POST' })
+      .then(function () { toast('Dispositivo bloqueado'); loadOrphans(); }).catch(function (e) { toast(e.message); });
+  }
+
+  function activateDevice(deviceId, done) {
+    var days = prompt('Días de licencia:', '30');
+    if (days === null) return;
+    api('/api/admin/device/' + encodeURIComponent(deviceId) + '/activate', { method: 'POST', body: JSON.stringify({ days: parseInt(days, 10) || 30 }) })
+      .then(function () { toast('Licencia activada'); if (done) done(); loadAll(); }).catch(function (e) { toast(e.message); });
+  }
+
+  function linkOrphan(deviceId) {
+    var name = prompt('Nombre del cliente para vincular ' + deviceId.slice(0, 14) + '…:', '');
+    if (name === null || !name.trim()) return;
+    api('/api/admin/clients', { method: 'POST', body: JSON.stringify({ name: name.trim(), phone: '' }) })
+      .then(function (r) {
+        return api('/api/admin/clients/' + r.client.id + '/devices', { method: 'POST', body: JSON.stringify({ deviceId: deviceId, alias: '' }) });
+      })
+      .then(function () { toast('Cliente creado y dispositivo vinculado'); loadOrphans(); loadAll(); })
+      .catch(function (e) { toast(e.message); });
+  }
+
+  function delOrphan(deviceId) {
+    if (!confirm('¿Eliminar este dispositivo del registro?')) return;
+    api('/api/admin/device/' + encodeURIComponent(deviceId), { method: 'DELETE' })
+      .then(function () { toast('Dispositivo eliminado'); loadOrphans(); loadAll(); }).catch(function (e) { toast(e.message); });
+  }
+
+  function loadOrphans() {
+    api('/api/admin/orphans').then(function (r) { renderOrphans(r.orphans); }).catch(function (e) { toast('Error: ' + e.message); });
+  }
+
   function loadAll() {
     api('/api/admin/summary').then(function (r) { window._summary = r.summary; renderCards(r.summary); }).catch(function (e) { toast('Error: ' + e.message); });
     api('/api/admin/clients').then(function (r) { allClients = r.clients; applyFilter(); }).catch(function (e) { toast('Error: ' + e.message); });
+    loadOrphans();
   }
 
   function q() { return document.getElementById('search').value.trim(); }

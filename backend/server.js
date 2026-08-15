@@ -176,6 +176,36 @@ app.get('/api/admin/clients', (req, res) => {
   res.json({ ok: true, clients: list });
 });
 
+app.get('/api/admin/orphans', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const q = String(req.query.q || '').toLowerCase().trim();
+  const devices = store.allDevices();
+  const clients = store.listClients();
+  const linked = {};
+  clients.forEach((c) => (c.devices || []).forEach((d) => { linked[d.deviceId] = true; }));
+  const lic = store.allLicenses();
+  let orphans = Object.keys(devices).map((deviceId) => {
+    const l = lic[deviceId];
+    const st = licenseStatus(l);
+    return {
+      deviceId,
+      alias: null,
+      status: st,
+      label: licenseLabel(st),
+      expiresAt: l ? l.expiresAt : null,
+      graceUntil: l ? l.graceUntil : null,
+      firstSeen: devices[deviceId].firstSeen,
+      lastSeen: devices[deviceId].lastSeen
+    };
+  }).filter((d) => !linked[d.deviceId]);
+  if (q) {
+    orphans = orphans.filter((d) => (d.deviceId || '').toLowerCase().indexOf(q) > -1);
+  }
+  orphans.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+  res.json({ ok: true, orphans });
+});
+
 app.post('/api/admin/clients', (req, res) => {
   const info = requireAdmin(req, res);
   if (!info) return;
@@ -216,6 +246,39 @@ app.delete('/api/admin/clients/:id/devices/:deviceId', (req, res) => {
   const c = store.removeDeviceFromClient(req.params.id, req.params.deviceId);
   if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
   res.json({ ok: true, client: enrichClient(c) });
+});
+
+app.post('/api/admin/device/:deviceId/activate', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const days = parseInt(req.body.days, 10) || 30;
+  const graceDays = parseInt(req.body.graceDays, 10) || 15;
+  const now = Date.now();
+  const expiresAt = now + days * 86400000;
+  const graceUntil = expiresAt + graceDays * 86400000;
+  const l = {
+    deviceId: req.params.deviceId,
+    issuedAt: now,
+    expiresAt,
+    graceUntil,
+    token: license.signLicense({ v: 1, deviceId: req.params.deviceId, issuedAt: now, expiresAt, graceUntil })
+  };
+  store.setLicense(req.params.deviceId, l);
+  res.json({ ok: true, license: l });
+});
+
+app.post('/api/admin/device/:deviceId/block', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  store.removeLicense(req.params.deviceId);
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/device/:deviceId', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  store.removeDevice(req.params.deviceId);
+  res.json({ ok: true });
 });
 
 app.post('/api/admin/clients/:id/devices/:deviceId/activate', (req, res) => {

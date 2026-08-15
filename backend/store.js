@@ -124,6 +124,30 @@ function licenseCount() {
   return Object.keys(load().licenses).length;
 }
 
+function allDevices() {
+  return load().devices;
+}
+
+function removeDevice(deviceId) {
+  const db = load();
+  const had = !!db.devices[deviceId];
+  delete db.devices[deviceId];
+  delete db.licenses[deviceId];
+  db.clients = (db.clients || []).map((c) => {
+    c.devices = (c.devices || []).filter((d) => d.deviceId !== deviceId);
+    return c;
+  });
+  if (had) {
+    save();
+    if (DATABASE_URL) {
+      pgSet('devices', db.devices).catch(function (e) { console.error('[pg] save devices:', e.message); });
+      pgSet('licenses', db.licenses).catch(function (e) { console.error('[pg] save licenses:', e.message); });
+      pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients:', e.message); });
+    }
+  }
+  return had;
+}
+
 function clientId() {
   return 'cl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
 }
@@ -228,5 +252,7 @@ module.exports = {
   updateClient,
   removeClient,
   addDeviceToClient,
-  removeDeviceFromClient
+  removeDeviceFromClient,
+  allDevices,
+  removeDevice
 };
