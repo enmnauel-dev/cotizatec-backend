@@ -4,8 +4,16 @@ let PRIVATE_KEY = process.env.LICENSE_PRIVATE_KEY || '';
 let PUBLIC_KEY = process.env.LICENSE_PUBLIC_KEY || '';
 
 function setKeys(pub, priv) {
-  if (pub) PUBLIC_KEY = pub;
-  if (priv) PRIVATE_KEY = priv;
+  if (pub) PUBLIC_KEY = normalizePem(pub);
+  if (priv) PRIVATE_KEY = normalizePem(priv);
+}
+
+function normalizePem(pem) {
+  if (!pem) return '';
+  return String(pem)
+    .replace(/^["']|["']$/g, '')
+    .replace(/\\n/g, '\n')
+    .trim();
 }
 
 function loadKeysFromFile() {
@@ -21,9 +29,24 @@ function loadKeysFromFile() {
   }
 }
 
+function tryLoadKeys() {
+  if (PRIVATE_KEY && PUBLIC_KEY) return true;
+  if (loadKeysFromFile()) return true;
+  return false;
+}
+
 function signLicense(payload) {
   const data = JSON.stringify(payload);
-  const sig = crypto.sign(null, Buffer.from(data), PRIVATE_KEY).toString('base64');
+  let sig;
+  try {
+    sig = crypto.sign(null, Buffer.from(data), PRIVATE_KEY).toString('base64');
+  } catch (e) {
+    if (tryLoadKeys()) {
+      sig = crypto.sign(null, Buffer.from(data), PRIVATE_KEY).toString('base64');
+    } else {
+      throw e;
+    }
+  }
   return Buffer.from(JSON.stringify({ d: data, s: sig })).toString('base64');
 }
 
@@ -38,4 +61,4 @@ function verifyLicense(token) {
   }
 }
 
-module.exports = { setKeys, loadKeysFromFile, signLicense, verifyLicense };
+module.exports = { setKeys, loadKeysFromFile, tryLoadKeys, signLicense, verifyLicense };
