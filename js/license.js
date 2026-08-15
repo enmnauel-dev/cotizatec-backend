@@ -105,10 +105,23 @@ var License = (function () {
         persist();
       }
       return null;
+    }).then(function (result) {
+      registerDevice();
+      return result;
     }).catch(function () {
       clearTimeout(timer);
       return null;
     });
+  }
+
+  function registerDevice() {
+    if (typeof fetch === 'undefined' || !state.deviceId) return;
+    var appVersion = (window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform()) || 'web';
+    fetch(SERVER_BASE + '/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: state.deviceId, appVersion: 'cotizatec-' + appVersion, platform: appVersion })
+    }).catch(function () {});
   }
 
   function computeStatus(payload) {
@@ -134,6 +147,42 @@ var License = (function () {
     return { status: 'expired', expiresAt: payload.expiresAt, graceUntil: payload.graceUntil };
   }
 
+  function notificationsPlugin() {
+    return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) || null;
+  }
+
+  var notifDayMs = 86400000;
+
+  function scheduleNotification(id, title, body, at) {
+    var n = notificationsPlugin();
+    if (!n || !n.schedule) return;
+    if (at <= Date.now()) return;
+    n.schedule({
+      notifications: [{
+        id: id,
+        title: title,
+        body: body,
+        schedule: { at: new Date(at) },
+        sound: 'default'
+      }]
+    }).catch(function (e) { console.error('NOTIF_ERR ' + (e && e.message)); });
+  }
+
+  function scheduleAll(payload) {
+    if (!payload || !payload.expiresAt || !payload.graceUntil) return;
+    var now = Date.now();
+    var exp = payload.expiresAt;
+    var grace = payload.graceUntil;
+    if (now >= grace) return;
+
+    scheduleNotification(1, 'CotizaTec', 'Tu suscripción vence en 5 días. Conéctate a internet para renovarla automáticamente.', exp - 5 * notifDayMs);
+    scheduleNotification(2, 'CotizaTec', 'Tu suscripción vence mañana. Conéctate a internet para renovarla y evitar el bloqueo.', exp - 1 * notifDayMs);
+    scheduleNotification(3, 'CotizaTec', 'Tu licencia caducó. Entraste en período de gracia de 15 días. Conéctate para renovar y evitar el bloqueo.', exp);
+    scheduleNotification(4, 'CotizaTec', 'Te quedan 7 días de gracia. Renueva tu suscripción para seguir usando CotizaTec.', grace - 7 * notifDayMs);
+    scheduleNotification(5, 'CotizaTec', 'Te quedan 3 días de gracia. Si no renuevas, la app se bloqueará.', grace - 3 * notifDayMs);
+    scheduleNotification(6, 'CotizaTec', 'ÚLTIMA OPORTUNIDAD: mañana la app se bloqueará si no renuevas tu suscripción.', grace - 1 * notifDayMs);
+  }
+
   function check() {
     ensureDeviceId();
     loadPersisted();
@@ -142,17 +191,20 @@ var License = (function () {
         if (payload) {
           state.loaded = true;
           return checkOnline().then(function (fresh) {
+            scheduleAll(fresh || payload);
             return computeStatus(fresh || payload);
           });
         }
         state.loaded = true;
         return checkOnline().then(function (fresh) {
+          scheduleAll(fresh);
           return computeStatus(fresh);
         });
       });
     }
     state.loaded = true;
     return checkOnline().then(function (fresh) {
+      scheduleAll(fresh);
       return computeStatus(fresh);
     });
   }
@@ -166,5 +218,15 @@ var License = (function () {
     return state.loaded;
   }
 
-  return { check: check, getDeviceId: getDeviceId, isLoaded: isLoaded, verifyToken: verifyToken, parseToken: parseToken };
+  function requestNotificationPermission() {
+    var n = notificationsPlugin();
+    if (!n || !n.requestPermissions) return Promise.resolve(false);
+    return n.requestPermissions().then(function (res) {
+      return !!(res && res.display === 'granted');
+    }).catch(function () {
+      return false;
+    });
+  }
+
+  return { check: check, getDeviceId: getDeviceId, isLoaded: isLoaded, verifyToken: verifyToken, parseToken: parseToken, requestNotificationPermission: requestNotificationPermission };
 })();

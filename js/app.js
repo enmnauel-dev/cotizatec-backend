@@ -1658,6 +1658,7 @@ function settingsView() {
 })();
 
 document.addEventListener('DOMContentLoaded', function () {
+    License.requestNotificationPermission();
     License.check().then(function (st) {
       if (st.status === 'active' || st.status === 'grace') {
         licenseStatus = st;
