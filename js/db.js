@@ -60,6 +60,7 @@ var DB = (function () {
 
   let _localSource = false;
   let _idbPromise = null;
+  let _saveHooks = [];
 
   // ===== Cifrado en reposo (AES-256-GCM) =====
   // Clave maestra (MK) aleatoria de 256 bits. Se guarda en el keystore del
@@ -382,7 +383,7 @@ var DB = (function () {
   // Guardado seguro: respaldo del estado anterior antes de sobreescribir la clave principal.
   function save(skipMirror) {
     state.seq = { client: _seq.client, catalog: _seq.catalog, job: _seq.job, expense: _seq.expense, payment: _seq.payment };
-    if (_encKey) { scheduleEncSave(); return; }
+    if (_encKey) { scheduleEncSave(); notifySave(); return; }
     try {
       const jsonStr = JSON.stringify(state);
       if (!skipMirror) mirrorWrite(jsonStr);
@@ -393,6 +394,17 @@ var DB = (function () {
       localStorage.setItem(TS_KEY, String(Date.now()));
     } catch (e) {
       console.error('CotizaTec: error al guardar en localStorage', e);
+    }
+    notifySave();
+  }
+
+  function onSave(fn) {
+    if (typeof fn === 'function') _saveHooks.push(fn);
+  }
+
+  function notifySave() {
+    for (let i = 0; i < _saveHooks.length; i++) {
+      try { _saveHooks[i](); } catch (e) {}
     }
   }
 
@@ -888,7 +900,8 @@ var DB = (function () {
     buildBackup, parseBackup, applyBackup, backupError,
     startedFromLocal, restoreFromIdb, restoreFromFs, fsFlush, itemType,
     needsUnlock, isEncrypted, isProtected, hasBackupPassword, hasFingerprint, canUnlockByPassword, bioAvailable,
-    unlock, unlockFingerprint, setEncryption, removePassword, disableEncryption, relock, boot
+    unlock, unlockFingerprint, setEncryption, removePassword, disableEncryption, relock, boot,
+    onSave
   });
   return api;
 })();

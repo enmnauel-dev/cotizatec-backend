@@ -1590,11 +1590,15 @@ function settingsView() {
     let html = '<div class="lock-card">' + LOCK_ICON +
       '<b>CotizaTec</b><p class="muted">' + msg + '</p>' +
       '<p class="muted">' + sub + '</p>' +
-      '<div class="license-code">Código de dispositivo:<br><b>' + deviceId + '</b></div>' +
+      '<div class="license-code" id="license-code">Código de dispositivo:<br>cargando…</div>' +
       '<button class="btn primary block" data-action="licenseRetry">' + CHECK_ICON + ' Volver a verificar</button>';
     html += '</div>';
     d.innerHTML = html;
     document.body.appendChild(d);
+    deviceId.then(function (id) {
+      const el = document.getElementById('license-code');
+      if (el) el.innerHTML = 'Código de dispositivo:<br><b>' + id + '</b>';
+    });
   }
 
   function showLockFirst() {
@@ -1664,7 +1668,18 @@ document.addEventListener('DOMContentLoaded', function () {
         licenseStatus = st;
         return DB.boot().then(function (mode) {
           if (mode === 'locked') { UI.showLockFirst(); return; }
-          UI.init();
+          return License.getDeviceId().then(function (deviceId) {
+            if (mode === 'blank') {
+              return Backups.pullFromCloud(deviceId).then(function (restored) {
+                UI.init();
+                if (restored) Util.toast('Datos restaurados desde la nube', true);
+                else Util.toast('No hay datos en la nube para restaurar', false);
+                Backups.pushToCloud(deviceId);
+              });
+            }
+            UI.init();
+            Backups.pushToCloud(deviceId);
+          });
         });
       }
       UI.showLicenseScreen(st);

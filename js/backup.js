@@ -67,7 +67,128 @@ var Backups = (function () {
     location.reload();
   }
 
+  // ===== Respaldo en la nube (cifrado) =====
+  // Los datos se cifran en el dispositivo con AES-GCM antes de subirlos al
+  // servidor, por lo que este solo almacena un blob ilegible. La clave se
+  // deriva del deviceId + secreto embebido (PBKDF2).
+
+  const CLOUD_SECRET = 'cotizatec-cloud-backup-v1';
+  const ENC_ITER = 120000;
+  const CLOUD_BASE = (typeof LICENCE_SERVER_BASE !== 'undefined' && LICENCE_SERVER_BASE) ? LICENCE_SERVER_BASE : 'https://cotizatec-backend.onrender.com';
+
+  function _subtle() {
+    try { return (window.crypto || {}).subtle || null; } catch (e) { return null; }
+  }
+
+  function _b64(buf) {
+    const b = new Uint8Array(buf);
+    let bin = '';
+    for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+    try { return btoa(bin); } catch (e) { return null; }
+  }
+
+  function _unb64(s) {
+    const bin = atob(s);
+    const b = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+    return b;
+  }
+
+  function _cloudKey(deviceId) {
+    const sub = _subtle();
+    if (!sub) return Promise.resolve(null);
+    return sub.importKey('raw', new TextEncoder().encode(CLOUD_SECRET + '::' + deviceId), 'PBKDF2', false, ['deriveKey'])
+      .then(function (mat) {
+        return sub.deriveKey(
+          { name: 'PBKDF2', salt: _unb64('Y290aXphdGVjLWNsb3VkLXNhbHQ='), iterations: ENC_ITER, hash: 'SHA-256' },
+          mat, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+      });
+  }
+
+  function _encryptData(deviceId, jsonStr) {
+    return _cloudKey(deviceId).then(function (key) {
+      if (!key) return null;
+      const iv = new Uint8Array(12);
+      if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(iv);
+      return window.crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(jsonStr))
+        .then(function (ct) {
+          return JSON.stringify({ enc: 'aes-gcm', v: 1, iv: _b64(iv), ct: _b64(ct) });
+        });
+    });
+  }
+
+  function _decryptData(deviceId, envStr) {
+    let env;
+    try { env = JSON.parse(envStr); } catch (e) { return Promise.resolve(null); }
+    if (!env || env.enc !== 'aes-gcm' || !env.iv || !env.ct) return Promise.resolve(null);
+    return _cloudKey(deviceId).then(function (key) {
+      if (!key) return null;
+      return window.crypto.subtle.decrypt({ name: 'AES-GCM', iv: _unb64(env.iv) }, key, _unb64(env.ct))
+        .then(function (buf) { return new TextDecoder().decode(buf); })
+        .catch(function () { return null; });
+    });
+  }
+
+  // Sube el respaldo cifrado al servidor. Devuelve true si se guardó.
+  function pushToCloud(deviceId) {
+    if (typeof fetch === 'undefined') return Promise.resolve(false);
+    const json = DB.buildBackup();
+    if (!json) return Promise.resolve(false);
+    return _encryptData(deviceId, json).then(function (encrypted) {
+      if (!encrypted) return false;
+      return fetch(CLOUD_BASE + '/api/backup/' + encodeURIComponent(deviceId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: encrypted })
+      }).then(function (r) {
+        return r.ok || r.status === 200;
+      }).catch(function () {
+        return false;
+      });
+    }).catch(function () {
+      return false;
+    });
+  }
+
+  // Descarga y restaura el respaldo desde el servidor (solo si no hay datos
+  // locales). Devuelve true si se restauró correctamente.
+  function pullFromCloud(deviceId) {
+    if (typeof fetch === 'undefined') return Promise.resolve(false);
+    return fetch(CLOUD_BASE + '/api/backup/' + encodeURIComponent(deviceId))
+      .then(function (r) { return r.json(); })
+      .then(function (body) {
+        if (!(body && body.ok && body.data)) return false;
+        return _decryptData(deviceId, body.data).then(function (jsonStr) {
+          if (!jsonStr) return false;
+          const d = DB.parseBackup(jsonStr);
+          if (!d) return false;
+          DB.applyBackup(d);
+          Media.recompressExisting();
+          return true;
+        });
+      })
+      .catch(function () {
+        return false;
+      });
+  }
+
   const api = { render: function () {} };
-  Object.assign(api, { exportBackup, importBackupFile, hashVal, doReset });
+  Object.assign(api, { exportBackup, importBackupFile, hashVal, doReset, pushToCloud, pullFromCloud });
+
+  // Auto-respaldo: cada vez que se guardan datos locales, se sube el respaldo
+  // cifrado a la nube (debounce para agrupar cambios consecutivos).
+  let _autoTimer = null;
+  function _autoPush() {
+    if (_autoTimer) clearTimeout(_autoTimer);
+    _autoTimer = setTimeout(function () {
+      if (typeof License === 'undefined' || !License.getDeviceId) return;
+      License.getDeviceId().then(function (deviceId) {
+        if (!deviceId) return;
+        Backups.pushToCloud(deviceId);
+      }).catch(function () {});
+    }, 2500);
+  }
+  if (typeof DB !== 'undefined' && DB.onSave) DB.onSave(_autoPush);
+
   return api;
 })();

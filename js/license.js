@@ -48,10 +48,27 @@ var License = (function () {
   }
 
   function ensureDeviceId() {
-    if (!state.deviceId) {
-      state.deviceId = 'cotizatec-' + randomId(16);
+    if (state.deviceId) return Promise.resolve(state.deviceId);
+    var cap = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Device;
+    var useCap = cap && cap.getId && cap.getId();
+    var set = function (id) {
+      state.deviceId = id;
       persist();
+      return state.deviceId;
+    };
+    if (useCap) {
+      return useCap.then(function (info) {
+        var id = (info && info.identifier) || '';
+        var clean = String(id).replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 20);
+        if (!clean) {
+          clean = randomId(16);
+        }
+        return set('cotizatec-' + clean);
+      }).catch(function () {
+        return set('cotizatec-' + randomId(16));
+      });
     }
+    return Promise.resolve(set('cotizatec-' + randomId(16)));
   }
 
   function parseToken(token) {
@@ -184,34 +201,36 @@ var License = (function () {
   }
 
   function check() {
-    ensureDeviceId();
     loadPersisted();
-    if (state.token) {
-      return verifyToken(state.token).then(function (payload) {
-        if (payload) {
+    return ensureDeviceId().then(function () {
+      if (state.token) {
+        return verifyToken(state.token).then(function (payload) {
+          if (payload) {
+            state.loaded = true;
+            return checkOnline().then(function (fresh) {
+              scheduleAll(fresh || payload);
+              return computeStatus(fresh || payload);
+            });
+          }
           state.loaded = true;
           return checkOnline().then(function (fresh) {
-            scheduleAll(fresh || payload);
-            return computeStatus(fresh || payload);
+            scheduleAll(fresh);
+            return computeStatus(fresh);
           });
-        }
-        state.loaded = true;
-        return checkOnline().then(function (fresh) {
-          scheduleAll(fresh);
-          return computeStatus(fresh);
         });
+      }
+      state.loaded = true;
+      return checkOnline().then(function (fresh) {
+        scheduleAll(fresh);
+        return computeStatus(fresh);
       });
-    }
-    state.loaded = true;
-    return checkOnline().then(function (fresh) {
-      scheduleAll(fresh);
-      return computeStatus(fresh);
     });
   }
 
   function getDeviceId() {
-    ensureDeviceId();
-    return state.deviceId;
+    return ensureDeviceId().then(function () {
+      return state.deviceId;
+    });
   }
 
   function isLoaded() {

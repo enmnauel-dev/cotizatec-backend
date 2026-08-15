@@ -42,6 +42,7 @@ function load() {
   if (!cache.licenses) cache.licenses = {};
   if (!cache.blocked) cache.blocked = {};
   if (!cache.clients) cache.clients = [];
+  if (!cache.backups) cache.backups = {};
   return cache;
 }
 
@@ -107,11 +108,14 @@ async function loadFromPg() {
     const licenses = await pgGet('licenses');
     const clients = await pgGet('clients');
     const blocked = await pgGet('blocked');
+    const backups = await pgGet('backups');
     if (devices) cache.devices = devices;
     if (licenses) cache.licenses = licenses;
     if (clients) cache.clients = clients;
     if (blocked) cache.blocked = blocked;
+    if (backups) cache.backups = backups;
     if (!cache.blocked) cache.blocked = {};
+    if (!cache.backups) cache.backups = {};
   } catch (e) {
     console.error('[pg] load:', e.message);
   }
@@ -150,6 +154,7 @@ function removeDevice(deviceId) {
     c.devices = (c.devices || []).filter((d) => d.deviceId !== deviceId);
     return c;
   });
+  if (db.backups) delete db.backups[deviceId];
   if (had) {
     save();
     if (DATABASE_URL) {
@@ -157,6 +162,7 @@ function removeDevice(deviceId) {
       pgSet('licenses', db.licenses).catch(function (e) { console.error('[pg] save licenses:', e.message); });
       pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients:', e.message); });
       pgSet('blocked', db.blocked).catch(function (e) { console.error('[pg] save blocked:', e.message); });
+      pgSet('backups', db.backups).catch(function (e) { console.error('[pg] save backups:', e.message); });
     }
   }
   return had;
@@ -283,6 +289,25 @@ function removeDeviceFromClient(clientKey, deviceId) {
   return c;
 }
 
+function setBackup(deviceId, data) {
+  const db = load();
+  if (!db.backups) db.backups = {};
+  db.backups[deviceId] = {
+    savedAt: Date.now(),
+    size: String(data || '').length,
+    data: data
+  };
+  save();
+  if (DATABASE_URL) {
+    pgSet('backups', db.backups).catch(function (e) { console.error('[pg] save backups:', e.message); });
+  }
+  return db.backups[deviceId];
+}
+
+function getBackup(deviceId) {
+  return (load().backups || {})[deviceId] || null;
+}
+
 module.exports = {
   init,
   registerDevice,
@@ -304,5 +329,7 @@ module.exports = {
   blockDevice,
   unblockDevice,
   isBlocked,
-  blockedCount
+  blockedCount,
+  setBackup,
+  getBackup
 };

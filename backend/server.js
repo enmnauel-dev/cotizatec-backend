@@ -65,6 +65,29 @@ app.get('/api/device/:deviceId', (req, res) => {
   } : null });
 });
 
+app.post('/api/backup/:deviceId', (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  if (!deviceId || deviceId.length < 8 || deviceId.length > 128) {
+    return res.status(400).json({ error: 'deviceId inválido' });
+  }
+  const data = String(req.body.data || '').trim();
+  if (!data || data.length < 32) {
+    return res.status(400).json({ error: 'Respaldo vacío o inválido' });
+  }
+  if (data.length > 4 * 1024 * 1024) {
+    return res.status(413).json({ error: 'Respaldo demasiado grande' });
+  }
+  store.setBackup(deviceId, data);
+  res.json({ ok: true });
+});
+
+app.get('/api/backup/:deviceId', (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  const b = store.getBackup(deviceId);
+  if (!b) return res.json({ ok: false, status: 'none' });
+  res.json({ ok: true, savedAt: b.savedAt, data: b.data });
+});
+
 app.use('/admin', express.static(path.join(__dirname, 'public')));
 
 app.get('/admin', (req, res) => {
