@@ -32,7 +32,7 @@ function formatDate(ts) {
 
 function isAdmin(chatId) {
   if (!ADMIN_CHAT_ID) return false;
-  const allowed = String(ADMIN_CHAT_ID).replace(/["'\s,;\r\n]+/g, '').split(',').filter(Boolean);
+  const allowed = String(ADMIN_CHAT_ID).replace(/[^0-9,]/g, '').split(',').filter(Boolean);
   return allowed.indexOf(String(chatId)) > -1;
 }
 
