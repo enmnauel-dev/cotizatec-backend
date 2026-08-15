@@ -31,7 +31,9 @@ function formatDate(ts) {
 }
 
 function isAdmin(chatId) {
-  return ADMIN_CHAT_ID ? String(chatId) === String(ADMIN_CHAT_ID) : false;
+  if (!ADMIN_CHAT_ID) return false;
+  const allowed = String(ADMIN_CHAT_ID).replace(/["'\s,;\r\n]+/g, '').split(',').filter(Boolean);
+  return allowed.indexOf(String(chatId)) > -1;
 }
 
 function startBot(token) {
@@ -44,6 +46,7 @@ function startBot(token) {
     const [cmd, arg] = text.split(/\s+/);
 
     if (!isAdmin(chatId)) {
+      console.log('[bot] mensaje NO autorizado de chat ' + chatId + ' (ADMIN_CHAT_ID=' + JSON.stringify(ADMIN_CHAT_ID) + '): ' + text.slice(0, 40));
       if (cmd === '/start' && !ADMIN_CHAT_ID) {
         bot.sendMessage(chatId, '🤖 CotizaTec Admin\n\nTu CHAT ID es: <code>' + chatId + '</code>\n\nConfigúralo en la variable ADMIN_CHAT_ID del servidor para activar los comandos de administración.', { parse_mode: 'HTML' });
         return;
