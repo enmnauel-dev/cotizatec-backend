@@ -12,8 +12,12 @@ function isAdmin(chatId) {
   return getAdminChatIds().indexOf(Number(chatId)) > -1;
 }
 
+function cleanToken() {
+  return String(process.env.TELEGRAM_TOKEN || '').replace(/["'\s,;\r\n]+/g, '');
+}
+
 function validateInitData(initData) {
-  const botToken = process.env.TELEGRAM_TOKEN || '';
+  const botToken = cleanToken();
   if (!initData || !botToken) return null;
   try {
     const params = new URLSearchParams(initData);

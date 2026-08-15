@@ -72,12 +72,20 @@ app.get('/admin', (req, res) => {
 });
 
 function requireAdmin(req, res) {
-  const info = admin.validateInitData(req.query.initData || '');
+  const raw = req.query.initData || '';
+  if (!raw) {
+    console.log('[admin] petición sin initData (' + req.path + ')');
+    res.status(401).json({ error: 'No autorizado. Falta initData de Telegram.' });
+    return null;
+  }
+  const info = admin.validateInitData(raw);
   if (!info) {
+    console.log('[admin] initData inválido: token len=' + String(process.env.TELEGRAM_TOKEN || '').length + ' user=' + raw.slice(0, 60));
     res.status(401).json({ error: 'No autorizado. initData de Telegram inválido.' });
     return null;
   }
   if (!admin.isAdmin(info.user && info.user.id)) {
+    console.log('[admin] usuario no-admin: id=' + (info.user && info.user.id));
     res.status(403).json({ error: 'No autorizado. Tu cuenta de Telegram no es administradora.' });
     return null;
   }
