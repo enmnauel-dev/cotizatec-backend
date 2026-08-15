@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: cotizatec-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: ADMIN_CHAT_ID
+        sync: false
+      - key: LICENSE_PUBLIC_KEY
+        sync: false
+      - key: LICENSE_PRIVATE_KEY
+        sync: false
+      - key: LICENSE_DAYS
+        value: "30"
+      - key: GRACE_DAYS
+        value: "15"
+      - key: DATABASE_URL
+        sync: false
+      - key: PORT
+        value: "10000"

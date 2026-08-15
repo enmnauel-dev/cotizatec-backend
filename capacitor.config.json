@@ -1,0 +1,10 @@
+{
+  "appId": "com.cotizatec.app",
+  "appName": "CotizaTec",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "backgroundColor": "#0b1220",
+  "server": {
+    "androidScheme": "https"
+  }
+}

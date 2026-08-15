@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CotizaTec v2 — Wireframe mejorado</title>
+<style>
+  :root{
+    --bg:#eef1f6; --surface:#ffffff; --ink:#0f172a; --muted:#64748b;
+    --amber:#f59e0b; --amber-d:#b45309; --amber-soft:#fef3c7;
+    --violet:#7c4dff; --violet-soft:#ede9fe;
+    --green:#22c55e; --green-soft:#dcfce7; --red:#ef4444; --red-soft:#fee2e2;
+    --blue:#3b82f6; --blue-soft:#dbeafe; --slate-d:#0b1220;
+    --r:18px; --r-sm:12px; --sh:0 8px 24px rgba(15,23,42,.08), 0 2px 6px rgba(15,23,42,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:'Segoe UI',Roboto,system-ui,-apple-system,sans-serif;background:#1a2030;color:var(--ink);
+    display:flex;justify-content:center;min-height:100vh;padding:14px}
+  .phone{width:400px;max-width:100%;height:860px;max-height:96vh;background:var(--bg);border-radius:34px;
+    box-shadow:0 20px 60px rgba(0,0,0,.45);display:flex;flex-direction:column;overflow:hidden;position:relative;
+    border:8px solid #0d1117}
+  .notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:110px;height:18px;background:#0d1117;border-radius:12px;z-index:60}
+  .crown{padding:34px 18px 0;color:#fff;font-size:12px;font-weight:600;opacity:.85;display:flex;justify-content:space-between}
+  .crown b{color:#fff;font-weight:700}
+  .appbar{background:linear-gradient(150deg,#131c2e,#0b1220 70%);padding:18px 20px 26px;border-radius:0 0 28px 28px}
+  .appbar .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .appbar .brand{display:flex;align-items:center;gap:10px;color:#fff;font-weight:800;font-size:18px}
+  .appbar .brand .logo{width:34px;height:34px;border-radius:10px;background:var(--amber);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;box-shadow:0 4px 12px rgba(245,158,11,.4)}
+  .appbar .avatar{width:34px;height:34px;border-radius:50%;background:var(--violet);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+  .appbar .hi{color:#cbd5e1;font-size:13px}
+  .appbar .title{color:#fff;font-weight:800;font-size:22px;line-height:1.15}
+  .appbar .sub{color:#94a3b8;font-size:13px;margin-top:2px}
+  .appbar .search{margin-top:16px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:14px;display:flex;align-items:center;gap:8px;padding:11px 14px;color:#cbd5e1;font-size:14px}
+  .content{flex:1;overflow-y:auto;padding:16px 16px 90px}
+  .screen{display:none}
+  .screen.on{display:block}
+  /* stats */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .stat{background:var(--surface);border-radius:var(--r);padding:14px;box-shadow:var(--sh)}
+  .stat .lbl{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px}
+  .stat .val{font-size:22px;font-weight:800;margin-top:6px}
+  .stat .delta{font-size:12px;color:var(--green);font-weight:700}
+  .stat .ico{width:30px;height:30px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .sec{display:flex;align-items:center;justify-content:space-between;margin:18px 2px 10px}
+  .sec h3{font-size:16px;font-weight:800}
+  .sec a{font-size:13px;color:var(--amber-d);font-weight:700;text-decoration:none}
+  /* work cards */
+  .wcard{background:var(--surface);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
+  .wcard .r1{display:flex;align-items:center;justify-content:space-between}
+  .wcard .code{font-weight:800;font-size:14px}
+  .wcard .client{font-size:13px;color:var(--muted)}
+  .wcard .moneys{display:flex;gap:16px}
+  .wcard .m{font-size:13px}
+  .wcard .m b{display:block;font-size:15px}
+  .wcard .m .tot{color:var(--ink)}
+  .wcard .m .pend{color:var(--red)}
+  .pill{font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px}
+  .p-cotizado{background:var(--blue-soft);color:var(--blue)}
+  .p-aprobado{background:var(--amber-soft);color:var(--amber-d)}
+  .p-proceso{background:var(--violet-soft);color:var(--violet)}
+  .p-completado{background:var(--green-soft);color:var(--green)}
+  .p-cobrado{background:#f1f5f9;color:var(--muted)}
+  /* clients */
+  .avatar{width:42px;height:42px;border-radius:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:15px}
+  .av-amb{background:linear-gradient(135deg,#f59e0b,#f97316)}
+  .av-vio{background:linear-gradient(135deg,#7c4dff,#a855f7)}
+  .av-gre{background:linear-gradient(135deg,#22c55e,#14b8a6)}
+  .av-blu{background:linear-gradient(135deg,#3b82f6,#6366f1)}
+  .lrow{background:var(--surface);border-radius:var(--r);box-shadow:var(--sh);padding:12px;display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .lrow .inf{flex:1;min-width:0}
+  .lrow .inf b{font-size:15px;display:block}
+  .lrow .inf span{font-size:13px;color:var(--muted);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lrow .chev{color:#cbd5e1;font-weight:800}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--muted);background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:6px 12px}
+  .chip.on{background:var(--slate-d);color:#fff;border-color:var(--slate-d)}
+  .chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+  .h-search{background:#fff;border:1px solid #e2e8f0;border-radius:14px;display:flex;align-items:center;gap:8px;padding:11px 14px;font-size:14px;color:var(--muted);margin-bottom:14px;box-shadow:var(--sh)}
+  /* catalog */
+  .citem{display:flex;align-items:center;gap:12px;background:var(--surface);border-radius:var(--r);box-shadow:var(--sh);padding:12px;margin-bottom:10px}
+  .citem .ty{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px}
+  .citem .inf{flex:1}
+  .citem .inf b{display:block;font-size:14px}
+  .citem .inf span{font-size:12px;color:var(--muted);font-weight:600}
+  .citem .price{font-weight:800;font-size:15px;color:var(--amber-d)}
+  /* quote editor */
+  .qclient{background:var(--slate-d);border-radius:var(--r);color:#fff;padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .qclient .sel{flex:1;background:rgba(255,255,255,.1);border-radius:12px;padding:11px 14px;color:#cbd5e1;font-size:14px;display:flex;align-items:center;justify-content:space-between}
+  .qitem{background:var(--surface);border-radius:var(--r-sm);box-shadow:var(--sh);padding:12px;margin-bottom:10px}
+  .qitem .q1{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .qitem .q1 input{border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px;font-size:13px;width:64px;text-align:center;font-weight:700}
+  .qitem .d{font-size:14px;font-weight:600;flex:1}
+  .qitem .q2{display:flex;align-items:center;gap:8px;margin-top:8px}
+  .qitem .q2 input{flex:1;border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px;font-size:13px;color:var(--muted)}
+  .qitem .st{color:var(--amber-d);font-weight:800;font-size:13px}
+  .addline{display:flex;align-items:center;justify-content:center;gap:8px;border:2px dashed #cbd5e1;border-radius:var(--r-sm);padding:13px;color:var(--muted);font-weight:700;font-size:14px}
+  .totals{background:#fff;border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-top:14px}
+  .totals .row{display:flex;justify-content:space-between;font-size:14px;padding:5px 0;color:var(--muted)}
+  .totals .row.g{font-size:18px;font-weight:800;color:var(--ink);border-top:1px dashed #e2e8f0;margin-top:8px;padding-top:10px}
+  .totals .row.g span:last-child{color:var(--amber-d)}
+  .disc{display:flex;align-items:center;gap:8px;margin:10px 0 4px;font-size:13px;color:var(--muted)}
+  .disc input{border:1px solid #e2e8f0;border-radius:10px;padding:7px 10px;width:110px;text-align:right;font-weight:700;color:var(--ink)}
+  /* detail job */
+  .stepper{display:flex;align-items:flex-start;justify-content:space-between;background:var(--surface);border-radius:var(--r);box-shadow:var(--sh);padding:16px;margin-bottom:14px}
+  .step{flex:1;text-align:center;position:relative}
+  .step:before{content:'';position:absolute;top:14px;left:-50%;width:100%;height:3px;background:#e2e8f0;z-index:0}
+  .step:first-child:before{display:none}
+  .step .dot{width:28px;height:28px;border-radius:50%;background:#f1f5f9;border:2px solid #e2e8f0;margin:0 auto 6px;z-index:1;position:relative;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#94a3b8}
+  .step.done .dot{background:var(--green);border-color:var(--green);color:#fff}
+  .step.done:before{background:var(--green)}
+  .step.cur .dot{background:var(--amber);border-color:var(--amber);color:#fff;box-shadow:0 0 0 5px var(--amber-soft)}
+  .step .lb{font-size:9px;font-weight:700;color:var(--muted)}
+  .step.done .lb,.step.cur .lb{color:var(--ink)}
+  .moneyc{background:linear-gradient(140deg,#7c4dff,#6366f1);border-radius:var(--r);color:#fff;padding:16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;box-shadow:0 12px 28px rgba(124,77,255,.35)}
+  .moneyc .lbl{font-size:12px;opacity:.85}
+  .moneyc .val{font-size:26px;font-weight:800}
+  .moneyc .chipsm{background:rgba(255,255,255,.2);border-radius:10px;padding:8px 12px;text-align:center}
+  .moneyc .chipsm b{display:block;font-size:16px}
+  .moneyc .chipsm span{font-size:10px;opacity:.85}
+  .do{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .do button{border:none;border-radius:14px;padding:13px;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+  .do .w{background:var(--green);color:#fff}
+  .do .p{background:var(--violet);color:#fff}
+  .entry{background:var(--surface);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px}
+  .entry h4{font-size:14px;font-weight:800;margin-bottom:8px;display:flex;justify-content:space-between}
+  .entry h4 span{font-size:12px;color:var(--muted);font-weight:600}
+  .field{display:flex;gap:8px}
+  .field input{border:1px solid #e2e8f0;border-radius:12px;padding:11px;font-size:14px}
+  .field input[type=text]{flex:1}
+  .field .add{border:none;border-radius:12px;background:var(--amber);color:#fff;font-weight:800;padding:0 16px;cursor:pointer}
+  .mini{display:flex;justify-content:space-between;font-size:13.5px;padding:8px 0;border-bottom:1px solid #f1f5f9}
+  .mini:last-child{border:none}
+  .mini .amt{font-weight:800;color:var(--green)}
+  /* settings */
+  .sgroup{background:var(--surface);border-radius:var(--r);box-shadow:var(--sh);padding:6px 14px;margin-bottom:12px}
+  .srow{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:14px;font-weight:600}
+  .srow:last-child{border:none}
+  .srow .sw{width:44px;height:26px;border-radius:999px;background:var(--green);position:relative}
+  .srow .sw:after{content:'';position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:#fff}
+  /* buttons */
+  .fab{position:absolute;bottom:64px;right:20px;z-index:50;background:linear-gradient(135deg,var(--amber),#f97316);color:#fff;border:none;width:58px;height:58px;border-radius:20px;font-size:26px;font-weight:800;box-shadow:0 12px 28px rgba(245,158,11,.5);cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .btn-primary{display:block;width:100%;border:none;background:linear-gradient(135deg,var(--amber),#f97316);color:#fff;font-weight:800;font-size:15px;border-radius:14px;padding:14px;margin-top:14px;cursor:pointer;box-shadow:0 8px 20px rgba(245,158,11,.4)}
+  /* bottom nav */
+  .bnav{position:absolute;bottom:0;left:0;right:0;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-top:1px solid #eef1f6;display:flex;justify-content:space-around;padding:8px 4px 12px;z-index:50}
+  .bnav button{border:none;background:none;flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer}
+  .bnav button.on{color:var(--amber-d)}
+  .bnav button .ic{font-size:20px;padding:6px 14px;border-radius:12px}
+  .bnav button.on .ic{background:var(--amber-soft)}
+  .banner{position:absolute;top:14px;right:14px;left:auto;background:var(--violet);color:#fff;font-size:11px;font-weight:800;padding:6px 12px;border-radius:999px;z-index:70;box-shadow:0 6px 16px rgba(124,77,255,.4)}
+  .note{font-size:12px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.5}
+  .note b{color:var(--amber-d)}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="banner">WIREFRAME v2 · CotizaTec</div>
+
+  <!-- ============ INICIO ============ -->
+  <section class="screen on" id="sc-inicio">
+    <div class="appbar">
+      <div class="crown"><span>miércoles, 12 ago</span><span>RD$ <b>1,250.00</b></span></div>
+      <div class="top">
+        <div class="brand"><span class="logo">&#9873;</span> CotizaTec</div>
+        <div class="avatar">JR</div>
+      </div>
+      <div class="title">¡Hola, Juan! 👋</div>
+      <div class="sub">Resumen de tu taller hoy</div>
+      <div class="search">&#128269;&nbsp; Buscar trabajo, cliente…</div>
+    </div>
+    <div class="content">
+      <div class="grid2">
+        <div class="stat"><div class="lbl"><span class="ico" style="background:var(--amber-soft)">📋</span> Cotizaciones</div><div class="val">12</div><div class="delta">▲ 3 esta semana</div></div>
+        <div class="stat"><div class="lbl"><span class="ico" style="background:var(--green-soft)">✓</span> Cobrado</div><div class="val">RD$ 8,400</div><div class="delta">▲ 12%</div></div>
+        <div class="stat"><div class="lbl"><span class="ico" style="background:var(--red-soft)">⏳</span> Por cobrar</div><div class="val">RD$ 3,250</div><div class="delta" style="color:var(--red)">▼ 4 pendientes</div></div>
+        <div class="stat"><div class="lbl"><span class="ico" style="background:var(--violet-soft)">Σ</span> Margen</div><div class="val">RD$ 5,150</div><div class="delta">▲ 58%</div></div>
+      </div>
+      <div class="sec"><h3>Últimos trabajos</h3><a href="#" onclick="go('sc-trabajos')">Ver todos →</a></div>
+      <div class="wcard" onclick="go('sc-detalle')">
+        <div class="r1"><span class="code">COT-0004 · Reparar lavadora</span><span class="pill p-aprobado">Aprobado</span></div>
+        <div class="client">María Gómez · 809-555-0142</div>
+        <div class="moneys"><div class="m tot">Total <b>RD$ 7,250</b></div><div class="m pend">Saldo <b>RD$ 2,250</b></div></div>
+      </div>
+      <div class="wcard" onclick="go('sc-detalle')">
+        <div class="r1"><span class="code">COT-0003 · Instalar nevera</span><span class="pill p-proceso">En proceso</span></div>
+        <div class="client">Carlos Peña · 829-555-0912</div>
+        <div class="moneys"><div class="m tot">Total <b>RD$ 4,900</b></div><div class="m pend">Saldo <b>RD$ 1,900</b></div></div>
+      </div>
+      <div class="wcard" onclick="go('sc-detalle')">
+        <div class="r1"><span class="code">COT-0002 · Mantenimiento AC</span><span class="pill p-cobrado">Cobrado</span></div>
+        <div class="client">Luisa Frías · 809-555-0777</div>
+        <div class="moneys"><div class="m tot">Total <b>RD$ 2,300</b></div><div class="m pend" style="color:var(--green)">Pagado ✓</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLIENTES ============ -->
+  <section class="screen" id="sc-clientes">
+    <div class="appbar">
+      <div class="top" style="margin-bottom:0">
+        <div class="brand"><span class="logo" style="background:var(--violet)">👤</span> Clientes</div>
+        <div class="avatar">+</div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="h-search">&#128269;&nbsp; Buscar cliente…</div>
+      <div class="chips"><span class="chip on">Todos</span><span class="chip">Recientes</span><span class="chip">Con trabajo activo</span></div>
+      <div class="lrow">
+        <div class="avatar av-amb">MG</div>
+        <div class="inf"><b>María Gómez</b><span>809-555-0142 · 2 trabajos</span></div>
+        <span class="chev">›</span>
+      </div>
+      <div class="lrow">
+        <div class="avatar av-vio">CP</div>
+        <div class="inf"><b>Carlos Peña</b><span>829-555-0912 · 1 trabajo</span></div>
+        <span class="chev">›</span>
+      </div>
+      <div class="lrow">
+        <div class="avatar av-gre">LF</div>
+        <div class="inf"><b>Luisa Frías</b><span>809-555-0777 · 3 trabajos</span></div>
+        <span class="chev">›</span>
+      </div>
+      <div class="lrow">
+        <div class="avatar av-blu">RD</div>
+        <div class="inf"><b>Ramón Disla</b><span>809-555-0311 · 0 trabajos</span></div>
+        <span class="chev">›</span>
+      </div>
+      <div class="note">Pulsa <b>+</b> en la esquina para <b>registrar un cliente nuevo</b> (nombre, teléfono, dirección).</div>
+    </div>
+  </section>
+
+  <!-- ============ COTIZAR ============ -->
+  <section class="screen" id="sc-cotizar">
+    <div class="appbar">
+      <div class="top" style="margin-bottom:0">
+        <div class="brand"><span class="logo">📄</span> Nueva cotización</div>
+        <div class="chip" style="background:var(--amber-soft);color:var(--amber-d)">COT-0005</div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="qclient">
+        <div class="sel" onclick="go('sc-clientes')">Seleccionar cliente <span>▾</span></div>
+      </div>
+      <div class="sec" style="margin-top:6px"><h3>Conceptos</h3><a href="#" onclick="go('sc-catalogo')">+ Añadir del catálogo</a></div>
+      <div class="qitem">
+        <div class="q1"><input value="2"><div class="d">Mano de obra: cambiar compresor</div></div>
+        <div class="q2"><input readonly value="Mano de obra de reparación de compresor 1.5 HP"></div>
+        <div class="st" style="margin-top:6px;text-align:right">RD$ 1,500.00 × 2</div>
+      </div>
+      <div class="qitem">
+        <div class="q1"><input value="1"><div class="d">Compresor 1.5 HP R-22</div></div>
+        <div class="q2"><input readonly value="Compresor herméticos 1.5 HP refrigeración"></div>
+        <div class="st" style="margin-top:6px;text-align:right">RD$ 3,500.00 × 1</div>
+      </div>
+      <div class="addline">＋ Agregar línea</div>
+      <div class="disc">Descuento&nbsp;<input value="0" placeholder="0.00" readonly></div>
+      <div class="totals">
+        <div class="row"><span>Subtotal</span><span>RD$ 6,500.00</span></div>
+        <div class="row"><span>Descuento</span><span>RD$ 0.00</span></div>
+        <div class="row"><span>ITBIS (18%)</span><span>RD$ 1,170.00</span></div>
+        <div class="row g"><span>Total</span><span>RD$ 7,670.00</span></div>
+      </div>
+      <button class="btn-primary">Guardar cotización</button>
+      <div class="note">Al guardar verás ✉ PDF y 💬 WhatsApp listos para enviar al cliente.</div>
+    </div>
+  </section>
+
+  <!-- ============ CATALOGO ============ -->
+  <section class="screen" id="sc-catalogo">
+    <div class="appbar">
+      <div class="top" style="margin-bottom:0">
+        <div class="brand"><span class="logo" style="background:var(--violet)">🛠</span> Catálogo</div>
+        <div class="avatar">+</div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="h-search">&#128269;&nbsp; Buscar ítem…</div>
+      <div class="chips"><span class="chip on">Todos</span><span class="chip">Repuestos</span><span class="chip">Mano de obra</span></div>
+      <div class="citem"><div class="ty" style="background:var(--amber-soft)">🛒</div><div class="inf"><b>Compresor 1.5 HP R-22</b><span>REP · Refrigeración</span></div><div class="price">RD$ 3,500</div></div>
+      <div class="citem"><div class="ty" style="background:var(--green-soft)">🛒</div><div class="inf"><b>Termostato digital</b><span>REP · Control</span></div><div class="price">RD$ 850</div></div>
+      <div class="citem"><div class="ty" style="background:var(--blue-soft)">🧰</div><div class="inf"><b>Mano de obra: instalación</b><span>MO · Servicio</span></div><div class="price">RD$ 1,200</div></div>
+      <div class="citem"><div class="ty" style="background:var(--violet-soft)">🧰</div><div class="inf"><b>Mano de obra: cambio de motor</b><span>MO · Servicio</span></div><div class="price">RD$ 2,500</div></div>
+      <div class="note">Toca un ítem para <b>insertarlo en la cotización</b> con su precio.</div>
+    </div>
+  </section>
+
+  <!-- ============ TRABAJOS ============ -->
+  <section class="screen" id="sc-trabajos">
+    <div class="appbar">
+      <div class="top" style="margin-bottom:0">
+        <div class="brand"><span class="logo" style="background:var(--green)">📋</span> Trabajos</div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="chips"><span class="chip on">Todos</span><span class="chip">Cotizado</span><span class="chip">Aprobado</span><span class="chip">En proceso</span><span class="chip">Cobrado</span></div>
+      <div class="wcard" onclick="go('sc-detalle')">
+        <div class="r1"><span class="code">COT-0004 · Reparar lavadora</span><span class="pill p-aprobado">Aprobado</span></div>
+        <div class="client">María Gómez · 809-555-0142</div>
+        <div class="moneys"><div class="m tot">Total <b>RD$ 7,250</b></div><div class="m pend">Saldo <b>RD$ 2,250</b></div></div>
+      </div>
+      <div class="wcard" onclick="go('sc-detalle')">
+        <div class="r1"><span class="code">COT-0003 · Instalar nevera</span><span class="pill p-proceso">En proceso</span></div>
+        <div class="client">Carlos Peña · 829-555-0912</div>
+        <div class="moneys"><div class="m tot">Total <b>RD$ 4,900</b></div><div class="m pend">Saldo <b>RD$ 1,900</b></div></div>
+      </div>
+      <div class="wcard" onclick="go('sc-detalle')">
+        <div class="r1"><span class="code">COT-0001 · Aire acondicionado</span><span class="pill p-cotizado">Cotizado</span></div>
+        <div class="client">José Abreu · 809-555-0233</div>
+        <div class="moneys"><div class="m tot">Total <b>RD$ 1,890</b></div><div class="m pend">Saldo <b>RD$ 1,890</b></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DETALLE ============ -->
+  <section class="screen" id="sc-detalle">
+    <div class="appbar">
+      <div class="top" style="margin-bottom:0">
+        <div class="brand"><span class="logo" style="background:var(--amber)">🗂</span> COT-0004</div>
+        <div class="chip" style="background:var(--amber-soft);color:var(--amber-d)">María Gómez</div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="stepper">
+        <div class="step done"><div class="dot">✓</div><div class="lb">Cotizado</div></div>
+        <div class="step done"><div class="dot">✓</div><div class="lb">Aprobado</div></div>
+        <div class="step cur"><div class="dot">3</div><div class="lb">En proceso</div></div>
+        <div class="step"><div class="dot">4</div><div class="lb">Completado</div></div>
+        <div class="step"><div class="dot">✓</div><div class="lb">Cobrado</div></div>
+      </div>
+      <div class="moneyc">
+        <div><div class="lbl">Total cotización</div><div class="val">RD$ 7,250</div><div class="lbl" style="margin-top:4px">Saldo por cobrar</div></div>
+        <div class="chipsm"><b>RD$ 2,250</b><span>pagado 5,000</span></div>
+      </div>
+      <div class="do">
+        <button class="w" onclick="go('sc-cotizar')">✉ PDF</button>
+        <button class="p">💬 WhatsApp</button>
+      </div>
+      <div class="entry">
+        <h4>✔ Pagos recibidos <span>total RD$ 5,000</span></h4>
+        <div class="field"><input type="text" placeholder="Nota (anticipo, final…)"><input type="text" placeholder="RD$ 0" style="width:96px"><button class="add">＋</button></div>
+        <div style="margin-top:10px"><div class="mini"><span>Anticipo · 12 ago</span><span class="amt">RD$ 5,000</span></div></div>
+      </div>
+      <div class="entry">
+        <h4>💸 Gastos <span>total RD$ 950</span></h4>
+        <div class="field"><input type="text" placeholder="Gas refrigerante, repuesto…"><input type="text" placeholder="RD$ 0" style="width:96px"><button class="add">＋</button></div>
+        <div style="margin-top:10px"><div class="mini"><span>Gas refrigerante · 12 ago</span><span class="amt">RD$ 950</span></div></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn-primary" style="flex:1;background:linear-gradient(135deg,var(--green),#16a34a);box-shadow:0 8px 20px rgba(34,197,94,.4)">Marcar completado</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ AJUSTES ============ -->
+  <section class="screen" id="sc-ajustes">
+    <div class="appbar">
+      <div class="top" style="margin-bottom:0">
+        <div class="brand"><span class="logo" style="background:var(--amber)">⚙️</span> Ajustes</div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="sgroup">
+        <div class="srow">Nombre del negocio <b style="font-weight:600;color:var(--muted)">Mi Taller</b></div>
+        <div class="srow">Teléfono / WhatsApp <b style="font-weight:600;color:var(--muted)">809-555-0100</b></div>
+        <div class="srow">Prefijo de cotización <b style="font-weight:600;color:var(--muted)">COT</b></div>
+      </div>
+      <div class="sgroup">
+        <div class="srow">ITBIS aplicado <b style="font-weight:600;color:var(--muted)">18%</b></div>
+        <div class="srow">Validez (días) <b style="font-weight:600;color:var(--muted)">15</b></div>
+      </div>
+      <div class="sgroup">
+        <div class="srow">Marca de agua en PDF <span class="sw"></span></div>
+        <div class="srow">Modo oscuro / batería <span class="sw" style="background:#cbd5e1"></span></div>
+      </div>
+      <div class="sgroup">
+        <div class="srow" style="color:var(--red);font-weight:700">Restablecer todos los datos</div>
+      </div>
+      <div class="note">Los datos se guardan <b>en tu teléfono</b> (funciona sin internet). En PDF aparece tu nombre, teléfono y marca de agua.</div>
+    </div>
+  </section>
+
+  <!-- FAB (nueva cotización) -->
+  <button class="fab" onclick="go('sc-cotizar')">+</button>
+
+  <!-- Bottom nav -->
+  <nav class="bnav">
+    <button class="on" data-tab="sc-inicio" onclick="nav(this,'sc-inicio')"><span class="ic">🏠</span>Inicio</button>
+    <button data-tab="sc-clientes" onclick="nav(this,'sc-clientes')"><span class="ic">👤</span>Clientes</button>
+    <button data-tab="sc-catalogo" onclick="nav(this,'sc-catalogo')"><span class="ic">🛠</span>Catálogo</button>
+    <button data-tab="sc-trabajos" onclick="nav(this,'sc-trabajos')"><span class="ic">📋</span>Trabajos</button>
+    <button data-tab="sc-ajustes" onclick="nav(this,'sc-ajustes')"><span class="ic">⚙️</span>Ajustes</button>
+  </nav>
+</div>
+
+<script>
+  var fabVisible = true;
+  function nav(el, id) {
+    document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('on'); });
+    document.getElementById(id).classList.add('on');
+    document.querySelectorAll('.bnav button').forEach(function (b) { b.classList.remove('on'); });
+    el.classList.add('on');
+    var fab = document.querySelector('.fab');
+    fab.style.display = (id === 'sc-cotizar' || fabVisible) ? 'flex' : 'flex';
+    if (id === 'sc-cotizar') { fab.style.display = 'none'; }
+  }
+  function go(id) {
+    var b = document.querySelector('.bnav button[data-tab="' + id + '"]');
+    if (b) { nav(b, id); }
+    else {
+      document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('on'); });
+      document.getElementById(id).classList.add('on');
+      document.querySelectorAll('.bnav button').forEach(function (x) { x.classList.remove('on'); });
+    }
+  }
+</script>
+</body>
+</html>
