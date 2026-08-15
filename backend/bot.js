@@ -1,6 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const store = require('./store');
 const { signLicense } = require('./license');
+const { isAdmin } = require('./admin');
 
 let ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || '';
 const LICENSE_DAYS = parseInt(process.env.LICENSE_DAYS || '30', 10);
@@ -30,12 +31,6 @@ function formatDate(ts) {
   return new Date(ts).toLocaleString('es-DO', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-function isAdmin(chatId) {
-  if (!ADMIN_CHAT_ID) return false;
-  const allowed = String(ADMIN_CHAT_ID).replace(/[^0-9,]/g, '').split(',').filter(Boolean);
-  return allowed.indexOf(String(chatId)) > -1;
-}
-
 function startBot(token) {
   const clean = String(token || '').replace(/["'\s,;\r\n]+/g, '');
   const bot = new TelegramBot(clean, { polling: true });
@@ -59,6 +54,7 @@ function startBot(token) {
       bot.sendMessage(chatId, [
         '🤖 CotizaTec Admin',
         '',
+        '/dashboard — abrir panel de administración',
         '/usuarios — usuarios registrados y licencias activas',
         '/activar <deviceId> [días] — activar licencia (por defecto ' + LICENSE_DAYS + ' días)',
         '/renovar <deviceId> [días] — renovar/ampliar licencia',
@@ -67,6 +63,16 @@ function startBot(token) {
         '/avisar <deviceId> — enviar aviso de pago al cliente',
         ''
       ].join('\n'));
+      return;
+    }
+
+    if (cmd === '/dashboard') {
+      const webAppUrl = (process.env.WEB_APP_URL || 'https://cotizatec-backend.onrender.com/admin');
+      bot.sendMessage(chatId, '📊 Panel de administración CotizaTec', {
+        reply_markup: {
+          inline_keyboard: [[{ text: '📊 Abrir Dashboard', web_app: { url: webAppUrl } }]]
+        }
+      });
       return;
     }
 

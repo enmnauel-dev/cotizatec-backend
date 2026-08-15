@@ -36,7 +36,7 @@ function load() {
   try {
     cache = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
   } catch (e) {
-    cache = { devices: {}, licenses: {} };
+    cache = { devices: {}, licenses: {}, clients: [] };
   }
   return cache;
 }
@@ -101,8 +101,10 @@ async function loadFromPg() {
   try {
     const devices = await pgGet('devices');
     const licenses = await pgGet('licenses');
+    const clients = await pgGet('clients');
     if (devices) cache.devices = devices;
     if (licenses) cache.licenses = licenses;
+    if (clients) cache.clients = clients;
   } catch (e) {
     console.error('[pg] load:', e.message);
   }
@@ -122,6 +124,95 @@ function licenseCount() {
   return Object.keys(load().licenses).length;
 }
 
+function clientId() {
+  return 'cl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+}
+
+function listClients() {
+  return load().clients || [];
+}
+
+function getClient(clientKey) {
+  const db = load();
+  if (!db.clients) return null;
+  return db.clients.find((c) => c.id === clientKey) || null;
+}
+
+function createClient(data) {
+  const db = load();
+  if (!db.clients) db.clients = [];
+  const client = {
+    id: clientId(),
+    name: String(data.name || '').trim(),
+    phone: String(data.phone || '').trim(),
+    createdAt: Date.now(),
+    devices: []
+  };
+  db.clients.push(client);
+  save();
+  if (DATABASE_URL) {
+    pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients:', e.message); });
+  }
+  return client;
+}
+
+function updateClient(clientKey, patch) {
+  const db = load();
+  const c = getClient(clientKey);
+  if (!c) return null;
+  if (typeof patch.name === 'string') c.name = patch.name.trim();
+  if (typeof patch.phone === 'string') c.phone = patch.phone.trim();
+  save();
+  if (DATABASE_URL) {
+    pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients:', e.message); });
+  }
+  return c;
+}
+
+function removeClient(clientKey) {
+  const db = load();
+  if (!db.clients) return false;
+  const before = db.clients.length;
+  db.clients = db.clients.filter((c) => c.id !== clientKey);
+  save();
+  if (DATABASE_URL) {
+    pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients:', e.message); });
+  }
+  return db.clients.length !== before;
+}
+
+function addDeviceToClient(clientKey, deviceId, alias) {
+  const db = load();
+  const c = getClient(clientKey);
+  if (!c) return null;
+  const clean = String(deviceId || '').trim();
+  if (!clean) return null;
+  const existing = c.devices.find((d) => d.deviceId === clean);
+  if (existing) {
+    if (alias) existing.alias = String(alias).trim();
+    save();
+    return c;
+  }
+  c.devices.push({ deviceId: clean, alias: String(alias || '').trim() || null });
+  save();
+  if (DATABASE_URL) {
+    pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients:', e.message); });
+  }
+  return c;
+}
+
+function removeDeviceFromClient(clientKey, deviceId) {
+  const db = load();
+  const c = getClient(clientKey);
+  if (!c) return null;
+  c.devices = c.devices.filter((d) => d.deviceId !== deviceId);
+  save();
+  if (DATABASE_URL) {
+    pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients:', e.message); });
+  }
+  return c;
+}
+
 module.exports = {
   init,
   registerDevice,
@@ -130,5 +221,12 @@ module.exports = {
   removeLicense,
   allLicenses,
   deviceCount,
-  licenseCount
+  licenseCount,
+  listClients,
+  getClient,
+  createClient,
+  updateClient,
+  removeClient,
+  addDeviceToClient,
+  removeDeviceFromClient
 };

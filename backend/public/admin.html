@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>CotizaTec Admin</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f172a; --card: #1e293b; --line: #334155; --text: #e2e8f0;
+    --muted: #94a3b8; --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+    --blue: #3b82f6; --radius: 12px;
+  }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    padding: 16px; min-height: 100vh; font-size: 14px;
+  }
+  .topbar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .topbar h1 { font-size: 17px; font-weight: 700; }
+  .badge { background: var(--blue); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+  .search {
+    flex: 1; min-width: 180px; background: var(--card); border: 1px solid var(--line);
+    color: var(--text); padding: 9px 12px; border-radius: 10px; font-size: 14px; outline: none;
+  }
+  .search:focus { border-color: var(--blue); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+  .card .num { font-size: 24px; font-weight: 800; }
+  .card .lab { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .card .num.green { color: var(--green); }
+  .card .num.yellow { color: var(--yellow); }
+  .card .num.red { color: var(--red); }
+  .card .num.blue { color: var(--blue); }
+  .section { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .section h2 { font-size: 15px; }
+  .btn {
+    background: var(--blue); color: #fff; border: none; border-radius: 10px;
+    padding: 8px 14px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  .btn.secondary { background: var(--card); border: 1px solid var(--line); color: var(--text); }
+  .btn.small { padding: 5px 10px; font-size: 12px; border-radius: 8px; }
+  .btn.green { background: var(--green); }
+  .btn.red { background: var(--red); }
+  .btn.yellow { background: var(--yellow); color: #0f172a; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .client {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 12px; margin-bottom: 10px;
+  }
+  .client-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .client-name { font-weight: 700; font-size: 15px; }
+  .client-phone { color: var(--muted); font-size: 12px; }
+  .client-body { margin-top: 10px; }
+  .dev {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 10px; margin-bottom: 6px; flex-wrap: wrap;
+  }
+  .dev-id { font-family: monospace; font-size: 12px; color: var(--muted); word-break: break-all; }
+  .dev-alias { font-size: 13px; font-weight: 600; }
+  .chip { font-size: 11px; padding: 3px 8px; border-radius: 999px; font-weight: 700; }
+  .chip.active { background: rgba(34,197,94,0.15); color: var(--green); }
+  .chip.grace { background: rgba(234,179,8,0.15); color: var(--yellow); }
+  .chip.expired { background: rgba(239,68,68,0.15); color: var(--red); }
+  .chip.none { background: rgba(148,163,184,0.15); color: var(--muted); }
+  .exp { font-size: 12px; color: var(--muted); }
+  .dev-actions { display: flex; gap: 6px; }
+  .row-actions { display: flex; gap: 6px; margin-top: 10px; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--card); border: 1px solid var(--line); padding: 10px 16px;
+    border-radius: 10px; font-size: 13px; display: none; z-index: 10;
+  }
+  .modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none;
+    align-items: center; justify-content: center; z-index: 20; padding: 16px;
+  }
+  .modal.open { display: flex; }
+  .modal-box {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; width: 100%; max-width: 380px;
+  }
+  .modal-box h3 { margin-bottom: 12px; font-size: 15px; }
+  .field { width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--text); padding: 10px 12px; border-radius: 10px; margin-bottom: 10px; font-size: 14px; outline: none; }
+  .field:focus { border-color: var(--blue); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  .empty { color: var(--muted); text-align: center; padding: 30px 0; }
+  .muted { color: var(--muted); }
+  @media (min-width: 700px) { body { max-width: 860px; margin: 0 auto; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>CotizaTec <span class="badge">Admin</span></h1>
+    <input class="search" id="search" type="text" placeholder="🔍 Buscar usuario, deviceId o teléfono...">
+    <button class="btn secondary" onclick="loadAll()" title="Recargar">↻</button>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="section">
+    <h2>Gestión de Clientes</h2>
+    <button class="btn" onclick="openClientModal()">+ Nuevo Cliente</button>
+  </div>
+  <div id="clients"></div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="modal" id="modal">
+    <div class="modal-box">
+      <h3 id="modalTitle">Nuevo Cliente</h3>
+      <input class="field" id="mName" placeholder="Nombre del cliente">
+      <input class="field" id="mPhone" placeholder="Teléfono">
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn" id="mSave" onclick="saveClient()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="devModal">
+    <div class="modal-box">
+      <h3>Vincular Dispositivo</h3>
+      <input class="field" id="devId" placeholder="deviceId (ej. cotizatec-...)">
+      <input class="field" id="devAlias" placeholder="Alias (ej. Caja, Sucursal 1)">
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closeDevModal()">Cancelar</button>
+        <button class="btn" onclick="saveDevice()">Vincular</button>
+      </div>
+    </div>
+  </div>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+  var TG = window.Telegram && window.Telegram.WebApp;
+  var API = window.location.origin;
+  var initData = (TG && TG.initData) || '';
+
+  if (TG) {
+    TG.ready();
+    TG.expand();
+  }
+
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(t._h);
+    t._h = setTimeout(function () { t.style.display = 'none'; }, 2500);
+  }
+
+  function api(path, opts) {
+    var url = API + path + (path.indexOf('?') > -1 ? '&' : '?') + 'initData=' + encodeURIComponent(initData);
+    opts = opts || {};
+    opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+    return fetch(url, opts).then(function (r) {
+      return r.json().then(function (b) {
+        if (!r.ok || b.error) throw new Error(b.error || ('HTTP ' + r.status));
+        return b;
+      });
+    });
+  }
+
+  function fmtDate(ts) {
+    if (!ts) return '—';
+    var d = new Date(ts);
+    return d.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  function daysLeft(ts) {
+    if (!ts) return null;
+    var n = Math.ceil((ts - Date.now()) / 86400000);
+    return n >= 0 ? n : null;
+  }
+
+  function renderCards(s) {
+    var c = document.getElementById('cards');
+    c.innerHTML = [
+      ['Licencias Activas', s.activeLicenses, 'green'],
+      ['Por Vencer (7 días)', s.expiringSoon, 'yellow'],
+      ['Bloqueadas', s.blocked, 'red'],
+      ['Clientes', s.clients, 'blue']
+    ].map(function (x) {
+      return '<div class="card"><div class="num ' + x[2] + '">' + x[1] + '</div><div class="lab">' + x[0] + '</div></div>';
+    }).join('');
+  }
+
+  function renderClients(list) {
+    var c = document.getElementById('clients');
+    if (!list.length) {
+      c.innerHTML = '<div class="empty">Sin clientes aún. Crea el primero con "+ Nuevo Cliente".</div>';
+      return;
+    }
+    c.innerHTML = list.map(function (cl) {
+      var devs = (cl.devices || []).map(function (d) {
+        var dl = daysLeft(d.expiresAt);
+        var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null ? ' (' + dl + ' d)' : '') : (d.status === 'grace' ? 'gracia hasta ' + fmtDate(d.graceUntil) : (d.status === 'expired' ? 'vencida' : 'sin licencia'));
+        return '<div class="dev">' +
+          '<div style="flex:1;min-width:140px"><div class="dev-alias">' + (d.alias || d.deviceId) + '</div><div class="dev-id">' + d.deviceId + '</div></div>' +
+          '<span class="chip ' + d.status + '">' + d.label + '</span>' +
+          '<span class="exp">' + exp + '</span>' +
+          '<div class="dev-actions">' +
+            (d.status === 'active' || d.status === 'grace'
+              ? '<button class="btn small yellow" onclick="actDevice(\'' + cl.id + '\',\'' + d.deviceId + '\')">Renovar</button>' +
+                '<button class="btn small red" onclick="blkDevice(\'' + cl.id + '\',\'' + d.deviceId + '\')">Bloquear</button>'
+              : '<button class="btn small green" onclick="actDevice(\'' + cl.id + '\',\'' + d.deviceId + '\')">Activar</button>') +
+            '<button class="btn small secondary" onclick="delDev(\'' + cl.id + '\',\'' + d.deviceId + '\')">✕</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+      if (!devs) devs = '<div class="muted" style="padding:6px 0">Sin dispositivos vinculados.</div>';
+      return '<div class="client">' +
+        '<div class="client-head">' +
+          '<div><div class="client-name">' + esc(cl.name) + '</div><div class="client-phone">' + (cl.phone || '') + '</div></div>' +
+          '<div style="display:flex;gap:6px">' +
+            '<button class="btn small secondary" onclick="openDevModal(\'' + cl.id + '\')">+ Dispositivo</button>' +
+            '<button class="btn small secondary" onclick="editClient(\'' + cl.id + '\')">✎</button>' +
+            '<button class="btn small red" onclick="delClient(\'' + cl.id + '\')">🗑</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="client-body">' + devs + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
+  }
+
+  function loadAll() {
+    api('/api/admin/summary').then(function (r) { renderCards(r.summary); }).catch(function (e) { toast('Error: ' + e.message); });
+    api('/api/admin/clients' + (q() ? '?q=' + encodeURIComponent(q()) : '')).then(function (r) { renderClients(r.clients); }).catch(function (e) { toast('Error: ' + e.message); });
+  }
+
+  function q() { return document.getElementById('search').value.trim(); }
+
+  document.getElementById('search').addEventListener('input', function () {
+    clearTimeout(window._s);
+    window._s = setTimeout(loadAll, 350);
+  });
+
+  var editingId = null;
+
+  function openClientModal() {
+    editingId = null;
+    document.getElementById('mName').value = '';
+    document.getElementById('mPhone').value = '';
+    document.getElementById('modalTitle').textContent = 'Nuevo Cliente';
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function editClient(id) {
+    api('/api/admin/clients').then(function (r) {
+      var cl = r.clients.find(function (c) { return c.id === id; });
+      if (!cl) return;
+      editingId = id;
+      document.getElementById('mName').value = cl.name;
+      document.getElementById('mPhone').value = cl.phone || '';
+      document.getElementById('modalTitle').textContent = 'Editar Cliente';
+      document.getElementById('modal').classList.add('open');
+    }).catch(function (e) { toast(e.message); });
+  }
+
+  function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+  function saveClient() {
+    var name = document.getElementById('mName').value.trim();
+    var phone = document.getElementById('mPhone').value.trim();
+    if (!name) return toast('Escribe el nombre');
+    var p = editingId
+      ? api('/api/admin/clients/' + editingId, { method: 'PUT', body: JSON.stringify({ name: name, phone: phone }) })
+      : api('/api/admin/clients', { method: 'POST', body: JSON.stringify({ name: name, phone: phone }) });
+    p.then(function () { closeModal(); loadAll(); }).catch(function (e) { toast(e.message); });
+  }
+
+  function delClient(id) {
+    if (!confirm('¿Eliminar este cliente?')) return;
+    api('/api/admin/clients/' + id, { method: 'DELETE' }).then(loadAll).catch(function (e) { toast(e.message); });
+  }
+
+  var devClientId = null;
+
+  function openDevModal(clientId) {
+    devClientId = clientId;
+    document.getElementById('devId').value = '';
+    document.getElementById('devAlias').value = '';
+    document.getElementById('devModal').classList.add('open');
+  }
+
+  function closeDevModal() { document.getElementById('devModal').classList.remove('open'); }
+
+  function saveDevice() {
+    var deviceId = document.getElementById('devId').value.trim();
+    var alias = document.getElementById('devAlias').value.trim();
+    if (!deviceId) return toast('Escribe el deviceId');
+    api('/api/admin/clients/' + devClientId + '/devices', { method: 'POST', body: JSON.stringify({ deviceId: deviceId, alias: alias }) })
+      .then(function () { closeDevModal(); loadAll(); }).catch(function (e) { toast(e.message); });
+  }
+
+  function delDev(clientId, deviceId) {
+    if (!confirm('¿Quitar dispositivo?')) return;
+    api('/api/admin/clients/' + clientId + '/devices/' + encodeURIComponent(deviceId), { method: 'DELETE' })
+      .then(loadAll).catch(function (e) { toast(e.message); });
+  }
+
+  function actDevice(clientId, deviceId) {
+    var days = prompt('Días de licencia:', '30');
+    if (days === null) return;
+    api('/api/admin/clients/' + clientId + '/devices/' + encodeURIComponent(deviceId) + '/activate', { method: 'POST', body: JSON.stringify({ days: parseInt(days, 10) || 30 }) })
+      .then(function () { toast('Licencia activada'); loadAll(); }).catch(function (e) { toast(e.message); });
+  }
+
+  function blkDevice(clientId, deviceId) {
+    if (!confirm('¿Bloquear este dispositivo?')) return;
+    api('/api/admin/clients/' + clientId + '/devices/' + encodeURIComponent(deviceId) + '/block', { method: 'POST' })
+      .then(function () { toast('Dispositivo bloqueado'); loadAll(); }).catch(function (e) { toast(e.message); });
+  }
+
+  api('/api/admin/verify').then(function (r) {
+    loadAll();
+  }).catch(function (e) {
+    document.getElementById('clients').innerHTML = '<div class="empty">' + esc(e.message) + '<br>Ábrelo desde el bot @CotizaTecAdmin_bot con /dashboard.</div>';
+  });
+</script>
+</body>
+</html>

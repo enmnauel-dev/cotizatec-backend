@@ -1,8 +1,10 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const store = require('./store');
 const license = require('./license');
 const bot = require('./bot');
+const admin = require('./admin');
 
 const PORT = process.env.PORT || 3000;
 
@@ -61,6 +63,176 @@ app.get('/api/device/:deviceId', (req, res) => {
   res.json({ deviceId, license: l ? {
     issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, status: 'active'
   } : null });
+});
+
+app.use('/admin', express.static(path.join(__dirname, 'public')));
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+function requireAdmin(req, res) {
+  const info = admin.validateInitData(req.query.initData || '');
+  if (!info) {
+    res.status(401).json({ error: 'No autorizado. initData de Telegram inválido.' });
+    return null;
+  }
+  if (!admin.isAdmin(info.user && info.user.id)) {
+    res.status(403).json({ error: 'No autorizado. Tu cuenta de Telegram no es administradora.' });
+    return null;
+  }
+  return info;
+}
+
+function licenseStatus(l) {
+  if (!l) return 'none';
+  const now = Date.now();
+  if (now < l.expiresAt) return 'active';
+  if (now < l.graceUntil) return 'grace';
+  return 'expired';
+}
+
+function licenseLabel(st) {
+  return st === 'active' ? '🟢 Activa' : st === 'grace' ? '🟡 Por Vencer' : st === 'expired' ? '🔴 Vencida' : '⚪ Sin licencia';
+}
+
+function enrichClient(c) {
+  return {
+    id: c.id,
+    name: c.name,
+    phone: c.phone,
+    createdAt: c.createdAt,
+    devices: (c.devices || []).map((d) => {
+      const l = store.getLicense(d.deviceId);
+      const st = licenseStatus(l);
+      return {
+        deviceId: d.deviceId,
+        alias: d.alias || null,
+        status: st,
+        label: licenseLabel(st),
+        expiresAt: l ? l.expiresAt : null,
+        graceUntil: l ? l.graceUntil : null
+      };
+    })
+  };
+}
+
+app.get('/api/admin/verify', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  res.json({ ok: true, user: info.user });
+});
+
+app.get('/api/admin/summary', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const now = Date.now();
+  const DAY = 86400000;
+  const lic = store.allLicenses();
+  let active = 0, expiring = 0, blocked = 0;
+  Object.keys(lic).forEach((id) => {
+    const l = lic[id];
+    const st = licenseStatus(l);
+    if (st === 'active') {
+      active++;
+      if (l.expiresAt - now <= 7 * DAY) expiring++;
+    } else if (st === 'expired') {
+      blocked++;
+    }
+  });
+  res.json({
+    ok: true,
+    summary: {
+      activeLicenses: active,
+      expiringSoon: expiring,
+      blocked: blocked,
+      clients: store.listClients().length,
+      devices: store.deviceCount()
+    }
+  });
+});
+
+app.get('/api/admin/clients', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const q = String(req.query.q || '').toLowerCase().trim();
+  let list = store.listClients().map(enrichClient);
+  if (q) {
+    list = list.filter((c) =>
+      (c.name || '').toLowerCase().indexOf(q) > -1 ||
+      (c.phone || '').toLowerCase().indexOf(q) > -1 ||
+      (c.devices || []).some((d) => (d.deviceId || '').toLowerCase().indexOf(q) > -1)
+    );
+  }
+  list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  res.json({ ok: true, clients: list });
+});
+
+app.post('/api/admin/clients', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Falta el nombre del cliente.' });
+  const c = store.createClient({ name, phone: req.body.phone });
+  res.json({ ok: true, client: enrichClient(c) });
+});
+
+app.put('/api/admin/clients/:id', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const c = store.updateClient(req.params.id, { name: req.body.name, phone: req.body.phone });
+  if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
+  res.json({ ok: true, client: enrichClient(c) });
+});
+
+app.delete('/api/admin/clients/:id', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  store.removeClient(req.params.id);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/clients/:id/devices', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const deviceId = String(req.body.deviceId || '').trim();
+  if (!deviceId) return res.status(400).json({ error: 'Falta deviceId.' });
+  const c = store.addDeviceToClient(req.params.id, deviceId, req.body.alias);
+  if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
+  res.json({ ok: true, client: enrichClient(c) });
+});
+
+app.delete('/api/admin/clients/:id/devices/:deviceId', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const c = store.removeDeviceFromClient(req.params.id, req.params.deviceId);
+  if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
+  res.json({ ok: true, client: enrichClient(c) });
+});
+
+app.post('/api/admin/clients/:id/devices/:deviceId/activate', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const days = parseInt(req.body.days, 10) || 30;
+  const graceDays = parseInt(req.body.graceDays, 10) || 15;
+  const now = Date.now();
+  const l = {
+    deviceId: req.params.deviceId,
+    issuedAt: now,
+    expiresAt: now + days * 86400000,
+    graceUntil: now + days * 86400000 + graceDays * 86400000,
+    token: license.signLicense({ v: 1, deviceId: req.params.deviceId, issuedAt: now, expiresAt: now + days * 86400000, graceUntil: now + days * 86400000 + graceDays * 86400000 })
+  };
+  store.setLicense(req.params.deviceId, l);
+  const c = store.addDeviceToClient(req.params.id, req.params.deviceId, req.body.alias);
+  res.json({ ok: true, license: l, client: c ? enrichClient(c) : null });
+});
+
+app.post('/api/admin/clients/:id/devices/:deviceId/block', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  store.removeLicense(req.params.deviceId);
+  res.json({ ok: true });
 });
 
 store.init().then(() => {
