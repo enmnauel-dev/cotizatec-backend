@@ -38,6 +38,10 @@ function load() {
   } catch (e) {
     cache = { devices: {}, licenses: {}, blocked: {}, clients: [] };
   }
+  if (!cache.devices) cache.devices = {};
+  if (!cache.licenses) cache.licenses = {};
+  if (!cache.blocked) cache.blocked = {};
+  if (!cache.clients) cache.clients = [];
   return cache;
 }
 
@@ -107,6 +111,7 @@ async function loadFromPg() {
     if (licenses) cache.licenses = licenses;
     if (clients) cache.clients = clients;
     if (blocked) cache.blocked = blocked;
+    if (!cache.blocked) cache.blocked = {};
   } catch (e) {
     console.error('[pg] load:', e.message);
   }
@@ -177,11 +182,11 @@ function unblockDevice(deviceId) {
 }
 
 function isBlocked(deviceId) {
-  return !!load().blocked[deviceId];
+  return !!((load().blocked || {})[deviceId]);
 }
 
 function blockedCount() {
-  return Object.keys(load().blocked).length;
+  return Object.keys(load().blocked || {}).length;
 }
 
 function clientId() {
