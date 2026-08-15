@@ -35,11 +35,13 @@ function isAdmin(chatId) {
 }
 
 function startBot(token) {
-  const bot = new TelegramBot(token, { polling: true });
+  const clean = String(token || '').replace(/["'\s,;\r\n]+/g, '');
+  const bot = new TelegramBot(clean, { polling: true });
   bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const text = (msg.text || '').trim();
     if (!text) return;
+    const [cmd, arg] = text.split(/\s+/);
 
     if (!isAdmin(chatId)) {
       if (cmd === '/start' && !ADMIN_CHAT_ID) {
@@ -49,8 +51,6 @@ function startBot(token) {
       bot.sendMessage(chatId, '⚠️ No autorizado. Este bot es de administración de CotizaTec.');
       return;
     }
-
-    const [cmd, arg] = text.split(/\s+/);
 
     if (cmd === '/start' || cmd === '/ayuda') {
       bot.sendMessage(chatId, [
