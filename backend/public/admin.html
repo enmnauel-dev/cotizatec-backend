@@ -25,7 +25,9 @@
   }
   .search:focus { border-color: var(--blue); }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; cursor: pointer; transition: border-color .15s, transform .1s; }
+  .card:active { transform: scale(0.98); }
+  .card.sel { background: #24324d; }
   .card .num { font-size: 24px; font-weight: 800; }
   .card .lab { color: var(--muted); font-size: 12px; margin-top: 2px; }
   .card .num.green { color: var(--green); }
@@ -174,16 +176,40 @@
     return n >= 0 ? n : null;
   }
 
+  var currentFilter = 'all';
+  var allClients = [];
+
   function renderCards(s) {
     var c = document.getElementById('cards');
     c.innerHTML = [
-      ['Licencias Activas', s.activeLicenses, 'green'],
-      ['Por Vencer (7 días)', s.expiringSoon, 'yellow'],
-      ['Bloqueadas', s.blocked, 'red'],
-      ['Clientes', s.clients, 'blue']
+      ['Licencias Activas', s.activeLicenses, 'green', 'active'],
+      ['Por Vencer (7 días)', s.expiringSoon, 'yellow', 'grace'],
+      ['Bloqueadas', s.blocked, 'red', 'expired'],
+      ['Clientes', s.clients, 'blue', 'all']
     ].map(function (x) {
-      return '<div class="card"><div class="num ' + x[2] + '">' + x[1] + '</div><div class="lab">' + x[0] + '</div></div>';
+      var sel = currentFilter === x[3] ? ' style="border-color:' + ({green:'var(--green)',yellow:'var(--yellow)',red:'var(--red)',blue:'var(--blue)'})[x[2]] + '"' : '';
+      return '<div class="card' + (currentFilter === x[3] ? ' sel' : '') + '" data-f="' + x[3] + '"' + sel + ' onclick="setFilter(\'' + x[3] + '\')"><div class="num ' + x[2] + '">' + x[1] + '</div><div class="lab">' + x[0] + '</div></div>';
     }).join('');
+  }
+
+  function setFilter(f) {
+    currentFilter = (f === currentFilter) ? 'all' : f;
+    renderCards(window._summary);
+    applyFilter();
+  }
+
+  function applyFilter() {
+    var ql = q().toLowerCase();
+    var list = allClients.filter(function (cl) {
+      var has = (cl.name || '').toLowerCase().indexOf(ql) > -1 || (cl.phone || '').toLowerCase().indexOf(ql) > -1 || (cl.devices || []).some(function (d) { return (d.deviceId || '').toLowerCase().indexOf(ql) > -1; });
+      if (!has) return false;
+      if (currentFilter === 'all') return true;
+      return (cl.devices || []).some(function (d) { return d.status === currentFilter; });
+    });
+    renderClients(list);
+    if (currentFilter !== 'all' && !list.length) {
+      document.getElementById('clients').innerHTML = '<div class="empty">Ningún cliente con esta categoría.</div>';
+    }
   }
 
   function renderClients(list) {
@@ -231,8 +257,8 @@
   }
 
   function loadAll() {
-    api('/api/admin/summary').then(function (r) { renderCards(r.summary); }).catch(function (e) { toast('Error: ' + e.message); });
-    api('/api/admin/clients' + (q() ? '?q=' + encodeURIComponent(q()) : '')).then(function (r) { renderClients(r.clients); }).catch(function (e) { toast('Error: ' + e.message); });
+    api('/api/admin/summary').then(function (r) { window._summary = r.summary; renderCards(r.summary); }).catch(function (e) { toast('Error: ' + e.message); });
+    api('/api/admin/clients').then(function (r) { allClients = r.clients; applyFilter(); }).catch(function (e) { toast('Error: ' + e.message); });
   }
 
   function q() { return document.getElementById('search').value.trim(); }
