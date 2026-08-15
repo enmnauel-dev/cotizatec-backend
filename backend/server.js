@@ -43,6 +43,9 @@ app.post('/api/register', (req, res) => {
 
 app.get('/api/license/:deviceId', (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
+  if (store.isBlocked(deviceId)) {
+    return res.json({ ok: false, status: 'blocked', message: 'Dispositivo bloqueado. Contacta al administrador.' });
+  }
   const l = store.getLicense(deviceId);
   if (!l) {
     return res.json({ ok: false, status: 'none', message: 'Sin licencia. Contacta al administrador para activar.' });

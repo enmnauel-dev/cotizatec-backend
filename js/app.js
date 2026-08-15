@@ -1579,6 +1579,9 @@ function settingsView() {
     if (st.status === 'none') {
       msg = 'Licencia no activada';
       sub = 'Esta copia de CotizaTec aún no está activada. Envía tu código de dispositivo al administrador para activarla.';
+    } else if (st.status === 'blocked') {
+      msg = 'Dispositivo bloqueado';
+      sub = 'Contacta al administrador para restablecer tu acceso.';
     } else if (st.status === 'expired') {
       msg = 'Tu suscripción venció';
       sub = 'El período de gracia se agotó. Renueva tu suscripción para seguir usando CotizaTec.';

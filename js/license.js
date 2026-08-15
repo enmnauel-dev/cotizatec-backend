@@ -112,12 +112,17 @@ var License = (function () {
     var timer = setTimeout(function () {}, 8000);
     return fetch(url).then(function (r) { return r.json(); }).then(function (body) {
       clearTimeout(timer);
+      if (body && body.status === 'blocked') {
+        state.token = '';
+        persist();
+        return { blocked: true };
+      }
       if (body && body.ok && body.token) {
         state.token = body.token;
         persist();
         return verifyToken(body.token);
       }
-      if (body && body.ok && body.status === 'none') {
+      if (body && body.status === 'none') {
         state.token = '';
         persist();
       }
@@ -143,6 +148,7 @@ var License = (function () {
 
   function computeStatus(payload) {
     var now = Date.now();
+    if (payload && payload.blocked) return { status: 'blocked' };
     if (!payload) return { status: 'none' };
     if (now < payload.expiresAt) {
       return {
