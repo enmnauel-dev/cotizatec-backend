@@ -121,6 +121,11 @@ async function init() {
   if (!DATABASE_URL) return;
   load();
   await loadFromPg();
+  // Recarga periódica desde Postgres para que cambios externos (o de otra
+  // instancia) se reflejen en la caché en memoria.
+  setInterval(() => {
+    loadFromPg().catch((e) => console.error('[pg] refresh:', e.message));
+  }, 5000);
 }
 
 function deviceCount() {
