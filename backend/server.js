@@ -92,7 +92,8 @@ function requireAdmin(req, res) {
   return info;
 }
 
-function licenseStatus(l) {
+function licenseStatus(deviceId, l) {
+  if (store.isBlocked(deviceId)) return 'blocked';
   if (!l) return 'none';
   const now = Date.now();
   if (now < l.expiresAt) return 'active';
@@ -101,7 +102,7 @@ function licenseStatus(l) {
 }
 
 function licenseLabel(st) {
-  return st === 'active' ? '🟢 Activa' : st === 'grace' ? '🟡 Por Vencer' : st === 'expired' ? '🔴 Vencida' : '⚪ Sin licencia';
+  return st === 'active' ? '🟢 Activa' : st === 'grace' ? '🟡 Por Vencer' : st === 'expired' ? '🔴 Vencida' : st === 'blocked' ? '🔒 Bloqueada' : '⚪ Sin licencia';
 }
 
 function enrichClient(c) {
@@ -112,7 +113,7 @@ function enrichClient(c) {
     createdAt: c.createdAt,
     devices: (c.devices || []).map((d) => {
       const l = store.getLicense(d.deviceId);
-      const st = licenseStatus(l);
+      const st = licenseStatus(d.deviceId, l);
       return {
         deviceId: d.deviceId,
         alias: d.alias || null,
@@ -137,15 +138,14 @@ app.get('/api/admin/summary', (req, res) => {
   const now = Date.now();
   const DAY = 86400000;
   const lic = store.allLicenses();
-  let active = 0, expiring = 0, blocked = 0;
+  let active = 0, expiring = 0;
   Object.keys(lic).forEach((id) => {
+    if (store.isBlocked(id)) return;
     const l = lic[id];
-    const st = licenseStatus(l);
+    const st = licenseStatus(id, l);
     if (st === 'active') {
       active++;
       if (l.expiresAt - now <= 7 * DAY) expiring++;
-    } else if (st === 'expired') {
-      blocked++;
     }
   });
   res.json({
@@ -153,7 +153,7 @@ app.get('/api/admin/summary', (req, res) => {
     summary: {
       activeLicenses: active,
       expiringSoon: expiring,
-      blocked: blocked,
+      blocked: store.blockedCount(),
       clients: store.listClients().length,
       devices: store.deviceCount()
     }
@@ -187,7 +187,7 @@ app.get('/api/admin/orphans', (req, res) => {
   const lic = store.allLicenses();
   let orphans = Object.keys(devices).map((deviceId) => {
     const l = lic[deviceId];
-    const st = licenseStatus(l);
+    const st = licenseStatus(deviceId, l);
     return {
       deviceId,
       alias: null,
@@ -263,6 +263,7 @@ app.post('/api/admin/device/:deviceId/activate', (req, res) => {
     graceUntil,
     token: license.signLicense({ v: 1, deviceId: req.params.deviceId, issuedAt: now, expiresAt, graceUntil })
   };
+  store.unblockDevice(req.params.deviceId);
   store.setLicense(req.params.deviceId, l);
   res.json({ ok: true, license: l });
 });
@@ -270,7 +271,14 @@ app.post('/api/admin/device/:deviceId/activate', (req, res) => {
 app.post('/api/admin/device/:deviceId/block', (req, res) => {
   const info = requireAdmin(req, res);
   if (!info) return;
-  store.removeLicense(req.params.deviceId);
+  store.blockDevice(req.params.deviceId);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/device/:deviceId/unblock', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  store.unblockDevice(req.params.deviceId);
   res.json({ ok: true });
 });
 
@@ -294,6 +302,7 @@ app.post('/api/admin/clients/:id/devices/:deviceId/activate', (req, res) => {
     graceUntil: now + days * 86400000 + graceDays * 86400000,
     token: license.signLicense({ v: 1, deviceId: req.params.deviceId, issuedAt: now, expiresAt: now + days * 86400000, graceUntil: now + days * 86400000 + graceDays * 86400000 })
   };
+  store.unblockDevice(req.params.deviceId);
   store.setLicense(req.params.deviceId, l);
   const c = store.addDeviceToClient(req.params.id, req.params.deviceId, req.body.alias);
   res.json({ ok: true, license: l, client: c ? enrichClient(c) : null });
@@ -302,7 +311,14 @@ app.post('/api/admin/clients/:id/devices/:deviceId/activate', (req, res) => {
 app.post('/api/admin/clients/:id/devices/:deviceId/block', (req, res) => {
   const info = requireAdmin(req, res);
   if (!info) return;
-  store.removeLicense(req.params.deviceId);
+  store.blockDevice(req.params.deviceId);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/clients/:id/devices/:deviceId/unblock', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  store.unblockDevice(req.params.deviceId);
   res.json({ ok: true });
 });
 

@@ -36,7 +36,7 @@ function load() {
   try {
     cache = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
   } catch (e) {
-    cache = { devices: {}, licenses: {}, clients: [] };
+    cache = { devices: {}, licenses: {}, blocked: {}, clients: [] };
   }
   return cache;
 }
@@ -102,9 +102,11 @@ async function loadFromPg() {
     const devices = await pgGet('devices');
     const licenses = await pgGet('licenses');
     const clients = await pgGet('clients');
+    const blocked = await pgGet('blocked');
     if (devices) cache.devices = devices;
     if (licenses) cache.licenses = licenses;
     if (clients) cache.clients = clients;
+    if (blocked) cache.blocked = blocked;
   } catch (e) {
     console.error('[pg] load:', e.message);
   }
@@ -133,6 +135,7 @@ function removeDevice(deviceId) {
   const had = !!db.devices[deviceId];
   delete db.devices[deviceId];
   delete db.licenses[deviceId];
+  delete db.blocked[deviceId];
   db.clients = (db.clients || []).map((c) => {
     c.devices = (c.devices || []).filter((d) => d.deviceId !== deviceId);
     return c;
@@ -143,9 +146,42 @@ function removeDevice(deviceId) {
       pgSet('devices', db.devices).catch(function (e) { console.error('[pg] save devices:', e.message); });
       pgSet('licenses', db.licenses).catch(function (e) { console.error('[pg] save licenses:', e.message); });
       pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients:', e.message); });
+      pgSet('blocked', db.blocked).catch(function (e) { console.error('[pg] save blocked:', e.message); });
     }
   }
   return had;
+}
+
+function blockDevice(deviceId) {
+  const db = load();
+  db.blocked[deviceId] = Date.now();
+  delete db.licenses[deviceId];
+  save();
+  if (DATABASE_URL) {
+    pgSet('blocked', db.blocked).catch(function (e) { console.error('[pg] save blocked:', e.message); });
+    pgSet('licenses', db.licenses).catch(function (e) { console.error('[pg] save licenses:', e.message); });
+  }
+}
+
+function unblockDevice(deviceId) {
+  const db = load();
+  const had = !!db.blocked[deviceId];
+  delete db.blocked[deviceId];
+  if (had) {
+    save();
+    if (DATABASE_URL) {
+      pgSet('blocked', db.blocked).catch(function (e) { console.error('[pg] save blocked:', e.message); });
+    }
+  }
+  return had;
+}
+
+function isBlocked(deviceId) {
+  return !!load().blocked[deviceId];
+}
+
+function blockedCount() {
+  return Object.keys(load().blocked).length;
 }
 
 function clientId() {
@@ -254,5 +290,9 @@ module.exports = {
   addDeviceToClient,
   removeDeviceFromClient,
   allDevices,
-  removeDevice
+  removeDevice,
+  blockDevice,
+  unblockDevice,
+  isBlocked,
+  blockedCount
 };

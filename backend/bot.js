@@ -95,21 +95,26 @@ function startBot(token) {
       const deviceId = arg.trim();
       const days = parseInt((text.split(/\s+/)[2] || ''), 10) || LICENSE_DAYS;
       const license = buildLicense(deviceId, days, GRACE_DAYS);
+      store.unblockDevice(deviceId);
       store.setLicense(deviceId, license);
       bot.sendMessage(chatId, '✅ Licencia activada para ' + deviceId.slice(0, 16) + '… por ' + days + ' días.\nVence: ' + formatDate(license.expiresAt));
       return;
     }
 
     if (cmd === '/bloquear') {
-      if (!arg) { bot.sendMessage(chatId, 'Usa: /bloquear <deviceId>'); return; }
-      store.removeLicense(arg.trim());
-      bot.sendMessage(chatId, '⛔ Licencia revocada para ' + arg.trim().slice(0, 16) + '…');
+if (!arg) { bot.sendMessage(chatId, 'Usa: /bloquear <deviceId>'); return; }
+      store.blockDevice(arg.trim());
+      bot.sendMessage(chatId, '🔒 Dispositivo bloqueado: ' + arg.trim().slice(0, 16) + '…');
       return;
     }
 
     if (cmd === '/estado') {
       if (!arg) { bot.sendMessage(chatId, 'Usa: /estado <deviceId>'); return; }
       const deviceId = arg.trim();
+      if (store.isBlocked(deviceId)) {
+        bot.sendMessage(chatId, 'Estado ' + deviceId.slice(0, 16) + '…: 🔒 bloqueado manualmente.');
+        return;
+      }
       const l = store.getLicense(deviceId);
       if (!l) { bot.sendMessage(chatId, 'Sin licencia para ' + deviceId.slice(0, 16) + '…'); return; }
       const now = Date.now();
