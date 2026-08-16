@@ -92,7 +92,7 @@ const NAV = [
     html += '</header>';
 
     if (licenseStatus && licenseStatus.trial && licenseStatus.status === 'active') {
-      html += '<div class="trial-banner">🧪 Modo prueba: te quedan <b>' + licenseStatus.daysLeft + '</b> día(s). Después deberás activar tu licencia con el administrador.</div>';
+      html += '<div class="trial-banner">🧪 Modo prueba: te quedan <b>' + licenseStatus.daysLeft + '</b> día(s). Después deberás activar tu licencia con el administrador.<br><button class="trial-activate" data-action="contactSupport" data-motivo="trial">' + WA_ICON + ' Activar ahora</button></div>';
     }
 
     if (licenseStatus && licenseStatus.status === 'grace') {
@@ -992,7 +992,7 @@ case 'trabajos': inner = jobsView(); break;
       window.open(url, '_blank');
     },
 
-    contactSupport: function () { contactSupportAction(); },
+    contactSupport: function (el) { contactSupportAction(el); },
 
     licenseRetry: function () {
       const scr = document.getElementById('license-screen');
@@ -1792,7 +1792,7 @@ case 'trabajos': inner = jobsView(); break;
     });
   }
 
-  function contactSupportAction() {
+  function contactSupportAction(el) {
     License.getDeviceId().then(function (id) {
       const s = (DB.state && DB.state.settings) || {};
       const serverPhone = (typeof License.getSupportPhone === 'function') ? License.getSupportPhone() : '';
@@ -1805,10 +1805,12 @@ case 'trabajos': inner = jobsView(); break;
         digits = p.replace(/[^\d]/g, '');
         if (digits.length < 8) return;
       }
-      const btn = document.getElementById('license-contact');
+      const btn = (el && el.getAttribute('data-motivo')) ? el : document.getElementById('license-contact');
       const motivo = btn ? btn.getAttribute('data-motivo') : 'bloqueado';
       let texto;
-      if (motivo === 'expirado') {
+      if (motivo === 'trial') {
+        texto = 'Hola, estoy en modo prueba de CotizaTec y quiero activar mi licencia. Código: ' + (id || 'desconocido') + '.';
+      } else if (motivo === 'expirado') {
         texto = 'Hola, mi período de prueba/suscripción de CotizaTec terminó. Código: ' + (id || 'desconocido') + '. Quiero activarla.';
       } else if (motivo === 'sin-activar') {
         texto = 'Hola, quiero activar CotizaTec. Código: ' + (id || 'desconocido') + '.';
