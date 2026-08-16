@@ -1,4 +1,4 @@
-const TelegramBot = require('node-telegram-bot-api');
+const { TelegramBot } = require('node-telegram-bot-api');
 const store = require('./store');
 const { signLicense } = require('./license');
 const { isAdmin } = require('./admin');
