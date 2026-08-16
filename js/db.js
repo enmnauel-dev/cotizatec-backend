@@ -897,7 +897,7 @@ var DB = (function () {
   Object.assign(api, {
     load, save, incr, esc, money, date, push, find, update, remove,
     jobTotals, newJob, saveJob, captureClient,
-    statusLabel, statusColor, STATUS, KEY, BAK_KEY, TS_KEY,
+    statusLabel, statusColor, STATUS, KEY, BAK_KEY, TS_KEY, FS_KEY, ENC_META,
     buildBackup, parseBackup, applyBackup, backupError,
     startedFromLocal, restoreFromIdb, restoreFromFs, fsFlush, itemType,
     needsUnlock, isEncrypted, isProtected, hasBackupPassword, hasFingerprint, canUnlockByPassword, bioAvailable,

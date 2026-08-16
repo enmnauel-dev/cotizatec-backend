@@ -61,8 +61,23 @@ var Backups = (function () {
   }
 
   function doReset() {
+    // Borrar los 3 almacenes: localStorage, espejo IndexedDB y archivo nativo.
     localStorage.removeItem(DB.KEY);
     localStorage.removeItem(DB.BAK_KEY);
+    localStorage.removeItem(DB.TS_KEY);
+    try { localStorage.removeItem(DB.ENC_META); } catch (e) {}
+    const FS = Util.capacitorPlugin('Filesystem');
+    if (Util.isNativeEnv() && FS && FS.deleteFile) {
+      FS.deleteFile({ path: DB.FS_KEY, directory: 'DATA' }).catch(function () {});
+    }
+    try {
+      const req = indexedDB.open('cotizatec_idb_v1', 1);
+      req.onsuccess = function () {
+        const db = req.result;
+        try { db.transaction('kv', 'readwrite').objectStore('kv').delete('state'); } catch (e) {}
+        try { db.close(); } catch (e) {}
+      };
+    } catch (e) {}
     window.location.hash = '#/';
     location.reload();
   }
