@@ -861,6 +861,7 @@ function settingsView() {
           return DB.boot().then(function (mode) {
             if (mode === 'locked') { UI.showLockFirst(); return; }
             UI.init();
+            try { Reminders.scheduleToday(); } catch (e) {}
           });
         }
         UI.showLicenseScreen(st);
@@ -923,6 +924,7 @@ function settingsView() {
       if (!(amount > 0)) { toast('Escribe el monto del abono', false); return; }
       j.payments.push({ id: 'p' + DB.incr('payment'), note: (noteInput ? noteInput.value.trim() : '') || 'Abono', amount: amount, date: new Date().toISOString() });
       DB.save();
+      if (DB.jobTotals(j).balance <= 0.005) { try { Reminders.cancelForJob(j.id); } catch (e) {} }
       const holder = document.getElementById('sheet-holder');
       if (holder) holder.remove();
       render();
@@ -1075,6 +1077,7 @@ function settingsView() {
       const j = DB.find('jobs', el.dataset.id);
       if (!j) return;
       if (!confirmar('¿Eliminar la cotización ' + j.code + '?')) return;
+      try { Reminders.cancelForJob(j.id); } catch (e) {}
       DB.remove('jobs', j.id);
       go('#/trabajos');
     },
@@ -1418,6 +1421,7 @@ function settingsView() {
       } else {
         if (Number(amount) <= 0) { toast('Escribe el monto del abono', false); return; }
         j.payments.push({ id: 'p' + DB.incr('payment'), note: note || 'Abono', amount: Number(amount), date: new Date().toISOString() });
+        if (DB.jobTotals(j).balance <= 0.005) { try { Reminders.cancelForJob(j.id); } catch (e) {} }
         toast('Abono registrado', true);
       }
       DB.save();
@@ -1678,10 +1682,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (restored) Util.toast('Datos restaurados desde la nube', true);
                 else Util.toast('No hay datos en la nube para restaurar', false);
                 Backups.pushToCloud(deviceId);
+                try { Reminders.scheduleToday(); } catch (e) {}
               });
             }
             UI.init();
             Backups.pushToCloud(deviceId);
+            try { Reminders.scheduleToday(); } catch (e) {}
           });
         });
       }
