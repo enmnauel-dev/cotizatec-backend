@@ -237,8 +237,9 @@
               ? '<button class="btn small yellow" onclick="actDevice(\'' + cl.id + '\',\'' + d.deviceId + '\')">Renovar</button>' +
                 '<button class="btn small red" onclick="blkDevice(\'' + cl.id + '\',\'' + d.deviceId + '\')">Bloquear</button>'
               : d.status === 'blocked'
-                ? '<button class="btn small green" onclick="unblkDevice(\'' + cl.id + '\',\'' + d.deviceId + '\')">Desbloquear</button>'
+                ?             '<button class="btn small green" onclick="unblkDevice(\'' + cl.id + '\',\'' + d.deviceId + '\')">Desbloquear</button>'
                 : '<button class="btn small green" onclick="actDevice(\'' + cl.id + '\',\'' + d.deviceId + '\')">Activar</button>') +
+            '<button class="btn small secondary" onclick="migDev(\'' + cl.id + '\',\'' + d.deviceId + '\')">Migrar</button>' +
             '<button class="btn small secondary" onclick="delDev(\'' + cl.id + '\',\'' + d.deviceId + '\')">✕</button>' +
           '</div>' +
         '</div>';
@@ -286,6 +287,7 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
               ? '<button class="btn small green" onclick="unblkOrphan(\'' + d.deviceId + '\')">Desbloquear</button>'
               : '<button class="btn small green" onclick="actOrphan(\'' + d.deviceId + '\')">Activar</button>') +
           '<button class="btn small secondary" onclick="linkOrphan(\'' + d.deviceId + '\')">+ Cliente</button>' +
+          '<button class="btn small secondary" onclick="migOrphan(\'' + d.deviceId + '\')">Migrar</button>' +
           '<button class="btn small secondary" onclick="delOrphan(\'' + d.deviceId + '\')">✕</button>' +
         '</div>' +
       '</div>';
@@ -293,6 +295,17 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
   }
 
   function actOrphan(deviceId) { activateDevice(deviceId, function () { loadOrphans(); }); }
+
+  function migOrphan(deviceId) {
+    var toId = prompt('Dispositivo NUEVO (deviceId):');
+    if (!toId || !toId.trim()) return;
+    if (!confirm('¿Mover respaldo y licencia de ' + deviceId + ' a ' + toId.trim() + '?\nEl dispositivo viejo quedará eliminado.')) return;
+    api('/api/admin/device/' + encodeURIComponent(deviceId) + '/migrate', { method: 'POST', body: JSON.stringify({ toDeviceId: toId.trim() }) })
+      .then(function (r) {
+        toast('Migrado: respaldo ' + (r.backupMoved ? 'sí' : 'no había') + ' · licencia ' + (r.licenseMoved ? 'sí' : 'no'));
+        loadOrphans(); loadAll();
+      }).catch(function (e) { toast(e.message); });
+  }
 
   function renOrphan(deviceId) { activateDevice(deviceId, function () { loadOrphans(); }); }
 
@@ -428,6 +441,17 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
   function unblkDevice(clientId, deviceId) {
     api('/api/admin/clients/' + clientId + '/devices/' + encodeURIComponent(deviceId) + '/unblock', { method: 'POST' })
       .then(function () { toast('Dispositivo desbloqueado'); loadAll(); }).catch(function (e) { toast(e.message); });
+  }
+
+  function migDev(clientId, deviceId) {
+    var toId = prompt('Dispositivo NUEVO (deviceId):');
+    if (!toId || !toId.trim()) return;
+    if (!confirm('¿Mover respaldo y licencia de ' + deviceId + ' a ' + toId.trim() + '?\nEl dispositivo viejo quedará eliminado.')) return;
+    api('/api/admin/device/' + encodeURIComponent(deviceId) + '/migrate', { method: 'POST', body: JSON.stringify({ toDeviceId: toId.trim() }) })
+      .then(function (r) {
+        toast('Migrado: respaldo ' + (r.backupMoved ? 'sí' : 'no había') + ' · licencia ' + (r.licenseMoved ? 'sí' : 'no'));
+        loadAll();
+      }).catch(function (e) { toast(e.message); });
   }
 
   api('/api/admin/verify').then(function (r) {

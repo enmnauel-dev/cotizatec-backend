@@ -60,6 +60,7 @@ function startBot(token) {
         '/renovar <deviceId> [días] — renovar/ampliar licencia',
         '/bloquear <deviceId> — revocar licencia',
         '/estado <deviceId> — ver estado de un dispositivo',
+        '/migrar <viejo> <nuevo> — mover respaldo (y licencia) a otro dispositivo',
         '/avisar <deviceId> — enviar aviso de pago al cliente',
         ''
       ].join('\n'));
@@ -122,6 +123,35 @@ if (!arg) { bot.sendMessage(chatId, 'Usa: /bloquear <deviceId>'); return; }
       if (now < l.expiresAt) st = '✅ activa';
       else if (now < l.graceUntil) st = '⏳ en período de gracia hasta ' + formatDate(l.graceUntil);
       bot.sendMessage(chatId, 'Estado ' + deviceId.slice(0, 16) + '…: ' + st + '\nActiva desde: ' + formatDate(l.issuedAt) + '\nVence: ' + formatDate(l.expiresAt));
+      return;
+    }
+
+    if (cmd === '/migrar') {
+      const parts = text.split(/\s+/);
+      const fromId = (parts[1] || '').trim();
+      const toId = (parts[2] || '').trim();
+      if (!fromId || !toId) { bot.sendMessage(chatId, 'Usa: /migrar <deviceId_viejo> <deviceId_nuevo>'); return; }
+      try {
+        const moved = await store.migrateBackup(fromId, toId);
+        const oldLic = store.getLicense(fromId);
+        let licMsg = 'ℹ️ el viejo no tenía licencia';
+        if (oldLic && !oldLic.trial) {
+          store.setLicense(toId, oldLic);
+          store.removeLicense(fromId);
+          licMsg = '✅ licencia movida (vence ' + formatDate(oldLic.expiresAt) + ')';
+        } else if (oldLic && oldLic.trial) {
+          licMsg = 'ℹ️ el viejo estaba en prueba (no se mueve; el nuevo ya tiene su trial)';
+        }
+        store.removeDevice(fromId);
+        bot.sendMessage(chatId,
+          '🔄 Migración completada:\n' +
+          '• Respaldo: ' + (moved ? '✅ movido a ' + toId.slice(0, 16) + '…' : '⚠️ no había respaldo para ' + fromId.slice(0, 16) + '…') + '\n' +
+          '• Licencia: ' + licMsg + '\n' +
+          '• Dispositivo viejo: eliminado de registros');
+      } catch (e) {
+        console.error('[bot] /migrar error:', e.message);
+        bot.sendMessage(chatId, '❌ Error al migrar: ' + e.message);
+      }
       return;
     }
 

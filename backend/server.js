@@ -316,6 +316,26 @@ app.post('/api/admin/device/:deviceId/unblock', (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/admin/device/:deviceId/migrate', async (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const toId = String(req.body.toDeviceId || '').trim();
+  if (!toId || toId.length < 8 || toId.length > 128) {
+    return res.status(400).json({ error: 'Falta toDeviceId válido.' });
+  }
+  const fromId = String(req.params.deviceId || '').trim();
+  const moved = await store.migrateBackup(fromId, toId);
+  const oldLic = store.getLicense(fromId);
+  let licMoved = false;
+  if (oldLic && !oldLic.trial) {
+    store.setLicense(toId, oldLic);
+    store.removeLicense(fromId);
+    licMoved = true;
+  }
+  store.removeDevice(fromId);
+  res.json({ ok: true, backupMoved: moved, licenseMoved: licMoved });
+});
+
 app.delete('/api/admin/device/:deviceId', (req, res) => {
   const info = requireAdmin(req, res);
   if (!info) return;

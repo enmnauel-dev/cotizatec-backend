@@ -374,6 +374,23 @@ async function getBackup(deviceId) {
   return (load().backups || {})[deviceId] || null;
 }
 
+// Mueve el respaldo de un dispositivo a otro (migración cuando el usuario
+// cambia de equipo). Devuelve true si se movió algo.
+async function migrateBackup(fromDeviceId, toDeviceId) {
+  if (String(fromDeviceId) === String(toDeviceId)) return false;
+  const src = await getBackup(fromDeviceId);
+  if (!src) return false;
+  await setBackup(toDeviceId, src.data);
+  if (DATABASE_URL) {
+    await pgBackupDelete(fromDeviceId).catch(function (e) { console.error('[pg] delete old backup:', e.message); });
+  } else {
+    const db = load();
+    if (db.backups) delete db.backups[fromDeviceId];
+    save();
+  }
+  return true;
+}
+
 module.exports = {
   init,
   registerDevice,
@@ -397,5 +414,6 @@ module.exports = {
   isBlocked,
   blockedCount,
   setBackup,
-  getBackup
+  getBackup,
+  migrateBackup
 };
