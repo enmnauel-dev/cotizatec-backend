@@ -241,40 +241,45 @@ var Backups = (function () {
   // re-cifra con la clave propia para dejar el respaldo bajo el ID nuevo.
   function pullFromCloud(deviceId) {
     if (typeof fetch === 'undefined') return Promise.resolve(false);
-    return fetch(CLOUD_BASE + '/api/backup/' + encodeURIComponent(deviceId))
+    // Prioridad: si existe un reclamo de migración, se restaura ESE respaldo
+    // (equipo viejo -> equipo nuevo) y se re-cifra bajo el ID propio. Solo si no
+    // hay reclamo se restaura el respaldo propio del dispositivo.
+    return fetch(CLOUD_BASE + '/api/backup/claim/' + encodeURIComponent(deviceId))
       .then(function (r) { return r.json(); })
-      .then(function (body) {
-        if (body && body.ok && body.data) {
-          return _decryptData(deviceId, body.data).then(function (jsonStr) {
-            if (!jsonStr) return false;
-            const d = DB.parseBackup(jsonStr);
-            if (!d) return false;
-            DB.applyBackup(d);
-            Media.recompressExisting();
-            return true;
-          });
-        }
-        return fetch(CLOUD_BASE + '/api/backup/claim/' + encodeURIComponent(deviceId))
-          .then(function (r) { return r.json(); })
-          .then(function (claim) {
-            if (!(claim && claim.ok && claim.oldDeviceId)) return false;
-            return fetch(CLOUD_BASE + '/api/backup/' + encodeURIComponent(claim.oldDeviceId))
-              .then(function (r) { return r.json(); })
-              .then(function (oldBody) {
-                if (!(oldBody && oldBody.ok && oldBody.data)) return false;
-                return _decryptData(claim.oldDeviceId, oldBody.data).then(function (jsonStr) {
-                  if (!jsonStr) return false;
-                  const d = DB.parseBackup(jsonStr);
-                  if (!d) return false;
-                  DB.applyBackup(d);
-                  Media.recompressExisting();
-                  return pushToCloud(deviceId).then(function () {
-                    return fetch(CLOUD_BASE + '/api/backup/claim/' + encodeURIComponent(deviceId) + '/resolve', { method: 'POST' })
-                      .then(function () { return true; })
-                      .catch(function () { return true; });
-                  });
+      .then(function (claim) {
+        if (claim && claim.ok && claim.oldDeviceId) {
+          return fetch(CLOUD_BASE + '/api/backup/' + encodeURIComponent(claim.oldDeviceId))
+            .then(function (r) { return r.json(); })
+            .then(function (oldBody) {
+              if (!(oldBody && oldBody.ok && oldBody.data)) return false;
+              return _decryptData(claim.oldDeviceId, oldBody.data).then(function (jsonStr) {
+                if (!jsonStr) return false;
+                const d = DB.parseBackup(jsonStr);
+                if (!d) return false;
+                DB.applyBackup(d);
+                Media.recompressExisting();
+                return pushToCloud(deviceId).then(function () {
+                  return fetch(CLOUD_BASE + '/api/backup/claim/' + encodeURIComponent(deviceId) + '/resolve', { method: 'POST' })
+                    .then(function () { return true; })
+                    .catch(function () { return true; });
                 });
               });
+            });
+        }
+        return fetch(CLOUD_BASE + '/api/backup/' + encodeURIComponent(deviceId))
+          .then(function (r) { return r.json(); })
+          .then(function (body) {
+            if (body && body.ok && body.data) {
+              return _decryptData(deviceId, body.data).then(function (jsonStr) {
+                if (!jsonStr) return false;
+                const d = DB.parseBackup(jsonStr);
+                if (!d) return false;
+                DB.applyBackup(d);
+                Media.recompressExisting();
+                return true;
+              });
+            }
+            return false;
           });
       })
       .catch(function () {
