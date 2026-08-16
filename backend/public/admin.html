@@ -302,7 +302,7 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
     if (!confirm('¿Mover respaldo y licencia de ' + deviceId + ' a ' + toId.trim() + '?\nEl dispositivo viejo quedará eliminado.')) return;
     api('/api/admin/device/' + encodeURIComponent(deviceId) + '/migrate', { method: 'POST', body: JSON.stringify({ toDeviceId: toId.trim() }) })
       .then(function (r) {
-        toast('Migrado: respaldo ' + (r.backupMoved ? 'sí' : 'no había') + ' · licencia ' + (r.licenseMoved ? 'sí' : 'no'));
+        toast('Migrado: respaldo ' + (r.backupMoved ? 'sí' : 'no había') + ' · licencia ' + (r.licenseMoved ? 'sí' : 'no') + '. El nuevo debe abrir la app para heredar.');
         loadOrphans(); loadAll();
       }).catch(function (e) { toast(e.message); });
   }
@@ -449,7 +449,7 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
     if (!confirm('¿Mover respaldo y licencia de ' + deviceId + ' a ' + toId.trim() + '?\nEl dispositivo viejo quedará eliminado.')) return;
     api('/api/admin/device/' + encodeURIComponent(deviceId) + '/migrate', { method: 'POST', body: JSON.stringify({ toDeviceId: toId.trim() }) })
       .then(function (r) {
-        toast('Migrado: respaldo ' + (r.backupMoved ? 'sí' : 'no había') + ' · licencia ' + (r.licenseMoved ? 'sí' : 'no'));
+        toast('Migrado: respaldo ' + (r.backupMoved ? 'sí' : 'no había') + ' · licencia ' + (r.licenseMoved ? 'sí' : 'no') + '. El nuevo debe abrir la app para heredar.');
         loadAll();
       }).catch(function (e) { toast(e.message); });
   }

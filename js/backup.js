@@ -152,20 +152,47 @@ var Backups = (function () {
 
   // Descarga y restaura el respaldo desde el servidor (solo si no hay datos
   // locales). Devuelve true si se restauró correctamente.
+  // Si el propio deviceId no tiene respaldo, consulta si existe un "reclamo"
+  // de migración (equipo viejo -> equipo nuevo): descarga el respaldo del
+  // equipo viejo, lo descifra con la clave de ESE deviceId, lo aplica y lo
+  // re-cifra con la clave propia para dejar el respaldo bajo el ID nuevo.
   function pullFromCloud(deviceId) {
     if (typeof fetch === 'undefined') return Promise.resolve(false);
     return fetch(CLOUD_BASE + '/api/backup/' + encodeURIComponent(deviceId))
       .then(function (r) { return r.json(); })
       .then(function (body) {
-        if (!(body && body.ok && body.data)) return false;
-        return _decryptData(deviceId, body.data).then(function (jsonStr) {
-          if (!jsonStr) return false;
-          const d = DB.parseBackup(jsonStr);
-          if (!d) return false;
-          DB.applyBackup(d);
-          Media.recompressExisting();
-          return true;
-        });
+        if (body && body.ok && body.data) {
+          return _decryptData(deviceId, body.data).then(function (jsonStr) {
+            if (!jsonStr) return false;
+            const d = DB.parseBackup(jsonStr);
+            if (!d) return false;
+            DB.applyBackup(d);
+            Media.recompressExisting();
+            return true;
+          });
+        }
+        return fetch(CLOUD_BASE + '/api/backup/claim/' + encodeURIComponent(deviceId))
+          .then(function (r) { return r.json(); })
+          .then(function (claim) {
+            if (!(claim && claim.ok && claim.oldDeviceId)) return false;
+            return fetch(CLOUD_BASE + '/api/backup/' + encodeURIComponent(claim.oldDeviceId))
+              .then(function (r) { return r.json(); })
+              .then(function (oldBody) {
+                if (!(oldBody && oldBody.ok && oldBody.data)) return false;
+                return _decryptData(claim.oldDeviceId, oldBody.data).then(function (jsonStr) {
+                  if (!jsonStr) return false;
+                  const d = DB.parseBackup(jsonStr);
+                  if (!d) return false;
+                  DB.applyBackup(d);
+                  Media.recompressExisting();
+                  return pushToCloud(deviceId).then(function () {
+                    return fetch(CLOUD_BASE + '/api/backup/claim/' + encodeURIComponent(deviceId) + '/resolve', { method: 'POST' })
+                      .then(function () { return true; })
+                      .catch(function () { return true; });
+                  });
+                });
+              });
+          });
       })
       .catch(function () {
         return false;

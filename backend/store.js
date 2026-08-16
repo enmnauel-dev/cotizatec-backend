@@ -45,6 +45,7 @@ function load() {
   if (!cache.blocked) cache.blocked = {};
   if (!cache.clients) cache.clients = [];
   if (!cache.backups) cache.backups = {};
+  if (!cache.claims) cache.claims = {};
   return cache;
 }
 
@@ -374,20 +375,83 @@ async function getBackup(deviceId) {
   return (load().backups || {})[deviceId] || null;
 }
 
-// Mueve el respaldo de un dispositivo a otro (migración cuando el usuario
-// cambia de equipo). Devuelve true si se movió algo.
-async function migrateBackup(fromDeviceId, toDeviceId) {
-  if (String(fromDeviceId) === String(toDeviceId)) return false;
-  const src = await getBackup(fromDeviceId);
-  if (!src) return false;
-  await setBackup(toDeviceId, src.data);
+// ===== Migración entre dispositivos (por "reclamo") =====
+// El respaldo está cifrado con una clave derivada del deviceId viejo, por lo
+// que NO se puede mover el blob al deviceId nuevo (el nuevo no podría
+// descifrarlo). En su lugar se guarda un "reclamo": nuevoId -> viejoId.
+// El equipo nuevo descarga el respaldo bajo el ID viejo, lo descifra con la
+// clave del viejo, lo re-cifra con su propia clave y lo vuelve a subir.
+
+async function pgClaimSet(newId, oldId) {
+  await pgQuery('INSERT INTO cotizatec_data (k, v) VALUES ($1, $2) ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v', ['claim:' + newId, JSON.stringify({ old: oldId })]);
+}
+
+async function pgClaimGet(newId) {
+  const r = await pgQuery('SELECT v FROM cotizatec_data WHERE k = $1', ['claim:' + newId]);
+  return r.rows.length ? (r.rows[0].v && r.rows[0].v.old) || null : null;
+}
+
+async function pgClaimDelete(newId) {
+  await pgQuery('DELETE FROM cotizatec_data WHERE k = $1', ['claim:' + newId]);
+}
+
+async function setClaim(newId, oldId) {
   if (DATABASE_URL) {
-    await pgBackupDelete(fromDeviceId).catch(function (e) { console.error('[pg] delete old backup:', e.message); });
+    try { await pgClaimSet(newId, oldId); } catch (e) { console.error('[pg] set claim:', e.message); }
+    return;
+  }
+  const db = load();
+  if (!db.claims) db.claims = {};
+  db.claims[newId] = oldId;
+  save();
+}
+
+async function getClaim(newId) {
+  if (DATABASE_URL) {
+    try { return await pgClaimGet(newId); } catch (e) { console.error('[pg] get claim:', e.message); return null; }
+  }
+  return (load().claims || {})[newId] || null;
+}
+
+async function clearClaim(newId) {
+  if (DATABASE_URL) {
+    try { await pgClaimDelete(newId); } catch (e) { console.error('[pg] clear claim:', e.message); }
+    return;
+  }
+  const db = load();
+  if (db.claims) delete db.claims[newId];
+  save();
+}
+
+// Registra el reclamo de migración y mueve la licencia (solo si es real, no
+// trial). El respaldo queda intacto bajo el ID viejo. Devuelve { backupExists }.
+async function migrateDevice(fromId, toId) {
+  if (String(fromId) === String(toId)) return { backupExists: false };
+  const src = await getBackup(fromId);
+  const backupExists = !!src;
+  const oldLic = getLicense(fromId);
+  if (oldLic && !oldLic.trial) {
+    setLicense(toId, oldLic);
+    removeLicense(fromId);
+  }
+  await setClaim(toId, fromId);
+  return { backupExists, licenseMoved: !!(oldLic && !oldLic.trial) };
+}
+
+// Tras restaurar el respaldo en el equipo nuevo (re-cifrado con su propia
+// clave), se elimina el respaldo del equipo viejo y el reclamo. La licencia ya
+// se movió en migrateDevice. Devuelve true si se limpió algo.
+async function resolveMigration(toId) {
+  const oldId = await getClaim(toId);
+  if (!oldId) return false;
+  if (DATABASE_URL) {
+    await pgBackupDelete(oldId).catch(function (e) { console.error('[pg] delete migrated backup:', e.message); });
   } else {
     const db = load();
-    if (db.backups) delete db.backups[fromDeviceId];
+    if (db.backups) delete db.backups[oldId];
     save();
   }
+  await clearClaim(toId);
   return true;
 }
 
@@ -415,5 +479,9 @@ module.exports = {
   blockedCount,
   setBackup,
   getBackup,
-  migrateBackup
+  migrateDevice,
+  resolveMigration,
+  getClaim,
+  setClaim,
+  clearClaim
 };

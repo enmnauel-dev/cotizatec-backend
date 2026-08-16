@@ -99,6 +99,23 @@ app.get('/api/backup/:deviceId', async (req, res) => {
   res.json({ ok: true, savedAt: b.savedAt, data: b.data });
 });
 
+// Reclamo de migración: el equipo nuevo pregunta si tiene un respaldo que
+// heredar de un dispositivo viejo (mismo usuario, otro teléfono).
+app.get('/api/backup/claim/:deviceId', async (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  const oldId = await store.getClaim(deviceId);
+  if (!oldId) return res.json({ ok: false, status: 'none' });
+  res.json({ ok: true, oldDeviceId: oldId });
+});
+
+// Cuando el equipo nuevo termina de restaurar y re-cifrar el respaldo con su
+// propia clave, elimina el respaldo del equipo viejo y el reclamo.
+app.post('/api/backup/claim/:deviceId/resolve', async (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  const cleaned = await store.resolveMigration(deviceId);
+  res.json({ ok: true, cleaned });
+});
+
 app.use('/admin', express.static(path.join(__dirname, 'public')));
 
 app.get('/admin', (req, res) => {
@@ -324,16 +341,9 @@ app.post('/api/admin/device/:deviceId/migrate', async (req, res) => {
     return res.status(400).json({ error: 'Falta toDeviceId válido.' });
   }
   const fromId = String(req.params.deviceId || '').trim();
-  const moved = await store.migrateBackup(fromId, toId);
-  const oldLic = store.getLicense(fromId);
-  let licMoved = false;
-  if (oldLic && !oldLic.trial) {
-    store.setLicense(toId, oldLic);
-    store.removeLicense(fromId);
-    licMoved = true;
-  }
-  store.removeDevice(fromId);
-  res.json({ ok: true, backupMoved: moved, licenseMoved: licMoved });
+  const result = await store.migrateDevice(fromId, toId);
+  store.blockDevice(fromId);
+  res.json({ ok: true, backupMoved: result.backupExists, licenseMoved: result.licenseMoved });
 });
 
 app.delete('/api/admin/device/:deviceId', (req, res) => {

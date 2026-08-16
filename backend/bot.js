@@ -132,22 +132,21 @@ if (!arg) { bot.sendMessage(chatId, 'Usa: /bloquear <deviceId>'); return; }
       const toId = (parts[2] || '').trim();
       if (!fromId || !toId) { bot.sendMessage(chatId, 'Usa: /migrar <deviceId_viejo> <deviceId_nuevo>'); return; }
       try {
-        const moved = await store.migrateBackup(fromId, toId);
-        const oldLic = store.getLicense(fromId);
+        const result = await store.migrateDevice(fromId, toId);
+        store.blockDevice(fromId);
         let licMsg = 'ℹ️ el viejo no tenía licencia';
-        if (oldLic && !oldLic.trial) {
-          store.setLicense(toId, oldLic);
-          store.removeLicense(fromId);
-          licMsg = '✅ licencia movida (vence ' + formatDate(oldLic.expiresAt) + ')';
-        } else if (oldLic && oldLic.trial) {
+        if (result.licenseMoved) {
+          const newLic = store.getLicense(toId);
+          licMsg = '✅ licencia movida (vence ' + (newLic ? formatDate(newLic.expiresAt) : '?') + ')';
+        } else if (store.getLicense(fromId)) {
           licMsg = 'ℹ️ el viejo estaba en prueba (no se mueve; el nuevo ya tiene su trial)';
         }
-        store.removeDevice(fromId);
         bot.sendMessage(chatId,
-          '🔄 Migración completada:\n' +
-          '• Respaldo: ' + (moved ? '✅ movido a ' + toId.slice(0, 16) + '…' : '⚠️ no había respaldo para ' + fromId.slice(0, 16) + '…') + '\n' +
+          '🔄 Migración iniciada:\n' +
+          '• Respaldo: ' + (result.backupExists ? '✅ listo para heredar (el nuevo lo descargará, descifrará y re-cifrará al abrir la app)' : '⚠️ no había respaldo para ' + fromId.slice(0, 16) + '…') + '\n' +
           '• Licencia: ' + licMsg + '\n' +
-          '• Dispositivo viejo: eliminado de registros');
+          '• Dispositivo viejo: bloqueado (deja de funcionar)\n' +
+          '💡 El cliente solo debe abrir la app en el equipo nuevo: restaurará sus datos automáticamente.');
       } catch (e) {
         console.error('[bot] /migrar error:', e.message);
         bot.sendMessage(chatId, '❌ Error al migrar: ' + e.message);
