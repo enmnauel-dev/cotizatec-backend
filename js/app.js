@@ -1687,4 +1687,28 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       UI.showLicenseScreen(st);
     });
+    startLicenseWatch();
   });
+
+  // Verificación periódica: si el admin bloquea el dispositivo mientras la app
+  // está abierta, se bloquea en el momento (cada 30s) sin esperar a reabrir.
+  function startLicenseWatch() {
+    setInterval(function () {
+      License.refresh().then(function (st) {
+        if (!st) return;
+        if (st.status === 'blocked') {
+          licenseStatus = st;
+          const scr = document.getElementById('license-screen');
+          if (!scr) UI.showLicenseScreen(st);
+          return;
+        }
+        if (st.status === 'none') {
+          licenseStatus = st;
+          const scr = document.getElementById('license-screen');
+          if (!scr) UI.showLicenseScreen(st);
+          return;
+        }
+        licenseStatus = st;
+      }).catch(function () {});
+    }, 30000);
+  }

@@ -239,6 +239,18 @@ var License = (function () {
     });
   }
 
+  // Revalidación en segundo plano: consulta el servidor sin tocar el arranque.
+  // Devuelve el status actual (blocked/none/active/grace). Si el servidor
+  // bloquea el dispositivo, el token local se borra dentro de checkOnline.
+  function refresh() {
+    return ensureDeviceId().then(function () {
+      if (typeof fetch === 'undefined') return Promise.resolve(computeStatus(null));
+      return checkOnline().then(function (fresh) {
+        return computeStatus(fresh);
+      });
+    });
+  }
+
   function isLoaded() {
     return state.loaded;
   }
@@ -253,5 +265,5 @@ var License = (function () {
     });
   }
 
-  return { check: check, getDeviceId: getDeviceId, isLoaded: isLoaded, verifyToken: verifyToken, parseToken: parseToken, requestNotificationPermission: requestNotificationPermission };
+  return { check: check, refresh: refresh, getDeviceId: getDeviceId, isLoaded: isLoaded, verifyToken: verifyToken, parseToken: parseToken, requestNotificationPermission: requestNotificationPermission };
 })();
