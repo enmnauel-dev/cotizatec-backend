@@ -4,6 +4,7 @@ var DB = (function () {
   const DEFAULT_SETTINGS = {
     businessName: 'Mi Taller / Técnico',
     phone: '',
+    supportPhone: '',
     address: '',
     logo: null,
     signature: null,

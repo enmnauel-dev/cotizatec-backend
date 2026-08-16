@@ -696,6 +696,7 @@ function settingsView() {
     html += '<h3>' + TOOLS_ICON + ' Tu negocio</h3>';
     html += '<label>Nombre del negocio / técnico</label><input type="text" name="businessName" value="' + escapeAttr(s.businessName) + '">';
     html += '<label>Teléfono</label><input type="tel" name="phone" value="' + escapeAttr(s.phone) + '">';
+    html += '<label>Teléfono de soporte <small>(el que se muestra para contactarte si el equipo se bloquea)</small></label><input type="tel" name="supportPhone" value="' + escapeAttr(s.supportPhone) + '" placeholder="809-000-0000">';
     html += '<label>Dirección</label><input type="text" name="address" value="' + escapeAttr(s.address) + '">';
     html += '<label>Logo</label>';
     html += '<input type="file" accept="image/png,image/jpeg" data-upload="logo">';
@@ -1478,6 +1479,7 @@ function settingsView() {
       const s = DB.state.settings;
       s.businessName = form.elements.businessName.value.trim() || s.businessName;
       s.phone = form.elements.phone.value.trim();
+      if (form.elements.supportPhone) s.supportPhone = form.elements.supportPhone.value.trim();
       s.address = form.elements.address.value.trim();
       s.itbis = Number(form.elements.itbis.value) || 0;
       s.validityDays = Number(form.elements.validityDays.value) || 15;
@@ -1615,7 +1617,8 @@ function settingsView() {
 
   function contactSupportAction() {
     License.getDeviceId().then(function (id) {
-      const phone = ((DB.state && DB.state.settings && DB.state.settings.phone) || '').replace(/[^\d]/g, '');
+      const s = (DB.state && DB.state.settings) || {};
+      const phone = String(s.supportPhone || s.phone || '').replace(/[^\d]/g, '');
       let digits = phone;
       if (digits.length === 10) digits = '1' + digits;
       if (digits.length !== 11 && digits.length !== 12) {
