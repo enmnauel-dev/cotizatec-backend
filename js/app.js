@@ -416,7 +416,7 @@ let html = '<form class="card form" data-form="cliente">';
   function catalog() {
     const s = DB.state;
     const filter = params.filter || 'ALL';
-    const types = s.settings.itemTypes || [];
+    const types = Array.isArray(s.settings.itemTypes) ? s.settings.itemTypes : [];
     let html = '<div class="chips">';
     html += '<button class="chip' + (filter === 'ALL' ? ' on' : '') + '" data-action="catalogFilter" data-f="ALL">Todo</button>';
     types.forEach(function (t) {

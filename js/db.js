@@ -324,7 +324,7 @@ var DB = (function () {
     if (!s.catalog) s.catalog = [];
     if (!s.clients) s.clients = [];
     if (!s.jobs) s.jobs = [];
-    if (!s.settings.itemTypes) s.settings.itemTypes = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.itemTypes));
+    if (!Array.isArray(s.settings.itemTypes)) s.settings.itemTypes = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.itemTypes));
     if (!s.settings.docTitle) s.settings.docTitle = DEFAULT_SETTINGS.docTitle;
     const LEGACY_TYPES = { MO: 'SERVICIO', REP: 'PRODUCTO' };
     (s.catalog || []).forEach(function (i) {
