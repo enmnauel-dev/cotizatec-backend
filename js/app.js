@@ -159,12 +159,17 @@ const NAV = [
 
     let html = '<div class="hero-card"><div class="hero-ic">' + WALLET_ICON + '</div><div class="hero-txt"><small>' + saludo + ' · ' + hoy + '</small><b>' + escapeAttr(biz) + '</b><span>Por cobrar <b>' + money(porCobrar) + '</b></span></div></div>';
     html += '<div class="grid2">';
-    html += statCard(FLAG_ICON, 'Pendientes', pending.length + ' cot.', 'por ' + money(pendingTotal), '#f59e0b');
-    html += statCard(PAPER_ICON, 'Cotizado', money(totCotizado), 'total estimado', '#3b82f6');
-    html += statCard(WALLET_ICON, 'Cobrado', money(cobrado), 'en caja', '#10b981');
-    html += statCard('&#128176;', 'Por cobrar', money(porCobrar), 'saldo pendiente', '#ef4444');
-    html += '<div class="span2">' + statCard(TOOLS_ICON, 'Ganancia real', money(ganancia), 'cobrado − materiales', '#8b5cf6') + '</div>';
+    html += statCard(FLAG_ICON, 'Pendientes', pending.length + ' cot.', 'por ' + money(pendingTotal), '#f59e0b', 'trabajos/f/COTIZADO');
+    html += statCard(PAPER_ICON, 'Cotizado', money(totCotizado), 'total estimado', '#3b82f6', 'trabajos/f/SINCOBRAR');
+    html += statCard(WALLET_ICON, 'Cobrado', money(cobrado), 'en caja', '#10b981', 'trabajos/f/COBRADO');
+    html += statCard('&#128176;', 'Por cobrar', money(porCobrar), 'saldo pendiente', '#ef4444', 'trabajos/f/DEBE');
+    html += '<div class="span2">' + statCard(TOOLS_ICON, 'Ganancia real', money(ganancia), 'cobrado − materiales', '#8b5cf6', 'reportes') + '</div>';
     html += '</div>';
+
+    if (porCobrar > 0.005) {
+      const deudores = jobs.filter(function (j) { return j.status !== 'CANCELADO' && DB.jobTotals(j).balance > 0.005; }).length;
+      html += '<button class="btn ghost block" data-action="recordarDeudores">' + WA_ICON + ' Recordar a ' + deudores + ' cliente(s) con saldo</button>';
+    }
 
     if (pending.length) {
       html += '<section class="card alert-card"><h3>' + CHECK_ICON + ' Cotizaciones por aprobar</h3>';
@@ -193,8 +198,9 @@ const NAV = [
     return html;
   }
 
-  function statCard(icon, label, val, sub, color) {
-    return '<div class="stat" style="--c:' + color + '"><div class="stat-ic">' + icon + '</div><div class="stat-l">' + label + '</div><div class="stat-v">' + val + '</div><div class="stat-s">' + sub + '</div></div>';
+  function statCard(icon, label, val, sub, color, to) {
+    const clickable = to ? ' style="cursor:pointer" data-action="nav" data-to="' + to + '"' : '';
+    return '<div class="stat' + (to ? ' stat-click' : '') + '" style="--c:' + color + '"' + clickable + '><div class="stat-ic">' + icon + '</div><div class="stat-l">' + label + '</div><div class="stat-v">' + val + '</div><div class="stat-s">' + sub + '</div></div>';
   }
 
   function monthKey(d) {
@@ -545,8 +551,20 @@ let html = '<form class="card form" data-form="cliente">';
     });
     html += '</div>';
 
+    if (filter === 'SINCOBRAR') {
+      html += '<p class="muted"><small>Filtrando: trabajos sin cobrar ni cancelar</small></p>';
+    } else if (filter === 'DEBE') {
+      html += '<p class="muted"><small>Filtrando: trabajos con saldo pendiente (debe)</small></p>';
+    }
+
     let jobs = s.jobs.slice();
-    if (filter !== 'ALL') jobs = jobs.filter(function (j) { return j.status === filter; });
+    if (filter === 'SINCOBRAR') {
+      jobs = jobs.filter(function (j) { return j.status !== 'COBRADO' && j.status !== 'CANCELADO'; });
+    } else if (filter === 'DEBE') {
+      jobs = jobs.filter(function (j) { return j.status !== 'CANCELADO' && DB.jobTotals(j).balance > 0.005; });
+    } else if (filter !== 'ALL') {
+      jobs = jobs.filter(function (j) { return j.status === filter; });
+    }
     jobs.sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
 
     if (!jobs.length) {
@@ -788,7 +806,6 @@ function settingsView() {
     html += '<h3>' + TOOLS_ICON + ' Tu negocio</h3>';
     html += '<label>Nombre del negocio / técnico</label><input type="text" name="businessName" value="' + escapeAttr(s.businessName) + '">';
     html += '<label>Teléfono</label><input type="tel" name="phone" value="' + escapeAttr(s.phone) + '">';
-    html += '<label>Teléfono de soporte <small>(el que se muestra para contactarte si el equipo se bloquea)</small></label><input type="tel" name="supportPhone" value="' + escapeAttr(s.supportPhone) + '" placeholder="809-000-0000">';
     html += '<label>Dirección</label><input type="text" name="address" value="' + escapeAttr(s.address) + '">';
     html += '<label>Logo</label>';
     html += '<input type="file" accept="image/png,image/jpeg" data-upload="logo">';
@@ -812,8 +829,6 @@ function settingsView() {
     html += '<label>Válida por (días)</label><input type="number" step="1" min="1" name="validityDays" value="' + (s.validityDays || 15) + '">';
     html += '<label>Prefijo de cotización</label><input type="text" name="quotePrefix" value="' + escapeAttr(s.quotePrefix || 'COT') + '">';
     html += '<label>Título del documento</label><input type="text" name="docTitle" value="' + escapeAttr(s.docTitle || 'COTIZACIÓN') + '" placeholder="COTIZACIÓN / PEDIDO / FACTURA">';
-    html += '<label class="switch-line"><span>Pie de página "Creado con ..."</span><input type="checkbox" name="watermarkEnabled"' + (s.watermarkEnabled ? ' checked' : '') + '></label>';
-    html += '<label>Texto del pie</label><input type="text" name="watermark" value="' + escapeAttr(s.watermark || '') + '">';
     html += '</section>';
 
     html += '<section class="card form">';
@@ -951,6 +966,27 @@ case 'trabajos': inner = jobsView(); break;
     reportNext: function () { shiftMonth(1); },
 
     reportPdf: function () { exportReportPdf(); },
+
+    recordarDeudores: function () { openSheet(deudoresSheet()); },
+
+    recordarCliente: function (el) {
+      let digits = String(el.dataset.phone || '').replace(/[^\d]/g, '');
+      if (digits.length === 10) digits = '1' + digits;
+      if (digits.length !== 11 && digits.length !== 12) {
+        const p = window.prompt('No hay un teléfono válido para ' + el.dataset.name + '. Escribe su número (solo dígitos):');
+        if (!p) return;
+        digits = p.replace(/[^\d]/g, '');
+        if (digits.length === 10) digits = '1' + digits;
+        if (digits.length < 8) return;
+      }
+      const msg = 'Hola ' + (el.dataset.name || '') + ' 👋\n\nUn recordatorio de *' + (DB.state.settings.businessName || 'Mi Negocio') + '*\n\nTienes un saldo pendiente de *' + money(Number(el.dataset.total) || 0) + '* en ' + (el.dataset.count || 1) + ' trabajo(s).\n\nPuedes hacer el pago cuando te sea posible. ¡Gracias! 🙏';
+      const url = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(msg);
+      if (isNativeEnv()) {
+        const B = capacitorPlugin('Browser');
+        if (B) { B.open({ url: url }); return; }
+      }
+      window.open(url, '_blank');
+    },
 
     contactSupport: function () { contactSupportAction(); },
 
@@ -1578,14 +1614,11 @@ case 'trabajos': inner = jobsView(); break;
       const s = DB.state.settings;
       s.businessName = form.elements.businessName.value.trim() || s.businessName;
       s.phone = form.elements.phone.value.trim();
-      if (form.elements.supportPhone) s.supportPhone = form.elements.supportPhone.value.trim();
       s.address = form.elements.address.value.trim();
       s.itbis = Number(form.elements.itbis.value) || 0;
       s.validityDays = Number(form.elements.validityDays.value) || 15;
       s.quotePrefix = form.elements.quotePrefix.value.trim() || 'COT';
       if (form.elements.docTitle) s.docTitle = form.elements.docTitle.value.trim() || 'COTIZACIÓN';
-      s.watermarkEnabled = form.elements.watermarkEnabled.checked;
-      s.watermark = form.elements.watermark.value.trim();
       s.lockOnStart = form.elements.lockOnStart.checked;
       s.relockOnResume = form.elements.relockOnResume.checked;
       DB.save();
@@ -1668,11 +1701,44 @@ case 'trabajos': inner = jobsView(); break;
     }
     if (s.validityDays) m.push('');
     m.push('Válida por ' + (s.validityDays || 15) + ' días');
-    if (s.watermarkEnabled && s.watermark) {
-      m.push('');
-      m.push(s.watermark);
-    }
+    m.push('');
+    m.push('_Creado con CotizaTec — App de cotizaciones y gestión_');
     return m.join('\n');
+  }
+
+  function waReminderMessage(j) {
+    const t = DB.jobTotals(j);
+    const s = DB.state.settings;
+    let m = [];
+    m.push('Hola ' + (j.clientName || '') + ' 👋');
+    m.push('');
+    m.push('Un recordatorio de *' + (s.businessName || 'Mi Negocio') + '*');
+    m.push('');
+    m.push('Tu trabajo *' + j.code + '* tiene un saldo pendiente de:');
+    m.push('*' + money(t.balance) + '*');
+    if (j.payments && j.payments.length) m.push('(Abonado hasta ahora: ' + money(t.collected) + ')');
+    m.push('');
+    m.push('Puedes hacer el pago cuando te sea posible. ¡Gracias! 🙏');
+    return m.join('\n');
+  }
+
+  function deudoresSheet() {
+    const jobs = DB.state.jobs.filter(function (j) { return j.status !== 'CANCELADO' && DB.jobTotals(j).balance > 0.005; });
+    const uniq = {};
+    jobs.forEach(function (j) {
+      const key = j.clientPhone || j.clientName || j.code;
+      if (!uniq[key]) uniq[key] = { name: j.clientName || 'Cliente', phone: j.clientPhone || '', total: 0, count: 0 };
+      uniq[key].total += DB.jobTotals(j).balance;
+      uniq[key].count++;
+    });
+    const deudores = Object.values(uniq);
+    let html = '<div class="sheet"><div class="sheet-head"><b>' + WA_ICON + ' Recordar cobros</b><button class="icon-btn" data-action="closeSheet">' + X_ICON + '</button></div><div class="sheet-body">';
+    html += '<p class="muted">' + deudores.length + ' cliente(s) con saldo pendiente por un total de <b>' + money(deudores.reduce(function (a, d) { return a + d.total; }, 0)) + '</b>. Toca uno para enviarle su recordatorio por WhatsApp.</p>';
+    deudores.forEach(function (d) {
+      html += '<button class="sheet-item" data-action="recordarCliente" data-phone="' + escapeAttr(d.phone) + '" data-name="' + escapeAttr(d.name) + '" data-total="' + d.total + '" data-count="' + d.count + '"><span>' + escapeAttr(d.name) + '<small>' + d.count + ' trabajo(s) · ' + money(d.total) + '</small></span><b>' + WA_ICON + '</b></button>';
+    });
+    html += '</div></div>';
+    return html;
   }
 
   window.addEventListener('hashchange', render);

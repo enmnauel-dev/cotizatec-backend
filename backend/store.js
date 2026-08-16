@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 const DATABASE_URL = process.env.DATABASE_URL || '';
@@ -12,6 +13,7 @@ async function pgQuery(text, params) {
     const { Pool } = require('pg');
     pool = new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
     await pool.query('CREATE TABLE IF NOT EXISTS cotizatec_data (k text PRIMARY KEY, v jsonb NOT NULL)');
+    await pool.query('CREATE TABLE IF NOT EXISTS cotizatec_backups (device_id text PRIMARY KEY, data text NOT NULL, saved_at bigint NOT NULL, size integer NOT NULL)');
   }
   return pool.query(text, params);
 }
@@ -108,16 +110,62 @@ async function loadFromPg() {
     const licenses = await pgGet('licenses');
     const clients = await pgGet('clients');
     const blocked = await pgGet('blocked');
-    const backups = await pgGet('backups');
     if (devices) cache.devices = devices;
     if (licenses) cache.licenses = licenses;
     if (clients) cache.clients = clients;
     if (blocked) cache.blocked = blocked;
-    if (backups) cache.backups = backups;
     if (!cache.blocked) cache.blocked = {};
-    if (!cache.backups) cache.backups = {};
   } catch (e) {
     console.error('[pg] load:', e.message);
+  }
+}
+
+function gzipB64(str) {
+  return zlib.gzipSync(Buffer.from(String(str), 'utf8')).toString('base64');
+}
+
+function gunzipB64(b64) {
+  return zlib.gunzipSync(Buffer.from(String(b64), 'base64')).toString('utf8');
+}
+
+async function pgBackupSet(deviceId, data) {
+  await pgQuery(
+    'INSERT INTO cotizatec_backups (device_id, data, saved_at, size) VALUES ($1, $2, $3, $4) ON CONFLICT (device_id) DO UPDATE SET data = EXCLUDED.data, saved_at = EXCLUDED.saved_at, size = EXCLUDED.size',
+    [deviceId, gzipB64(data), Date.now(), String(data || '').length]
+  );
+}
+
+async function pgBackupGet(deviceId) {
+  const r = await pgQuery('SELECT data, saved_at, size FROM cotizatec_backups WHERE device_id = $1', [deviceId]);
+  if (!r.rows.length) return null;
+  const row = r.rows[0];
+  return { savedAt: Number(row.saved_at), size: Number(row.size), data: gunzipB64(row.data) };
+}
+
+async function pgBackupDelete(deviceId) {
+  await pgQuery('DELETE FROM cotizatec_backups WHERE device_id = $1', [deviceId]);
+}
+
+// Migra backups guardados como una sola fila JSONB en cotizatec_data hacia la
+// tabla separada cotizatec_backups (una fila por dispositivo).
+async function migrateLegacyBackups() {
+  if (!DATABASE_URL) return;
+  try {
+    const old = await pgGet('backups');
+    if (!old || typeof old !== 'object') return;
+    const keys = Object.keys(old);
+    for (const k of keys) {
+      const rec = old[k];
+      if (rec && typeof rec.data === 'string') {
+        await pgBackupSet(k, rec.data);
+      }
+    }
+    if (keys.length) {
+      await pgQuery('DELETE FROM cotizatec_data WHERE k = $1', ['backups']);
+      console.log('[pg] migrados ' + keys.length + ' backups a tabla separada');
+    }
+  } catch (e) {
+    console.error('[pg] migrate backups:', e.message);
   }
 }
 
@@ -125,6 +173,7 @@ async function init() {
   if (!DATABASE_URL) return;
   load();
   await loadFromPg();
+  await migrateLegacyBackups();
   // Recarga periódica desde Postgres para que cambios externos (o de otra
   // instancia) se reflejen en la caché en memoria.
   setInterval(() => {
@@ -155,6 +204,9 @@ function removeDevice(deviceId) {
     return c;
   });
   if (db.backups) delete db.backups[deviceId];
+  if (DATABASE_URL) {
+    pgBackupDelete(deviceId).catch(function (e) { console.error('[pg] delete backup:', e.message); });
+  }
   if (had) {
     save();
     if (DATABASE_URL) {
@@ -162,7 +214,6 @@ function removeDevice(deviceId) {
       pgSet('licenses', db.licenses).catch(function (e) { console.error('[pg] save licenses:', e.message); });
       pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients:', e.message); });
       pgSet('blocked', db.blocked).catch(function (e) { console.error('[pg] save blocked:', e.message); });
-      pgSet('backups', db.backups).catch(function (e) { console.error('[pg] save backups:', e.message); });
     }
   }
   return had;
@@ -289,22 +340,37 @@ function removeDeviceFromClient(clientKey, deviceId) {
   return c;
 }
 
-function setBackup(deviceId, data) {
-  const db = load();
-  if (!db.backups) db.backups = {};
-  db.backups[deviceId] = {
+async function setBackup(deviceId, data) {
+  const rec = {
     savedAt: Date.now(),
     size: String(data || '').length,
     data: data
   };
-  save();
   if (DATABASE_URL) {
-    pgSet('backups', db.backups).catch(function (e) { console.error('[pg] save backups:', e.message); });
+    try {
+      await pgBackupSet(deviceId, data);
+    } catch (e) {
+      console.error('[pg] save backup:', e.message);
+    }
+    return rec;
   }
-  return db.backups[deviceId];
+  const db = load();
+  if (!db.backups) db.backups = {};
+  db.backups[deviceId] = rec;
+  save();
+  return rec;
 }
 
-function getBackup(deviceId) {
+async function getBackup(deviceId) {
+  if (DATABASE_URL) {
+    try {
+      const rec = await pgBackupGet(deviceId);
+      return rec;
+    } catch (e) {
+      console.error('[pg] load backup:', e.message);
+      return null;
+    }
+  }
   return (load().backups || {})[deviceId] || null;
 }
 

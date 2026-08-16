@@ -76,7 +76,7 @@ app.get('/api/device/:deviceId', (req, res) => {
   } : null });
 });
 
-app.post('/api/backup/:deviceId', (req, res) => {
+app.post('/api/backup/:deviceId', async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId || deviceId.length < 8 || deviceId.length > 128) {
     return res.status(400).json({ error: 'deviceId inválido' });
@@ -88,13 +88,13 @@ app.post('/api/backup/:deviceId', (req, res) => {
   if (data.length > 4 * 1024 * 1024) {
     return res.status(413).json({ error: 'Respaldo demasiado grande' });
   }
-  store.setBackup(deviceId, data);
+  await store.setBackup(deviceId, data);
   res.json({ ok: true });
 });
 
-app.get('/api/backup/:deviceId', (req, res) => {
+app.get('/api/backup/:deviceId', async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
-  const b = store.getBackup(deviceId);
+  const b = await store.getBackup(deviceId);
   if (!b) return res.json({ ok: false, status: 'none' });
   res.json({ ok: true, savedAt: b.savedAt, data: b.data });
 });

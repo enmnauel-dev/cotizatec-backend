@@ -190,11 +190,9 @@ var PDF = (function () {
     doc.text('Firma del técnico', M, fY + 4);
     doc.text('Firma del cliente', W - M - 55, fY + 4);
 
-    if (st.watermarkEnabled && st.watermark) {
-      doc.setFontSize(8);
-      doc.setTextColor(160);
-      doc.text(st.watermark + ' — App de cotizaciones y gestión', W / 2, H - 10, { align: 'center' });
-    }
+    doc.setFontSize(8);
+    doc.setTextColor(160);
+    doc.text('Creado con CotizaTec — App de cotizaciones y gestión', W / 2, H - 10, { align: 'center' });
 
     return doc;
   }
@@ -308,7 +306,7 @@ var PDF = (function () {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(160);
-    doc.text(st.watermark || 'CotizaTec', W / 2, H - 10, { align: 'center' });
+    doc.text('Creado con CotizaTec — App de cotizaciones y gestión', W / 2, H - 10, { align: 'center' });
 
     return doc;
   }
