@@ -5,7 +5,7 @@ var UI = (function () {
   const { money, toast, isNativeEnv, capacitorPlugin, confirmar, escapeAttr,
     CLIENT_ICON, ITEM_ICON, TOOLS_ICON, WALLET_ICON, FLAG_ICON, PAPER_ICON,
     SAVE_ICON, PDF_ICON, WA_ICON, PLUS_ICON, BACK_ICON, TRASH_ICON,
-    PENCIL_ICON, CHECK_ICON, X_ICON, LOCK_ICON } = Util;
+    PENCIL_ICON, CHECK_ICON, X_ICON, LOCK_ICON, INFO_ICON, APP_VERSION } = Util;
   const { compressImage, recompressExisting } = Media;
   const { exportBackup, importBackupFile, hashVal, doReset } = Backups;
   const { unlockApp, resetLock, showPasswordField, applyLockScreen, appPlugin, bioApi } = Lock;
@@ -885,6 +885,18 @@ function settingsView() {
 
     html += '<section class="card"><h3>' + WA_ICON + ' Consejo rápido</h3>';
     html += '<p class="muted">Instala la app: menú del navegador → "Añadir a pantalla de inicio" para usarla sin conexión como una app real.</p>';
+    html += '</section>';
+
+    html += '<section class="card"><h3>' + INFO_ICON + ' Acerca de CotizaTec</h3>';
+    html += '<p class="muted">CotizaTec ' + APP_VERSION + ' · Crea, envía y gestiona cotizaciones en menos de 60 segundos.</p>';
+    html += '<p class="muted"><b>Guía rápida:</b></p>';
+    html += '<p class="muted">1. ' + CLIENT_ICON + ' <b>Clientes</b> → añade tus clientes.</p>';
+    html += '<p class="muted">2. ' + ITEM_ICON + ' <b>Catálogo</b> → guarda tus servicios y productos con precio.</p>';
+    html += '<p class="muted">3. <b>+ Nueva cotización</b> → elige cliente, añade ítems y envíala por WhatsApp o PDF.</p>';
+    html += '<p class="muted">4. <b>Trabajos</b> → sigue el estado (aprobado, en proceso, cobrado) y registra abonos y gastos.</p>';
+    html += '<p class="muted">5. <b>Reportes</b> → revisa tus ventas del día o del mes.</p>';
+    html += '<p class="muted">6. <b>Respaldo</b> → crea una copia cifrada con contraseña y guárdala en tu nube.</p>';
+    html += '<p class="muted">Los datos se guardan en este dispositivo y se sincronizan en la nube automáticamente.</p>';
     html += '</section>';
     return html;
   }

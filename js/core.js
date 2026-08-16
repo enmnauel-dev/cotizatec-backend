@@ -51,13 +51,15 @@ var Util = (function () {
   const CHECK_ICON = '&#10003;';
   const X_ICON = '&#10005;';
   const LOCK_ICON = '&#128274;';
+  const INFO_ICON = '&#8505;';
+  const APP_VERSION = '1.3.0';
 
   const api = {};
   Object.assign(api, {
     money, toast, isNativeEnv, capacitorPlugin, confirmar, escapeAttr,
     CLIENT_ICON, ITEM_ICON, TOOLS_ICON, WALLET_ICON, FLAG_ICON, PAPER_ICON,
     SAVE_ICON, PDF_ICON, WA_ICON, PLUS_ICON, BACK_ICON, TRASH_ICON,
-    PENCIL_ICON, CHECK_ICON, X_ICON, LOCK_ICON
+    PENCIL_ICON, CHECK_ICON, X_ICON, LOCK_ICON, INFO_ICON, APP_VERSION
   });
   return api;
 })();
