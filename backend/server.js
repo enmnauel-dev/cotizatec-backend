@@ -286,6 +286,8 @@ app.post('/api/admin/clients/:id/devices', (req, res) => {
   if (!info) return;
   const deviceId = String(req.body.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'Falta deviceId.' });
+  const owner = store.deviceInOtherClient(req.params.id, deviceId);
+  if (owner) return res.status(409).json({ error: 'Ese dispositivo ya está vinculado al cliente "' + owner.name + '". Quítalo de ahí o usa ese cliente.' });
   const c = store.addDeviceToClient(req.params.id, deviceId, req.body.alias);
   if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
   res.json({ ok: true, client: enrichClient(c) });
@@ -356,6 +358,8 @@ app.delete('/api/admin/device/:deviceId', (req, res) => {
 app.post('/api/admin/clients/:id/devices/:deviceId/activate', (req, res) => {
   const info = requireAdmin(req, res);
   if (!info) return;
+  const owner = store.deviceInOtherClient(req.params.id, req.params.deviceId);
+  if (owner) return res.status(409).json({ error: 'Ese dispositivo ya está vinculado al cliente "' + owner.name + '".' });
   const days = parseInt(req.body.days, 10) || 30;
   const graceDays = parseInt(req.body.graceDays, 10) || 15;
   const now = Date.now();

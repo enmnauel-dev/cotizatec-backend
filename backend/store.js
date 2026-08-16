@@ -309,6 +309,15 @@ function removeClient(clientKey) {
   return db.clients.length !== before;
 }
 
+// ¿El deviceId ya está vinculado a OTRO cliente (distinto de clientKey)?
+function deviceInOtherClient(clientKey, deviceId) {
+  const db = load();
+  const clean = String(deviceId || '').trim();
+  if (!clean) return null;
+  const found = (db.clients || []).find((c) => c.id !== clientKey && (c.devices || []).some((d) => d.deviceId === clean));
+  return found || null;
+}
+
 function addDeviceToClient(clientKey, deviceId, alias) {
   const db = load();
   const c = getClient(clientKey);
@@ -471,6 +480,7 @@ module.exports = {
   removeClient,
   addDeviceToClient,
   removeDeviceFromClient,
+  deviceInOtherClient,
   allDevices,
   removeDevice,
   blockDevice,
