@@ -852,6 +852,8 @@ function settingsView() {
 
     nav: function (el) { go('#/' + el.dataset.to); },
 
+    contactSupport: function () { contactSupportAction(); },
+
     licenseRetry: function () {
       const scr = document.getElementById('license-screen');
       if (scr) scr.remove();
@@ -1594,10 +1596,13 @@ function settingsView() {
       sub = 'No se pudo verificar la licencia en este momento.';
     }
     const deviceId = License.getDeviceId();
+    let contactHtml = '';
+    if (st.status === 'blocked') contactHtml = '<button class="btn primary block" id="license-contact" data-action="contactSupport">' + WA_ICON + ' Contactar por WhatsApp</button>';
     let html = '<div class="lock-card">' + LOCK_ICON +
       '<b>CotizaTec</b><p class="muted">' + msg + '</p>' +
       '<p class="muted">' + sub + '</p>' +
       '<div class="license-code" id="license-code">Código de dispositivo:<br>cargando…</div>' +
+      contactHtml +
       '<button class="btn primary block" data-action="licenseRetry">' + CHECK_ICON + ' Volver a verificar</button>';
     html += '</div>';
     d.innerHTML = html;
@@ -1605,6 +1610,27 @@ function settingsView() {
     deviceId.then(function (id) {
       const el = document.getElementById('license-code');
       if (el) el.innerHTML = 'Código de dispositivo:<br><b>' + id + '</b>';
+    });
+  }
+
+  function contactSupportAction() {
+    License.getDeviceId().then(function (id) {
+      const phone = ((DB.state && DB.state.settings && DB.state.settings.phone) || '').replace(/[^\d]/g, '');
+      let digits = phone;
+      if (digits.length === 10) digits = '1' + digits;
+      if (digits.length !== 11 && digits.length !== 12) {
+        const p = window.prompt('Escribe el teléfono de WhatsApp del administrador (solo dígitos):');
+        if (!p) return;
+        digits = p.replace(/[^\d]/g, '');
+        if (digits.length < 8) return;
+      }
+      const msg = 'Hola, mi dispositivo CotizaTec fue bloqueado. Código: ' + (id || 'desconocido') + '. Por favor restablece mi acceso.';
+      const url = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(msg);
+      if (isNativeEnv()) {
+        const B = capacitorPlugin('Browser');
+        if (B) { B.open({ url: url }); return; }
+      }
+      window.open(url, '_blank');
     });
   }
 
