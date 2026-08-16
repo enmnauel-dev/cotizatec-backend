@@ -156,9 +156,11 @@ var License = (function () {
     var now = Date.now();
     if (payload && payload.blocked) return { status: 'blocked' };
     if (!payload) return { status: 'none' };
+    var trial = !!(payload.trial);
     if (now < payload.expiresAt) {
       return {
         status: 'active',
+        trial: trial,
         expiresAt: payload.expiresAt,
         graceUntil: payload.graceUntil,
         daysLeft: Math.floor((payload.expiresAt - now) / 86400000)
@@ -167,13 +169,14 @@ var License = (function () {
     if (now < payload.graceUntil) {
       return {
         status: 'grace',
+        trial: trial,
         expiresAt: payload.expiresAt,
         graceUntil: payload.graceUntil,
         daysLeft: 0,
         graceDaysLeft: Math.floor((payload.graceUntil - now) / 86400000)
       };
     }
-    return { status: 'expired', expiresAt: payload.expiresAt, graceUntil: payload.graceUntil };
+    return { status: 'expired', trial: trial, expiresAt: payload.expiresAt, graceUntil: payload.graceUntil };
   }
 
   function notificationsPlugin() {

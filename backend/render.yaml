@@ -22,6 +22,8 @@ services:
         value: "30"
       - key: GRACE_DAYS
         value: "15"
+      - key: TRIAL_DAYS
+        value: "15"
       - key: SUPPORT_PHONE
         sync: false
       - key: DATABASE_URL

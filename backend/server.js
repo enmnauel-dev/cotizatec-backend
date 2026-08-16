@@ -47,18 +47,25 @@ app.get('/api/license/:deviceId', (req, res) => {
   if (store.isBlocked(deviceId)) {
     return res.json({ ok: false, status: 'blocked', supportPhone, message: 'Dispositivo bloqueado. Contacta al administrador.' });
   }
-  const l = store.getLicense(deviceId);
-  if (!l) {
-    return res.json({ ok: false, status: 'none', supportPhone, message: 'Sin licencia. Contacta al administrador para activar.' });
-  }
+  let l = store.getLicense(deviceId);
   const now = Date.now();
+  if (!l) {
+    const trialDays = Number(process.env.TRIAL_DAYS) || 15;
+    const expiresAt = now + trialDays * 86400000;
+    const payload = { v: 1, deviceId, issuedAt: now, expiresAt, graceUntil: expiresAt, trial: true };
+    l = store.setLicense(deviceId, { deviceId, issuedAt: now, expiresAt, graceUntil: expiresAt, trial: true, token: license.signLicense(payload) });
+    return res.json({ ok: true, status: 'trial', trial: true, supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, token: l.token });
+  }
   if (now < l.expiresAt) {
     return res.json({ ok: true, status: 'active', supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, token: l.token });
   }
   if (now < l.graceUntil) {
     return res.json({ ok: true, status: 'grace', supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, token: l.token });
   }
-  return res.json({ ok: false, status: 'expired', supportPhone, message: 'Licencia vencida y período de gracia agotado.' });
+  const message = l.trial
+    ? 'Tu período de prueba terminó. Actívala contactando al administrador por WhatsApp.'
+    : 'Licencia vencida y período de gracia agotado. Contacta al administrador para renovar.';
+  return res.json({ ok: false, status: 'expired', supportPhone, message });
 });
 
 app.get('/api/device/:deviceId', (req, res) => {

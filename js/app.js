@@ -1583,23 +1583,31 @@ function settingsView() {
   function showLicenseScreen(st) {
     const d = document.createElement('div');
     d.id = 'license-screen';
-    let msg = '', sub = '';
+    let msg = '', sub = '', motivo = '';
     if (st.status === 'none') {
       msg = 'Licencia no activada';
-      sub = 'Esta copia de CotizaTec aún no está activada. Envía tu código de dispositivo al administrador para activarla.';
+      sub = 'Esta copia de CotizaTec aún no está activada. Contacta al administrador por WhatsApp para activarla.';
+      motivo = 'sin-activar';
     } else if (st.status === 'blocked') {
       msg = 'Dispositivo bloqueado';
-      sub = 'Contacta al administrador para restablecer tu acceso.';
+      sub = 'Contacta al administrador por WhatsApp para restablecer tu acceso.';
+      motivo = 'bloqueado';
+    } else if (st.status === 'expired' && st.trial) {
+      msg = 'Tu período de prueba terminó';
+      sub = 'Disfrutaste la prueba de CotizaTec. Contáctanos por WhatsApp para activarla y seguir facturando.';
+      motivo = 'expirado';
     } else if (st.status === 'expired') {
       msg = 'Tu suscripción venció';
-      sub = 'El período de gracia se agotó. Renueva tu suscripción para seguir usando CotizaTec.';
+      sub = 'El período de gracia se agotó. Renueva tu suscripción por WhatsApp para seguir usando CotizaTec.';
+      motivo = 'expirado';
     } else {
       msg = 'Revisando licencia';
       sub = 'No se pudo verificar la licencia en este momento.';
+      motivo = '';
     }
     const deviceId = License.getDeviceId();
     let contactHtml = '';
-    if (st.status === 'blocked') contactHtml = '<button class="btn primary block" id="license-contact" data-action="contactSupport">' + WA_ICON + ' Contactar por WhatsApp</button>';
+    if (motivo) contactHtml = '<button class="btn primary block" id="license-contact" data-action="contactSupport" data-motivo="' + motivo + '">' + WA_ICON + ' Contactar por WhatsApp</button>';
     let html = '<div class="lock-card">' + LOCK_ICON +
       '<b>CotizaTec</b><p class="muted">' + msg + '</p>' +
       '<p class="muted">' + sub + '</p>' +
@@ -1628,8 +1636,17 @@ function settingsView() {
         digits = p.replace(/[^\d]/g, '');
         if (digits.length < 8) return;
       }
-      const msg = 'Hola, mi dispositivo CotizaTec fue bloqueado. Código: ' + (id || 'desconocido') + '. Por favor restablece mi acceso.';
-      const url = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(msg);
+      const btn = document.getElementById('license-contact');
+      const motivo = btn ? btn.getAttribute('data-motivo') : 'bloqueado';
+      let texto;
+      if (motivo === 'expirado') {
+        texto = 'Hola, mi período de prueba/suscripción de CotizaTec terminó. Código: ' + (id || 'desconocido') + '. Quiero activarla.';
+      } else if (motivo === 'sin-activar') {
+        texto = 'Hola, quiero activar CotizaTec. Código: ' + (id || 'desconocido') + '.';
+      } else {
+        texto = 'Hola, mi dispositivo CotizaTec fue bloqueado. Código: ' + (id || 'desconocido') + '. Por favor restablece mi acceso.';
+      }
+      const url = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(texto);
       if (isNativeEnv()) {
         const B = capacitorPlugin('Browser');
         if (B) { B.open({ url: url }); return; }
