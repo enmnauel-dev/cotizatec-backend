@@ -209,6 +209,42 @@ var DB = (function () {
       .then(function (buf) { return new TextDecoder().decode(buf); });
   }
 
+  // Cifra el JSON del respaldo manual con una contraseña elegida por el usuario.
+  function encryptBackupJson(jsonStr, password) {
+    const salt = new Uint8Array(16);
+    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(salt);
+    return deriveKey(password, b64FromBuf(salt)).then(function (k) {
+      const iv = new Uint8Array(12);
+      if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(iv);
+      return subtle().encrypt({ name: 'AES-GCM', iv: iv }, k, new TextEncoder().encode(jsonStr))
+        .then(function (ct) {
+          return JSON.stringify({
+            format: 'cotizatec-backup-enc',
+            version: 1,
+            app: 'CotizaTec',
+            kdf: 'PBKDF2-SHA256',
+            iter: ENC_ITER,
+            salt: b64FromBuf(salt),
+            iv: b64FromBuf(iv),
+            ct: b64FromBuf(ct)
+          }, null, 2);
+        });
+    });
+  }
+
+  // Descifra el respaldo manual. Devuelve el JSON plano o lanza Error con
+  // código 'bad-pass' si la contraseña no es la correcta.
+  function decryptBackupJson(encStr, password) {
+    let o;
+    try { o = JSON.parse(encStr); } catch (e) { return Promise.reject(new Error('bad-json')); }
+    if (!o || o.format !== 'cotizatec-backup-enc' || !o.salt || !o.iv || !o.ct) return Promise.reject(new Error('bad-format'));
+    return deriveKey(password, o.salt).then(function (k) {
+      return subtle().decrypt({ name: 'AES-GCM', iv: bufFromB64(o.iv) }, k, bufFromB64(o.ct))
+        .then(function (buf) { return new TextDecoder().decode(buf); })
+        .catch(function () { throw new Error('bad-pass'); });
+    });
+  }
+
   // Envuelve la clave maestra con la contraseña de respaldo.
   function wrapMk(password, mkRaw) {
     const salt = new Uint8Array(16);
@@ -899,6 +935,7 @@ var DB = (function () {
     jobTotals, newJob, saveJob, captureClient,
     statusLabel, statusColor, STATUS, KEY, BAK_KEY, TS_KEY, FS_KEY, ENC_META,
     buildBackup, parseBackup, applyBackup, backupError,
+    encryptBackupJson, decryptBackupJson,
     startedFromLocal, restoreFromIdb, restoreFromFs, fsFlush, itemType,
     needsUnlock, isEncrypted, isProtected, hasBackupPassword, hasFingerprint, canUnlockByPassword, bioAvailable,
     unlock, unlockFingerprint, setEncryption, removePassword, disableEncryption, relock, boot,

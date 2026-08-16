@@ -1,12 +1,41 @@
 var Backups = (function () {
   function exportBackup() {
+    // Pide una contraseña para cifrar el respaldo antes de generarlo.
+    const sheet = document.createElement('div');
+    sheet.id = 'sheet-holder';
+    sheet.innerHTML = '<div class="sheet"><div class="sheet-head"><b>' + Util.SAVE_ICON + ' Crear respaldo protegido</b><button class="icon-btn" data-action="closeSheet">' + Util.X_ICON + '</button></div><div class="sheet-body">' +
+      '<p class="muted">El archivo se cifrará con una contraseña. Sin ella no se podrá restaurar.</p>' +
+      '<input id="bk-pass" class="sheet-input" type="password" placeholder="Contraseña (mínimo 4 caracteres)" autocomplete="off">' +
+      '<input id="bk-pass2" class="sheet-input" type="password" placeholder="Repite la contraseña" autocomplete="off">' +
+      '<button class="btn primary block" data-action="doExportBackup">' + Util.SAVE_ICON + ' Crear respaldo cifrado</button>' +
+      '</div></div>';
+    document.body.appendChild(sheet);
+    setTimeout(function () { const i = document.getElementById('bk-pass'); if (i) i.focus(); }, 50);
+  }
+
+  function doExportBackup() {
+    const p1 = (document.getElementById('bk-pass') || {}).value || '';
+    const p2 = (document.getElementById('bk-pass2') || {}).value || '';
+    if (p1.length < 4) { Util.toast('La contraseña debe tener al menos 4 caracteres', false); return; }
+    if (p1 !== p2) { Util.toast('Las contraseñas no coinciden', false); return; }
     const json = DB.buildBackup();
+    DB.encryptBackupJson(json, p1).then(function (enc) {
+      const sh = document.getElementById('sheet-holder');
+      if (sh) sh.remove();
+      writeBackupFile(enc);
+    }).catch(function (e) {
+      Util.toast('No se pudo cifrar el respaldo', false);
+      console.error('BK_ERR ' + (e && e.message));
+    });
+  }
+
+  function writeBackupFile(content) {
     const d = new Date();
     const pad = function (n) { return String(n).padStart(2, '0'); };
-    const fname = 'cotizatec-respaldo-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.json';
+    const fname = 'cotizatec-respaldo-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.cotizatec';
     const FS = Util.capacitorPlugin('Filesystem');
     if (Util.isNativeEnv() && FS) {
-      const b64 = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(json)));
+      const b64 = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(content)));
       FS.writeFile({ path: fname, directory: 'CACHE', data: b64 })
         .then(function () { return FS.getUri({ path: fname, directory: 'CACHE' }); })
         .then(function (res) {
@@ -14,7 +43,7 @@ var Backups = (function () {
           if (!SH) { Util.toast('No se pudo compartir el respaldo', false); return null; }
           return SH.share({ files: [res.uri], title: fname, dialogTitle: 'Guardar respaldo en OneDrive / Drive' });
         })
-        .then(function () { Util.toast('Respaldo creado: elige dónde guardarlo', true); })
+        .then(function () { Util.toast('Respaldo cifrado creado: elige dónde guardarlo', true); })
         .catch(function (e) {
           console.error('BK_ERR ' + (e && e.message));
           Util.toast('Respaldo: ' + ((e && e.message) || 'error al compartir'), false);
@@ -22,7 +51,7 @@ var Backups = (function () {
       return;
     }
     try {
-      const blob = new Blob([json], { type: 'application/json' });
+      const blob = new Blob([content], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -32,7 +61,7 @@ var Backups = (function () {
       a.click();
       document.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-      Util.toast('Respaldo generado', true);
+      Util.toast('Respaldo cifrado generado', true);
     } catch (e) {
       Util.toast('No se pudo generar el respaldo', false);
     }
@@ -42,16 +71,55 @@ var Backups = (function () {
     if (!file) return;
     const r = new FileReader();
     r.onload = function (ev) {
-      const d = DB.parseBackup(ev.target.result);
-      if (!d) { Util.toast(DB.backupError(ev.target.result), false); return; }
-      if (!Util.confirmar('Esta acción reemplazará los datos actuales por los del respaldo. ¿Deseas continuar?')) return;
-      DB.applyBackup(d);
-      Media.recompressExisting();
-      Backups.render();
-      Util.toast('Respaldo restaurado', true);
+      const text = String(ev.target.result || '');
+      // ¿Es un respaldo cifrado? Detecta el formato y pide la contraseña.
+      let isEnc = false;
+      try { const o = JSON.parse(text.replace(/^\uFEFF/, '').trim()); isEnc = !!(o && o.format === 'cotizatec-backup-enc'); } catch (e) { isEnc = false; }
+      if (isEnc) {
+        const sheet = document.createElement('div');
+        sheet.id = 'sheet-holder';
+        sheet.innerHTML = '<div class="sheet"><div class="sheet-head"><b>' + Util.LOCK_ICON + ' Restaurar respaldo protegido</b><button class="icon-btn" data-action="closeSheet">' + Util.X_ICON + '</button></div><div class="sheet-body">' +
+          '<p class="muted">Este respaldo está cifrado. Escribe la contraseña para descifrarlo.</p>' +
+          '<input id="bk-pass" class="sheet-input" type="password" placeholder="Contraseña" autocomplete="off">' +
+          '<button class="btn primary block" data-action="doImportBackup">' + Util.CHECK_ICON + ' Descifrar y restaurar</button>' +
+          '</div></div>';
+        document.body.appendChild(sheet);
+        window.__bkEncText = text;
+        setTimeout(function () { const i = document.getElementById('bk-pass'); if (i) i.focus(); }, 50);
+        return;
+      }
+      const d = DB.parseBackup(text);
+      if (!d) { Util.toast(DB.backupError(text), false); return; }
+      applyRestore(d);
     };
     r.onerror = function () { Util.toast('No se pudo leer el archivo', false); };
     r.readAsText(file);
+  }
+
+  function doImportBackup() {
+    const p = (document.getElementById('bk-pass') || {}).value || '';
+    const text = window.__bkEncText || '';
+    if (!p) { Util.toast('Escribe la contraseña', false); return; }
+    DB.decryptBackupJson(text, p).then(function (json) {
+      window.__bkEncText = null;
+      const sh = document.getElementById('sheet-holder');
+      if (sh) sh.remove();
+      const d = DB.parseBackup(json);
+      if (!d) { Util.toast(DB.backupError(json), false); return; }
+      if (!Util.confirmar('Esta acción reemplazará los datos actuales por los del respaldo. ¿Deseas continuar?')) return;
+      applyRestore(d);
+    }).catch(function (e) {
+      if (e && e.message === 'bad-pass') { Util.toast('Contraseña incorrecta', false); return; }
+      Util.toast('No se pudo descifrar el respaldo', false);
+    });
+  }
+
+  function applyRestore(d) {
+    if (!Util.confirmar('Esta acción reemplazará los datos actuales por los del respaldo. ¿Deseas continuar?')) return;
+    DB.applyBackup(d);
+    Media.recompressExisting();
+    Backups.render();
+    Util.toast('Respaldo restaurado', true);
   }
 
   function hashVal(str) {
@@ -215,7 +283,7 @@ var Backups = (function () {
   }
 
   const api = { render: function () {} };
-  Object.assign(api, { exportBackup, importBackupFile, hashVal, doReset, pushToCloud, pullFromCloud });
+  Object.assign(api, { exportBackup, importBackupFile, doExportBackup, doImportBackup, hashVal, doReset, pushToCloud, pullFromCloud });
 
   // Auto-respaldo: cada vez que se guardan datos locales, se sube el respaldo
   // cifrado a la nube (debounce para agrupar cambios consecutivos).

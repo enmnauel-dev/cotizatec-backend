@@ -877,10 +877,10 @@ function settingsView() {
     html += '</section>';
 
     html += '<section class="card"><h3>' + SAVE_ICON + ' Respaldo de datos</h3>';
-    html += '<p class="muted">Crea un archivo con todos tus datos (catálogo, clientes, cotizaciones y ajustes) y guárdalo en tu OneDrive o Google Drive. Con Restaurar los recuperas en este u otro dispositivo.</p>';
+    html += '<p class="muted">Crea un archivo cifrado con contraseña con todos tus datos (catálogo, clientes, cotizaciones y ajustes) y guárdalo en tu OneDrive o Google Drive. Con Restaurar los recuperas en este u otro dispositivo.</p>';
     html += '<button class="btn primary block" type="button" data-action="createBackup">' + SAVE_ICON + ' Crear respaldo</button>';
     html += '<button class="btn block" type="button" data-action="restoreBackup">' + BACK_ICON + ' Restaurar respaldo</button>';
-    html += '<input type="file" id="backup-file" accept=".json,application/json" style="display:none">';
+    html += '<input type="file" id="backup-file" accept=".cotizatec,.json,application/json" style="display:none">';
     html += '</section>';
 
     html += '<section class="card"><h3>' + WA_ICON + ' Consejo rápido</h3>';
@@ -1317,6 +1317,8 @@ case 'trabajos': inner = jobsView(); break;
     },
 
     createBackup: function () { exportBackup(); },
+    doExportBackup: function () { Backups.doExportBackup(); },
+    doImportBackup: function () { Backups.doImportBackup(); },
 
     restoreBackup: function () {
       const f = document.getElementById('backup-file');
