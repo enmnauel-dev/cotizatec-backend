@@ -4,7 +4,8 @@
   "description": "Plataforma PWA de cotizaciones y gestion para tecnicos",
   "private": true,
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node test-app/run-tests.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
