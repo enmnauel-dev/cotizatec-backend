@@ -139,6 +139,19 @@
     </div>
   </div>
 
+  <div class="modal" id="migModal">
+    <div class="modal-box">
+      <h3>Migrar a otro dispositivo</h3>
+      <p class="muted" style="margin:0 0 10px">El dispositivo viejo quedará bloqueado y su respaldo + licencia se moverán al nuevo.</p>
+      <label style="font-size:12px;color:#8b8b96">Dispositivo NUEVO (deviceId)</label>
+      <input class="field" id="migToId" placeholder="cotizatec-...">
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closeMigModal()">Cancelar</button>
+        <button class="btn" onclick="confirmMig()">Migrar</button>
+      </div>
+    </div>
+  </div>
+
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
   var TG = window.Telegram && window.Telegram.WebApp;
@@ -296,16 +309,7 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
 
   function actOrphan(deviceId) { activateDevice(deviceId, function () { loadOrphans(); }); }
 
-  function migOrphan(deviceId) {
-    var toId = prompt('Dispositivo NUEVO (deviceId):');
-    if (!toId || !toId.trim()) return;
-    if (!confirm('¿Mover respaldo y licencia de ' + deviceId + ' a ' + toId.trim() + '?\nEl dispositivo viejo quedará eliminado.')) return;
-    api('/api/admin/device/' + encodeURIComponent(deviceId) + '/migrate', { method: 'POST', body: JSON.stringify({ toDeviceId: toId.trim() }) })
-      .then(function (r) {
-        toast('Migrado: respaldo ' + (r.backupMoved ? 'sí' : 'no había') + ' · licencia ' + (r.licenseMoved ? 'sí' : 'no') + '. El nuevo debe abrir la app para heredar.');
-        loadOrphans(); loadAll();
-      }).catch(function (e) { toast(e.message); });
-  }
+  function migOrphan(deviceId) { openMigModal(deviceId); }
 
   function renOrphan(deviceId) { activateDevice(deviceId, function () { loadOrphans(); }); }
 
@@ -443,16 +447,36 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
       .then(function () { toast('Dispositivo desbloqueado'); loadAll(); }).catch(function (e) { toast(e.message); });
   }
 
-  function migDev(clientId, deviceId) {
-    var toId = prompt('Dispositivo NUEVO (deviceId):');
-    if (!toId || !toId.trim()) return;
-    if (!confirm('¿Mover respaldo y licencia de ' + deviceId + ' a ' + toId.trim() + '?\nEl dispositivo viejo quedará eliminado.')) return;
-    api('/api/admin/device/' + encodeURIComponent(deviceId) + '/migrate', { method: 'POST', body: JSON.stringify({ toDeviceId: toId.trim() }) })
+  var migFromId = null;
+
+  function openMigModal(deviceId) {
+    migFromId = deviceId;
+    document.getElementById('migToId').value = '';
+    document.getElementById('migModal').classList.add('open');
+    setTimeout(function () { document.getElementById('migToId').focus(); }, 50);
+  }
+
+  function closeMigModal() {
+    document.getElementById('migModal').classList.remove('open');
+    migFromId = null;
+  }
+
+  function confirmMig() {
+    var toId = (document.getElementById('migToId').value || '').trim();
+    if (!toId) { toast('Escribe el deviceId del dispositivo nuevo'); return; }
+    if (toId.length < 8 || toId.length > 128) { toast('deviceId no válido'); return; }
+    var fromId = migFromId;
+    if (!fromId) return;
+    if (!confirm('¿Mover respaldo y licencia de ' + fromId + ' a ' + toId + '?\nEl dispositivo viejo quedará bloqueado.')) return;
+    closeMigModal();
+    api('/api/admin/device/' + encodeURIComponent(fromId) + '/migrate', { method: 'POST', body: JSON.stringify({ toDeviceId: toId }) })
       .then(function (r) {
         toast('Migrado: respaldo ' + (r.backupMoved ? 'sí' : 'no había') + ' · licencia ' + (r.licenseMoved ? 'sí' : 'no') + '. El nuevo debe abrir la app para heredar.');
         loadAll();
       }).catch(function (e) { toast(e.message); });
   }
+
+  function migDev(clientId, deviceId) { openMigModal(deviceId); }
 
   api('/api/admin/verify').then(function (r) {
     loadAll();
