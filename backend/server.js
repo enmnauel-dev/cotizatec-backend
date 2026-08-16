@@ -43,21 +43,22 @@ app.post('/api/register', (req, res) => {
 
 app.get('/api/license/:deviceId', (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
+  const supportPhone = process.env.SUPPORT_PHONE || '';
   if (store.isBlocked(deviceId)) {
-    return res.json({ ok: false, status: 'blocked', message: 'Dispositivo bloqueado. Contacta al administrador.' });
+    return res.json({ ok: false, status: 'blocked', supportPhone, message: 'Dispositivo bloqueado. Contacta al administrador.' });
   }
   const l = store.getLicense(deviceId);
   if (!l) {
-    return res.json({ ok: false, status: 'none', message: 'Sin licencia. Contacta al administrador para activar.' });
+    return res.json({ ok: false, status: 'none', supportPhone, message: 'Sin licencia. Contacta al administrador para activar.' });
   }
   const now = Date.now();
   if (now < l.expiresAt) {
-    return res.json({ ok: true, status: 'active', issuedAt: l.issuedAt, expiresAt: l.expiresAt, token: l.token });
+    return res.json({ ok: true, status: 'active', supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, token: l.token });
   }
   if (now < l.graceUntil) {
-    return res.json({ ok: true, status: 'grace', issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, token: l.token });
+    return res.json({ ok: true, status: 'grace', supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, token: l.token });
   }
-  return res.json({ ok: false, status: 'expired', message: 'Licencia vencida y período de gracia agotado.' });
+  return res.json({ ok: false, status: 'expired', supportPhone, message: 'Licencia vencida y período de gracia agotado.' });
 });
 
 app.get('/api/device/:deviceId', (req, res) => {

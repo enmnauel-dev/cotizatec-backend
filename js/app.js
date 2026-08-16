@@ -1618,7 +1618,8 @@ function settingsView() {
   function contactSupportAction() {
     License.getDeviceId().then(function (id) {
       const s = (DB.state && DB.state.settings) || {};
-      const phone = String(s.supportPhone || s.phone || '').replace(/[^\d]/g, '');
+      const serverPhone = (typeof License.getSupportPhone === 'function') ? License.getSupportPhone() : '';
+      const phone = String(serverPhone || s.supportPhone || s.phone || '').replace(/[^\d]/g, '');
       let digits = phone;
       if (digits.length === 10) digits = '1' + digits;
       if (digits.length !== 11 && digits.length !== 12) {

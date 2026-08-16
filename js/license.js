@@ -6,6 +6,7 @@ var License = (function () {
   var state = {
     deviceId: '',
     token: '',
+    supportPhone: '',
     loaded: false
   };
 
@@ -32,7 +33,7 @@ var License = (function () {
   }
 
   function persist() {
-    try { localStorage.setItem(LS_KEY, JSON.stringify({ deviceId: state.deviceId, token: state.token })); } catch (e) {}
+    try { localStorage.setItem(LS_KEY, JSON.stringify({ deviceId: state.deviceId, token: state.token, supportPhone: state.supportPhone })); } catch (e) {}
   }
 
   function loadPersisted() {
@@ -41,6 +42,7 @@ var License = (function () {
       if (raw && raw.deviceId) {
         state.deviceId = raw.deviceId;
         state.token = raw.token || '';
+        state.supportPhone = raw.supportPhone || '';
         return true;
       }
     } catch (e) {}
@@ -112,6 +114,10 @@ var License = (function () {
     var timer = setTimeout(function () {}, 8000);
     return fetch(url).then(function (r) { return r.json(); }).then(function (body) {
       clearTimeout(timer);
+      if (body && typeof body.supportPhone === 'string') {
+        state.supportPhone = body.supportPhone;
+        persist();
+      }
       if (body && body.status === 'blocked') {
         state.token = '';
         persist();
@@ -265,5 +271,5 @@ var License = (function () {
     });
   }
 
-  return { check: check, refresh: refresh, getDeviceId: getDeviceId, isLoaded: isLoaded, verifyToken: verifyToken, parseToken: parseToken, requestNotificationPermission: requestNotificationPermission };
+  return { check: check, refresh: refresh, getDeviceId: getDeviceId, getSupportPhone: function () { return state.supportPhone; }, isLoaded: isLoaded, verifyToken: verifyToken, parseToken: parseToken, requestNotificationPermission: requestNotificationPermission };
 })();
