@@ -11,31 +11,34 @@ var UI = (function () {
   const { unlockApp, resetLock, showPasswordField, applyLockScreen, appPlugin, bioApi } = Lock;
   Backups.render = render;
 
-  const TITLES = {
-    dashboard: 'Inicio',
-    clientes: 'Clientes',
-    cliente: 'Cliente',
-    catalogo: 'Catálogo',
-    'catalogo-item': 'Catálogo',
-    cotizacion: 'Cotización',
-    trabajos: 'Trabajos',
-    trabajo: 'Detalle',
-    ajustes: 'Ajustes'
-  };
+const TITLES = {
+  dashboard: 'Inicio',
+  clientes: 'Clientes',
+  cliente: 'Cliente',
+  catalogo: 'Catálogo',
+  'catalogo-item': 'Catálogo',
+  cotizacion: 'Cotización',
+  trabajos: 'Trabajos',
+  trabajo: 'Detalle',
+  reportes: 'Reportes',
+  ajustes: 'Ajustes'
+};
 
-  const NAV = [
-    { v: 'dashboard', label: 'Inicio', icon: '&#8962;' },
-    { v: 'clientes', label: 'Clientes', icon: '&#128100;' },
-    { v: 'catalogo', label: 'Catálogo', icon: '&#128722;' },
-    { v: 'trabajos', label: 'Trabajos', icon: '&#128203;' },
-    { v: 'ajustes', label: 'Ajustes', icon: '&#9881;' }
-  ];
+const NAV = [
+  { v: 'dashboard', label: 'Inicio', icon: '&#8962;' },
+  { v: 'clientes', label: 'Clientes', icon: '&#128100;' },
+  { v: 'catalogo', label: 'Catálogo', icon: '&#128722;' },
+  { v: 'trabajos', label: 'Trabajos', icon: '&#128203;' },
+  { v: 'reportes', label: 'Reportes', icon: '&#128202;' },
+  { v: 'ajustes', label: 'Ajustes', icon: '&#9881;' }
+];
 
   let routeName = 'dashboard';
   let params = {};
   let draftEntryMode = null;
   let biometricPromptActive = false;
   let licenseStatus = null;
+  let reportDate = new Date();
 
 
 
@@ -60,7 +63,7 @@ var UI = (function () {
 
   function shell() {
     const isEditor = routeName === 'cotizacion';
-    const showBack = routeName !== 'dashboard' && !isEditor && routeName !== 'clientes' && routeName !== 'catalogo' && routeName !== 'trabajos' && routeName !== 'ajustes';
+    const showBack = routeName !== 'dashboard' && !isEditor && routeName !== 'clientes' && routeName !== 'catalogo' && routeName !== 'trabajos' && routeName !== 'reportes' && routeName !== 'ajustes';
     const title = TITLES[routeName];
     const biz = DB.state.settings.businessName || 'CotizaTec';
 
@@ -192,6 +195,95 @@ var UI = (function () {
 
   function statCard(icon, label, val, sub, color) {
     return '<div class="stat" style="--c:' + color + '"><div class="stat-ic">' + icon + '</div><div class="stat-l">' + label + '</div><div class="stat-v">' + val + '</div><div class="stat-s">' + sub + '</div></div>';
+  }
+
+  function monthKey(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+
+  function monthLabel(d) {
+    const names = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    return names[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  function shiftMonth(delta) {
+    const d = new Date(reportDate.getFullYear(), reportDate.getMonth() + delta, 1);
+    reportDate = d;
+    render();
+  }
+
+  function inMonth(iso, d) {
+    const dt = new Date(iso);
+    return dt.getFullYear() === d.getFullYear() && dt.getMonth() === d.getMonth();
+  }
+
+  function reportTotals(d) {
+    const jobs = DB.state.jobs.filter(function (j) { return inMonth(j.date, d) && j.status !== 'CANCELADO'; });
+    let facturado = 0, cobrado = 0, porCobrar = 0, gastado = 0, ganancia = 0, count = 0;
+    jobs.forEach(function (j) {
+      const t = DB.jobTotals(j);
+      facturado += t.total;
+      porCobrar += t.balance;
+      gastado += t.cost;
+      count++;
+    });
+    DB.state.jobs.forEach(function (j) {
+      (j.payments || []).forEach(function (p) { if (inMonth(p.date, d)) cobrado += Number(p.amount) || 0; });
+    });
+    ganancia = facturado - gastado;
+    return { jobs: jobs, facturado: facturado, cobrado: cobrado, porCobrar: porCobrar, gastado: gastado, ganancia: ganancia, count: count };
+  }
+
+  function reportesView() {
+    const d = reportDate;
+    const r = reportTotals(d);
+    const isCurrent = monthKey(d) === monthKey(new Date());
+    let html = '<div class="sec r-title"><h3>' + PAPER_ICON + ' Reporte mensual</h3></div>';
+
+    html += '<div class="month-nav">';
+    html += '<button class="icon-btn" data-action="reportPrev">' + '&#9664;' + '</button>';
+    html += '<b class="month-name">' + monthLabel(d) + (isCurrent ? ' <small class="muted">(actual)</small>' : '') + '</b>';
+    html += '<button class="icon-btn" data-action="reportNext">' + '&#9654;' + '</button>';
+    html += '</div>';
+
+    html += '<div class="grid2">';
+    html += statCard(PAPER_ICON, 'Facturado', money(r.facturado), r.count + ' trabajo(s)', '#3b82f6');
+    html += statCard(WALLET_ICON, 'Cobrado', money(r.cobrado), 'recibido en el mes', '#10b981');
+    html += statCard(FLAG_ICON, 'Por cobrar', money(r.porCobrar), 'saldo pendiente', '#ef4444');
+    html += statCard('&#128722;', 'Gastado', money(r.gastado), 'materiales del mes', '#f59e0b');
+    html += '<div class="span2">' + statCard(TOOLS_ICON, 'Ganancia', money(r.ganancia), 'facturado − gastado', '#8b5cf6') + '</div>';
+    html += '</div>';
+
+    html += '<div class="btns-row"><button class="btn" data-action="reportPdf">' + PDF_ICON + ' Exportar PDF</button></div>';
+
+    html += '<div class="sec"><h3>' + PAPER_ICON + ' Trabajos del mes</h3></div>';
+    if (!r.jobs.length) {
+      html += emptyBox(PAPER_ICON, 'Sin trabajos en este mes', { action: 'newQuote', label: 'Crear cotización', icon: PLUS_ICON });
+    } else {
+      r.jobs.forEach(function (j) {
+        const t = DB.jobTotals(j);
+        html += '<div class="job" data-action="navTrabajo" data-id="' + j.id + '">';
+        html += '<div class="job-head"><b>' + escapeAttr(j.code || 'Cotización') + '</b>' + statusPill(j.status) + '</div>';
+        html += '<small>' + escapeAttr(j.clientName || 'Sin cliente') + ' · ' + DB.date(j.date) + '</small>';
+        html += '<div class="job-money"><div class="m">Total <b>' + money(t.total) + '</b></div><div class="m pend">Saldo <b>' + money(t.balance) + '</b></div></div>';
+        html += '</div>';
+      });
+    }
+
+    html += '<button class="fab" data-action="newQuote"><span>' + PLUS_ICON + '</span></button>';
+    return html;
+  }
+
+  function exportReportPdf() {
+    const d = reportDate;
+    const r = reportTotals(d);
+    PDF.reportShare({ month: monthKey(d), label: monthLabel(d), totals: r }).then(function (ok) {
+      console.log('REP_OK ' + ok);
+      if (ok) toast('Reporte PDF listo: elige dónde guardarlo', true);
+    }).catch(function (e) {
+      console.error('REP_ERR ' + (e && e.message));
+      toast('PDF: ' + (e && e.message ? e.message : 'no se pudo generar'), false);
+    });
   }
 
   function clients() {
@@ -816,9 +908,10 @@ function settingsView() {
       case 'cliente': inner = (params.id === 'perfil') ? clientPerfil(params.aux) : clientForm(); break;
       case 'catalogo': inner = catalog(); break;
       case 'cotizacion': inner = quoteEditor(); break;
-      case 'trabajos': inner = jobsView(); break;
-      case 'trabajo': inner = jobDetail(); break;
-      case 'ajustes': inner = settingsView(); break;
+case 'trabajos': inner = jobsView(); break;
+  case 'trabajo': inner = jobDetail(); break;
+  case 'reportes': inner = reportesView(); break;
+  case 'ajustes': inner = settingsView(); break;
       case 'catalogo-item': inner = catalogFormView(); break;
       default: inner = dashboard();
     }
@@ -852,6 +945,12 @@ function settingsView() {
   const ACTIONS = {
 
     nav: function (el) { go('#/' + el.dataset.to); },
+
+    reportPrev: function () { shiftMonth(-1); },
+
+    reportNext: function () { shiftMonth(1); },
+
+    reportPdf: function () { exportReportPdf(); },
 
     contactSupport: function () { contactSupportAction(); },
 

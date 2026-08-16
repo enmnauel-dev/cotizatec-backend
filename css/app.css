@@ -185,6 +185,10 @@ b { font-weight: 700; }
 /* ===== Notificaciones / alertas ===== */
 .alert-card { border: 1px solid var(--amber-soft); }
 
+/* ===== Reportes ===== */
+.month-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 10px 12px; margin: 0 0 14px; }
+.month-name { font-size: 15px; font-weight: 800; text-align: center; flex: 1; }
+
 /* ===== Trabajos ===== */
 .sec { display: flex; align-items: center; justify-content: space-between; margin: 16px 2px 10px; }
 .sec h3 { font-size: 16px; font-weight: 800; margin: 0; }

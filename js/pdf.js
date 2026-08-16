@@ -199,6 +199,145 @@ var PDF = (function () {
     return doc;
   }
 
+  function report(opts) {
+    const st = DB.state.settings;
+    const r = opts.totals;
+    const doc = new jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+
+    let y = M;
+
+    if (st.logo) {
+      try {
+        const prop = doc.getImageProperties(st.logo);
+        const h = 18;
+        const w = h * (prop.width / prop.height);
+        if (w < W - M * 2) {
+          doc.addImage(st.logo, 'PNG', M, y, w, h);
+          y += h + 3;
+        }
+      } catch (e) {}
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.setTextColor(COL[0], COL[1], COL[2]);
+    doc.text(st.businessName || 'Mi Negocio', M, y);
+    y += 6;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(110);
+    const contact = [];
+    if (st.phone) contact.push('Tel: ' + st.phone);
+    if (st.address) contact.push(st.address);
+    if (contact.length) {
+      doc.text(contact.join('  •  '), M, y);
+      y += 5;
+    }
+
+    doc.setFillColor(ACCENT[0], ACCENT[1], ACCENT[2]);
+    doc.rect(M, y, W - M * 2, 0.6, 'F');
+    y += 6;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2]);
+    doc.text('REPORTE MENSUAL', M, y);
+    doc.setFontSize(11);
+    doc.setTextColor(COL[0], COL[1], COL[2]);
+    doc.text(opts.label || '', W - M, y, { align: 'right' });
+    y += 8;
+
+    doc.setFontSize(9);
+    doc.setTextColor(90);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Generado: ' + DB.date(new Date().toISOString(), true), M, y);
+    y += 8;
+
+    doc.setFillColor(245, 158, 11);
+    doc.rect(M, y, W - M * 2, 0.6, 'F');
+    y += 7;
+
+    const rows = r.jobs.map(function (j) {
+      const t = DB.jobTotals(j);
+      return [j.code || '—', j.clientName || '—', DB.date(j.date), money(t.total), money(t.collected), money(t.balance)];
+    });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(COL[0], COL[1], COL[2]);
+    doc.text('Trabajos (' + r.count + ')', M, y);
+    y += 4;
+
+    doc.autoTable({
+      startY: y,
+      margin: { left: M, right: M },
+      head: [['Código', 'Cliente', 'Fecha', 'Total', 'Cobrado', 'Debe']],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [31, 41, 55], textColor: 255, fontSize: 8 },
+      bodyStyles: { fontSize: 8, textColor: [31, 41, 55] },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      styles: { cellPadding: 1.5 }
+    });
+
+    y = doc.lastAutoTable.finalY + 10;
+
+    doc.setFillColor(245, 158, 11);
+    doc.rect(M, y, W - M * 2, 0.6, 'F');
+    y += 7;
+
+    const totales = [
+      ['Facturado', money(r.facturado)],
+      ['Cobrado en el mes', money(r.cobrado)],
+      ['Por cobrar (debe)', money(r.porCobrar)],
+      ['Gastado en materiales', money(r.gastado)],
+      ['Ganancia', money(r.ganancia)]
+    ];
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(COL[0], COL[1], COL[2]);
+    totales.forEach(function (row, i) {
+      doc.text(row[0], M + 4, y);
+      doc.setFont('helvetica', i === 4 ? 'bold' : 'normal');
+      doc.text(row[1], W - M - 4, y, { align: 'right' });
+      doc.setFont('helvetica', 'bold');
+      y += 7;
+    });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(160);
+    doc.text(st.watermark || 'CotizaTec', W / 2, H - 10, { align: 'center' });
+
+    return doc;
+  }
+
+  function reportBlob(opts) {
+    const blob = report(opts).output('blob');
+    blob.name = 'reporte-' + opts.month + '.pdf';
+    return blob;
+  }
+
+  async function reportShare(opts) {
+    if (isNative()) {
+      return await saveNative(report(opts), 'reporte-' + opts.month + '.pdf');
+    }
+    const blob = reportBlob(opts);
+    const file = new File([blob], blob.name, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: blob.name });
+        return true;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return true;
+      }
+    }
+    const doc = report(opts);
+    doc.save(blob.name);
+    return false;
+  }
+
   function toBlob(job) {
     const blob = generate(job).output('blob');
     blob.name = (job.code || 'cotizacion') + '.pdf';
@@ -263,5 +402,5 @@ var PDF = (function () {
     return false;
   }
 
-  return { generate, download, share, toBlob };
+  return { generate, download, share, toBlob, report, reportShare, reportBlob };
 })();
