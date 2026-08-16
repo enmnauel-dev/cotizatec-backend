@@ -91,6 +91,10 @@ const NAV = [
     }
     html += '</header>';
 
+    if (licenseStatus && licenseStatus.trial && licenseStatus.status === 'active') {
+      html += '<div class="trial-banner">🧪 Modo prueba: te quedan <b>' + licenseStatus.daysLeft + '</b> día(s). Después deberás activar tu licencia con el administrador.</div>';
+    }
+
     if (licenseStatus && licenseStatus.status === 'grace') {
       html += '<div class="grace-banner">⚠️ Modo offline: te quedan <b>' + licenseStatus.graceDaysLeft + '</b> día(s) de gracia. Conéctate a internet para renovar tu licencia.</div>';
     }
@@ -1877,14 +1881,14 @@ case 'trabajos': inner = jobsView(); break;
     }
   }
 
-  return { init: init, applyLockScreen: applyLockScreen, compressImage: compressImage, showLockFirst: showLockFirst, showLicenseScreen: showLicenseScreen };
+  return { init: init, applyLockScreen: applyLockScreen, compressImage: compressImage, showLockFirst: showLockFirst, showLicenseScreen: showLicenseScreen, setLicenseStatus: function (st) { licenseStatus = st; } };
 })();
 
 document.addEventListener('DOMContentLoaded', function () {
     License.requestNotificationPermission();
     License.check().then(function (st) {
       if (st.status === 'active' || st.status === 'grace') {
-        licenseStatus = st;
+        UI.setLicenseStatus(st);
         return DB.boot().then(function (mode) {
           if (mode === 'locked') { UI.showLockFirst(); return; }
           return License.getDeviceId().then(function (deviceId) {
@@ -1915,18 +1919,18 @@ document.addEventListener('DOMContentLoaded', function () {
       License.refresh().then(function (st) {
         if (!st) return;
         if (st.status === 'blocked') {
-          licenseStatus = st;
+          UI.setLicenseStatus(st);
           const scr = document.getElementById('license-screen');
           if (!scr) UI.showLicenseScreen(st);
           return;
         }
         if (st.status === 'none') {
-          licenseStatus = st;
+          UI.setLicenseStatus(st);
           const scr = document.getElementById('license-screen');
           if (!scr) UI.showLicenseScreen(st);
           return;
         }
-        licenseStatus = st;
+        UI.setLicenseStatus(st);
       }).catch(function () {});
     }, 30000);
   }
