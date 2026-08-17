@@ -129,6 +129,9 @@ var Backups = (function () {
   }
 
   function doReset() {
+    // Marcar para que, al recargar, NO se restaure el respaldo de la nube del
+    // mismo deviceId (si no, los datos "vuelven" y el reinicio no pone en cero).
+    try { localStorage.setItem('cotizatec_skip_cloud_restore', '1'); } catch (e) {}
     // Borrar los 3 almacenes: localStorage, espejo IndexedDB y archivo nativo.
     localStorage.removeItem(DB.KEY);
     localStorage.removeItem(DB.BAK_KEY);

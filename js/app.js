@@ -1909,6 +1909,18 @@ document.addEventListener('DOMContentLoaded', function () {
           if (mode === 'locked') { UI.showLockFirst(); return; }
           return License.getDeviceId().then(function (deviceId) {
             if (mode === 'blank') {
+              // Tras "Reiniciar la app" se marca este flag para NO restaurar el
+              // respaldo de la nube (el usuario quiere empezar de cero).
+              const skipCloud = (function () {
+                try { return !!localStorage.getItem('cotizatec_skip_cloud_restore'); } catch (e) { return false; }
+              })();
+              try { localStorage.removeItem('cotizatec_skip_cloud_restore'); } catch (e) {}
+              if (skipCloud) {
+                UI.init();
+                Util.toast('Datos reiniciados', true);
+                try { Reminders.scheduleToday(); } catch (e) {}
+                return;
+              }
               return Backups.pullFromCloud(deviceId).then(function (restored) {
                 UI.init();
                 if (restored) Util.toast('Datos restaurados desde la nube', true);
