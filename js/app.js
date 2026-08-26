@@ -814,6 +814,7 @@ function settingsView() {
     html += '<label>Logo</label>';
     html += '<input type="file" accept="image/png,image/jpeg" data-upload="logo">';
     if (s.logo) html += '<button class="btn small ghost" type="button" data-action="removeLogo">Quitar logo</button>';
+    html += '<button class="btn small primary" type="submit">' + SAVE_ICON + ' Guardar</button>';
     html += '</section>';
 
     html += '<section class="card form">';
