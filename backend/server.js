@@ -476,38 +476,98 @@ app.put('/api/admin/clients/:id', (req, res) => {
   res.json({ ok: true, client: enrichClient(c) });
 });
 
-// Crea (o resetea la clave de) la cuenta web de un cliente. Solo el
-// administrador puede hacerlo; el cliente solo inicia sesiÃ³n con lo que aquÃ­
-// se configura.
-app.post('/api/admin/clients/:id/webaccount', async (req, res) => {
+// ===== Gestión de cuentas web por cliente (solo administrador) =====
+// En el MVP el administrador crea/administra todos los usuarios de cada
+// negocio. La estructura (clientId + userId + role + status + deviceIds) ya
+// permite en el futuro que el propietario gestione sus propios empleados.
+function adminUsersOf(clientId) {
+  return store.listWebAccountsByClient(clientId).map((u) => ({
+    userId: u.userId,
+    username: u.username,
+    name: u.name || u.username,
+    role: u.role || 'owner',
+    status: u.status || 'activo',
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt,
+    deviceId: (u.deviceIds || [])[0] || null
+  }));
+}
+
+function makeTempPassword() {
+  return 'CT' + Math.random().toString(36).slice(2, 6) + String(Math.floor(Math.random() * 900) + 100);
+}
+
+app.get('/api/admin/clients/:id/webaccounts', (req, res) => {
   const info = requireAdmin(req, res);
   if (!info) return;
   const c = store.getClient(req.params.id);
   if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
-  const username = String(req.body.username || '').trim();
-  const password = String(req.body.password || '');
+  res.json({ ok: true, users: adminUsersOf(c.id) });
+});
+
+app.post('/api/admin/clients/:id/webaccounts', async (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const c = store.getClient(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
+  const username = String(req.body.username || '').toLowerCase().trim();
+  const name = String(req.body.name || '').trim();
+  const role = req.body.role === 'owner' ? 'owner' : 'empleado';
+  let password = String(req.body.password || '');
   if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
-    return res.status(400).json({ error: 'Usuario invÃ¡lido (3-30: letras, nÃºmeros, . _ -).' });
+    return res.status(400).json({ error: 'Usuario inválido (3-30: letras, números, . _ -).' });
   }
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'La contraseÃ±a debe tener al menos 6 caracteres.' });
-  }
-  // Verificar que el usuario no estÃ© usado por OTRO cliente
   const existing = store.getWebAccountByUsername(username);
-  if (existing && existing.clientId !== c.id) {
-    return res.status(409).json({ error: 'Ese usuario ya estÃ¡ en uso por otro cliente.' });
+  if (existing) {
+    return res.status(409).json({ error: 'Ese usuario ya existe en el portal.' });
+  }
+  const generated = !password;
+  if (generated) password = makeTempPassword();
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' });
   }
   const hash = await webclients.hashPassword(password);
   const account = {
-    username: username.toLowerCase().trim(),
+    username,
     clientId: c.id,
-    deviceIds: (c.devices || []).map((d) => d.deviceId),
+    name: name || username,
+    role,
+    status: 'activo',
     passHash: hash,
-    createdAt: (existing && existing.createdAt) || Date.now(),
+    deviceIds: (c.devices || []).map((d) => d.deviceId),
+    createdAt: Date.now(),
     updatedAt: Date.now()
   };
   store.setWebAccount(username, account);
-  res.json({ ok: true, account: { username: account.username, clientId: account.clientId, deviceIds: account.deviceIds } });
+  const body = { ok: true, account: { userId: account.userId, username, name: account.name, role, status: 'activo' } };
+  if (generated) body.createdAtPassword = password;
+  res.json(body);
+});
+
+app.post('/api/admin/clients/:id/webaccounts/:userId/toggle', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const acc = store.getWebAccountById(req.params.userId);
+  if (!acc || String(acc.clientId) !== String(req.params.id)) {
+    return res.status(404).json({ error: 'Usuario no encontrado en este cliente.' });
+  }
+  acc.status = acc.status === 'inactivo' ? 'activo' : 'inactivo';
+  acc.updatedAt = Date.now();
+  store.setWebAccount(acc.username, acc);
+  res.json({ ok: true, status: acc.status });
+});
+
+app.post('/api/admin/clients/:id/webaccounts/:userId/reset-password', async (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const acc = store.getWebAccountById(req.params.userId);
+  if (!acc || String(acc.clientId) !== String(req.params.id)) {
+    return res.status(404).json({ error: 'Usuario no encontrado en este cliente.' });
+  }
+  const temp = makeTempPassword();
+  const hash = await webclients.hashPassword(temp);
+  store.setWebAccountPasswordByUserId(acc.userId, hash);
+  res.json({ ok: true, resetPassword: temp, userId: acc.userId });
 });
 
 app.delete('/api/admin/clients/:id', (req, res) => {

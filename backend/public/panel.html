@@ -459,17 +459,20 @@ async function loadReport() {
   document.getElementById('ph-date').textContent = new Date().toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
-// ===== Gestión de usuarios del portal (dueño) =====
+// ===== Gestión de usuarios del portal (MVP: la hace el administrador) =====
+// En esta versión el dueño del negocio NO gestiona usuarios desde el portal;
+// el administrador crea/administra todos los usuarios. La estructura interna
+// (clientId + userId + role + status) queda lista para que en el futuro el
+// propio dueño gestione a sus empleados según su rol/plan.
 let myRole = (localStorage.getItem('ct_role') || '').toLowerCase();
 let myCreds = { username: '', password: '' };
 
 function initUsers(role) {
   myRole = (role || myRole || '').toLowerCase();
   localStorage.setItem('ct_role', myRole);
-  if (myRole === 'owner') {
-    document.getElementById('users-card').style.display = 'block';
-    loadUsers();
-  }
+  // MVP: la gestión de usuarios se hace desde el panel del administrador.
+  var card = document.getElementById('users-card');
+  if (card) card.style.display = 'none';
 }
 
 function renderUsers(data) {

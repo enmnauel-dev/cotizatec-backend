@@ -90,6 +90,22 @@
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
   .empty { color: var(--muted); text-align: center; padding: 30px 0; }
   .muted { color: var(--muted); }
+  .ua-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .ua-row:last-child { border-bottom: none; }
+  .ua-name { font-weight: 600; font-size: 14px; }
+  .ua-muted { color: var(--muted); font-size: 12px; }
+  .ua-actions { display: flex; gap: 6px; }
+  .ua-empty { color: var(--muted); text-align: center; padding: 14px 0; font-size: 13px; }
+  .chip.owner { background: var(--blue); color: #fff; }
+  .chip.active { background: #d1fae5; color: #065f46; }
+  .chip.inactive { background: #e2e8f0; color: #334155; }
+  .ua-msg { min-height: 18px; font-size: 12px; margin-top: 6px; color: var(--muted); }
+  .ua-msg.err { color: var(--red); }
+  .ua-msg.ok { color: var(--green); }
+  .okbox { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 10px; }
+  .ua-creds { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: var(--bg); }
+  .ua-creds div { font-size: 12px; color: var(--muted); }
+  .ua-creds b { font-size: 16px; word-break: break-all; }
   @media (min-width: 700px) { body { max-width: 860px; margin: 0 auto; } }
 </style>
 </head>
@@ -148,6 +164,42 @@
       <div class="modal-actions">
         <button class="btn secondary" onclick="closeMigModal()">Cancelar</button>
         <button class="btn" onclick="confirmMig()">Migrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="uaModal">
+    <div class="modal-box" style="max-width:560px">
+      <h3>Usuarios web del cliente</h3>
+      <div id="ua-list" style="max-height:220px;overflow:auto;margin-bottom:12px"></div>
+      <div id="ua-form">
+        <label style="font-size:12px;color:#8b8b96">Crear usuario</label>
+        <input class="field" id="ua-name" placeholder="Nombre completo (ej. Pedro López)">
+        <input class="field" id="ua-username" placeholder="Usuario de acceso (ej. pedro)" style="margin-top:6px">
+        <input class="field" id="ua-pass" type="text" placeholder="Contraseña (déjala vacía para generar una)" style="margin-top:6px">
+        <label style="font-size:12px;color:#8b8b96;display:block;margin-top:8px">Rol</label>
+        <select class="field" id="ua-role" style="margin-top:2px">
+          <option value="owner">Dueño</option>
+          <option value="empleado">Empleado</option>
+        </select>
+        <div class="ua-msg" id="ua-msg"></div>
+        <div class="modal-actions">
+          <button class="btn secondary" onclick="closeUsersModal()">Cerrar</button>
+          <button class="btn" onclick="uaCreate()">Crear</button>
+        </div>
+      </div>
+      <div id="ua-result" style="display:none">
+        <div class="okbox">Credenciales de acceso. Muéstralas una sola vez.</div>
+        <div class="ua-creds">
+          <div>Usuario</div><b id="res-u">—</b>
+          <div>Contraseña</div><b id="res-p">—</b>
+        </div>
+        <div class="ua-msg ok" id="res-copy"></div>
+        <div class="modal-actions">
+          <button class="btn secondary" onclick="closeUsersModal()">Cerrar</button>
+          <button class="btn" onclick="uaCopy()">📋 Copiar</button>
+          <button class="btn" style="background:#25D366;color:#fff" onclick="uaWhatsApp()">💬 WhatsApp</button>
+        </div>
       </div>
     </div>
   </div>
@@ -263,7 +315,7 @@
           '<div><div class="client-name">' + esc(cl.name) + '</div><div class="client-phone">' + (cl.phone || '') + '</div></div>' +
           '<div style="display:flex;gap:6px">' +
             '<button class="btn small secondary" onclick="openDevModal(\'' + cl.id + '\')">+ Dispositivo</button>' +
-            '<button class="btn small secondary" onclick="webAccount(\'' + cl.id + '\')">Cuenta web</button>' +
+            '<button class="btn small secondary" onclick="openUsersModal(\'' + cl.id + '\')">Usuarios web</button>' +
             '<button class="btn small secondary" onclick="editClient(\'' + cl.id + '\')">✎</button>' +
             '<button class="btn small red" onclick="delClient(\'' + cl.id + '\')">🗑</button>' +
           '</div>' +
@@ -416,17 +468,116 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
 
   function closeDevModal() { document.getElementById('devModal').classList.remove('open'); }
 
-  function webAccount(clientId) {
-    var user = prompt('Usuario web para este cliente (ej. taller1):');
-    if (user === null) return;
-    user = user.trim();
-    if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(user)) { toast('Usuario inválido (3-30: letras, números, . _ -).'); return; }
-    var pass = prompt('Contraseña inicial (mínimo 6 caracteres):');
-    if (pass === null) return;
-    if (pass.length < 6) { toast('La contraseña debe tener al menos 6 caracteres.'); return; }
-    api('/api/admin/clients/' + encodeURIComponent(clientId) + '/webaccount', { method: 'POST', body: JSON.stringify({ username: user, password: pass }) })
-      .then(function () { toast('Cuenta web configurada. El cliente entra en /panel'); loadAll(); })
-      .catch(function (e) { toast('Error: ' + (e.message || 'no se pudo crear')); });
+  // ===== Gestión de usuarios web por cliente (MVP: todo desde el admin) =====
+  var uaClientId = null;
+  var uaMode = 'create';
+  var uaRes = null;
+
+  function openUsersModal(clientId) {
+    uaClientId = clientId;
+    document.getElementById('uaModal').classList.add('open');
+    uaMode = 'create';
+    document.getElementById('ua-form').style.display = 'block';
+    document.getElementById('ua-result').style.display = 'none';
+    document.getElementById('ua-name').value = '';
+    document.getElementById('ua-username').value = '';
+    document.getElementById('ua-pass').value = '';
+    document.getElementById('ua-role').value = 'owner';
+    document.getElementById('ua-msg').textContent = '';
+    document.getElementById('ua-msg').className = 'ua-msg';
+    loadUsers();
+  }
+
+  function closeUsersModal() { document.getElementById('uaModal').classList.remove('open'); }
+
+  function loadUsers() {
+    api('/api/admin/clients/' + encodeURIComponent(uaClientId) + '/webaccounts')
+      .then(function (r) {
+        var list = r.users || [];
+        var el = document.getElementById('ua-list');
+        if (!list.length) {
+          el.innerHTML = '<div class="ua-empty">Aún no hay usuarios web para este cliente.</div>';
+        } else {
+          el.innerHTML = list.map(function (u) {
+            var active = u.status !== 'inactivo';
+            return '<div class="ua-row">' +
+              '<div style="flex:1;min-width:130px"><div class="ua-name">' + esc(u.name) + ' <span class="chip ' + (u.role === 'owner' ? 'owner' : '') + '">' + (u.role === 'owner' ? 'Dueño' : 'Empleado') + '</span></div>' +
+              '<div class="ua-muted">@' + esc(u.username) + '</div></div>' +
+              '<span class="chip ' + (active ? 'active' : 'inactive') + '">' + (active ? '● Activo' : '○ Inactivo') + '</span>' +
+              '<div class="ua-actions">' +
+                '<button class="btn small ' + (active ? 'red' : 'green') + '" onclick="uaToggle(\'' + u.userId + '\')">' + (active ? 'Desactivar' : 'Activar') + '</button>' +
+                '<button class="btn small yellow" onclick="uaReset(' + JSON.stringify(u.userId) + ')">Resetear clave</button>' +
+              '</div></div>';
+          }).join('');
+        }
+      })
+      .catch(function (e) { toast('Error: ' + e.message); });
+  }
+
+  function uaCreate() {
+    var name = document.getElementById('ua-name').value.trim();
+    var username = document.getElementById('ua-username').value.trim();
+    var role = document.getElementById('ua-role').value;
+    var manualPass = document.getElementById('ua-pass').value.trim();
+    var msg = document.getElementById('ua-msg');
+    msg.className = 'ua-msg err';
+    msg.textContent = '';
+    if (!name || !username) { msg.textContent = 'Completa nombre y usuario.'; return; }
+    var body = { name: name, username: username, role: role };
+    if (manualPass) body.password = manualPass;
+    api('/api/admin/clients/' + encodeURIComponent(uaClientId) + '/webaccounts', { method: 'POST', body: JSON.stringify(body) })
+      .then(function (r) {
+        if (!r || !r.ok) {
+          msg.textContent = (r && r.error) || 'No se pudo crear el usuario.';
+          msg.className = 'ua-msg err';
+          return;
+        }
+        uaRes = { username: r.account.username, password: r.createdAtPassword || manualPass, name: name };
+        document.getElementById('ua-form').style.display = 'none';
+        document.getElementById('ua-result').style.display = 'block';
+        document.getElementById('res-u').textContent = uaRes.username;
+        document.getElementById('res-p').textContent = uaRes.password;
+        document.getElementById('res-copy').textContent = '';
+        document.getElementById('res-copy').className = 'ua-msg';
+        loadUsers();
+      })
+      .catch(function (e) { msg.textContent = 'Error: ' + e.message; msg.className = 'ua-msg err'; });
+  }
+
+  function uaToggle(userId) {
+    api('/api/admin/clients/' + encodeURIComponent(uaClientId) + '/webaccounts/' + encodeURIComponent(userId) + '/toggle', { method: 'POST' })
+      .then(function () { loadUsers(); }).catch(function (e) { toast('Error: ' + e.message); });
+  }
+
+  function uaReset(userId) {
+    if (!confirm('¿Resetear la contraseña de este usuario?')) return;
+    api('/api/admin/clients/' + encodeURIComponent(uaClientId) + '/webaccounts/' + encodeURIComponent(userId) + '/reset-password', { method: 'POST' })
+      .then(function (r) {
+        if (!r || !r.ok) { toast('Error: ' + ((r&&r.error)||'no se pudo resetear')); return; }
+        uaRes = { username: '—', password: r.resetPassword, name: 'Clave reseteada' };
+        document.getElementById('ua-form').style.display = 'none';
+        document.getElementById('ua-result').style.display = 'block';
+        document.getElementById('res-u').textContent = '—';
+        document.getElementById('res-p').textContent = r.resetPassword;
+        document.getElementById('res-copy').textContent = '';
+        document.getElementById('res-copy').className = 'ua-msg';
+        loadUsers();
+      }).catch(function (e) { toast('Error: ' + e.message); });
+  }
+
+  function uaCopy() {
+    var txt = 'Tu acceso al panel de CotizaTec\nUsuario: ' + uaRes.username + '\nContraseña: ' + uaRes.password + '\nEntra en /panel';
+    var el = document.createElement('textarea'); el.value = txt; document.body.appendChild(el); el.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(el);
+    if (navigator.clipboard) { navigator.clipboard.writeText(txt).catch(function () {}); }
+    document.getElementById('res-copy').textContent = '¡Copiado!';
+    document.getElementById('res-copy').className = 'ua-msg ok';
+  }
+
+  function uaWhatsApp() {
+    var txt = encodeURIComponent('Tu acceso al panel de CotizaTec\nUsuario: ' + uaRes.username + '\nContraseña: ' + uaRes.password + '\nEntra en: /panel');
+    window.open('https://wa.me/?text=' + txt, '_blank');
   }
 
   function saveDevice() {
