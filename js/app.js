@@ -21,6 +21,7 @@ const TITLES = {
   trabajos: 'Trabajos',
   trabajo: 'Detalle',
   reportes: 'Reportes',
+  'reporte-detalle': 'Detalle',
   ajustes: 'Ajustes'
 };
 
@@ -257,11 +258,11 @@ const NAV = [
     html += '</div>';
 
     html += '<div class="grid2">';
-    html += statCard(PAPER_ICON, 'Facturado', money(r.facturado), r.count + ' trabajo(s)', '#3b82f6');
-    html += statCard(WALLET_ICON, 'Cobrado', money(r.cobrado), 'recibido en el mes', '#10b981');
-    html += statCard(FLAG_ICON, 'Por cobrar', money(r.porCobrar), 'saldo pendiente', '#ef4444');
-    html += statCard('&#128722;', 'Gastado', money(r.gastado), 'materiales del mes', '#f59e0b');
-    html += '<div class="span2">' + statCard(TOOLS_ICON, 'Ganancia', money(r.ganancia), 'facturado − gastado', '#8b5cf6') + '</div>';
+    html += '<div class="stat stat-click" style="--c:#3b82f6" data-action="reportDetail" data-kind="facturado"><div class="stat-ic">' + PAPER_ICON + '</div><div class="stat-l">Facturado</div><div class="stat-v">' + money(r.facturado) + '</div><div class="stat-s">' + r.count + ' trabajo(s) ›</div></div>';
+    html += '<div class="stat stat-click" style="--c:#10b981" data-action="reportDetail" data-kind="cobrado"><div class="stat-ic">' + WALLET_ICON + '</div><div class="stat-l">Cobrado</div><div class="stat-v">' + money(r.cobrado) + '</div><div class="stat-s">recibido en el mes ›</div></div>';
+    html += '<div class="stat stat-click" style="--c:#ef4444" data-action="reportDetail" data-kind="porCobrar"><div class="stat-ic">' + FLAG_ICON + '</div><div class="stat-l">Por cobrar</div><div class="stat-v">' + money(r.porCobrar) + '</div><div class="stat-s">saldo pendiente ›</div></div>';
+    html += '<div class="stat stat-click" style="--c:#f59e0b" data-action="reportDetail" data-kind="gastado"><div class="stat-ic">&#128722;</div><div class="stat-l">Gastado</div><div class="stat-v">' + money(r.gastado) + '</div><div class="stat-s">materiales del mes ›</div></div>';
+    html += '<div class="span2"><div class="stat stat-click" style="--c:#8b5cf6" data-action="reportDetail" data-kind="ganancia"><div class="stat-ic">' + TOOLS_ICON + '</div><div class="stat-l">Ganancia</div><div class="stat-v">' + money(r.ganancia) + '</div><div class="stat-s">facturado − gastado ›</div></div></div>';
     html += '</div>';
 
     html += '<div class="btns-row"><button class="btn" data-action="reportPdf">' + PDF_ICON + ' Exportar PDF</button></div>';
@@ -281,6 +282,116 @@ const NAV = [
     }
 
     html += '<button class="fab" data-action="newQuote"><span>' + PLUS_ICON + '</span></button>';
+    return html;
+  }
+
+  var DETAIL_LABELS = {
+    facturado: { icon: PAPER_ICON, label: 'Facturado', color: '#3b82f6', sub: 'Trabajos facturados en el mes' },
+    cobrado: { icon: WALLET_ICON, label: 'Cobrado', color: '#10b981', sub: 'Pagos recibidos en el mes' },
+    porCobrar: { icon: FLAG_ICON, label: 'Por cobrar', color: '#ef4444', sub: 'Saldos pendientes de cobro' },
+    gastado: { icon: '&#128722;', label: 'Gastado', color: '#f59e0b', sub: 'Gastos en materiales del mes' },
+    ganancia: { icon: TOOLS_ICON, label: 'Ganancia', color: '#8b5cf6', sub: 'Facturado menos gastos' }
+  };
+
+  function reportDetailView() {
+    const kind = params.id;
+    const meta = DETAIL_LABELS[kind];
+    if (!meta) return '<div class="card">Tipo de reporte no válido</div>';
+    const d = reportDate;
+    const r = reportTotals(d);
+    let html = '<div class="sec"><h3>' + meta.icon + ' ' + meta.label + '</h3><small class="muted">' + monthLabel(d) + ' · ' + meta.sub + '</small></div>';
+
+    if (kind === 'facturado') {
+      html += '<div class="stat" style="--c:' + meta.color + '"><div class="stat-v">' + money(r.facturado) + '</div><div class="stat-s">Total facturado este mes</div></div>';
+      if (!r.jobs.length) {
+        html += emptyBox(PAPER_ICON, 'Sin trabajos este mes', {});
+      } else {
+        r.jobs.forEach(function (j) {
+          const t = DB.jobTotals(j);
+          html += '<div class="job" data-action="navTrabajo" data-id="' + j.id + '">';
+          html += '<div class="job-head"><b>' + escapeAttr(j.code || 'Cotización') + '</b>' + statusPill(j.status) + '</div>';
+          html += '<small>' + escapeAttr(j.clientName || 'Sin cliente') + ' · ' + DB.date(j.date) + '</small>';
+          (j.items || []).forEach(function (item) {
+            html += '<div class="row-line"><span>' + escapeAttr(item.name || 'Ítem') + ' × ' + (Number(item.qty) || 1) + '</span><b>' + money((Number(item.qty) || 1) * (Number(item.price) || 0)) + '</b></div>';
+          });
+          if (Number(j.discount) > 0) html += '<div class="row-line"><span class="muted">Descuento</span><b>−' + money(j.discount) + '</b></div>';
+          if (Number(j.itbis) > 0) html += '<div class="row-line"><span class="muted">ITBIS ' + j.itbis + '%</span><b>+' + money(t.tax) + '</b></div>';
+          html += '<div class="job-money"><div class="m">Total <b>' + money(t.total) + '</b></div></div>';
+          html += '</div>';
+        });
+      }
+    } else if (kind === 'cobrado') {
+      html += '<div class="stat" style="--c:' + meta.color + '"><div class="stat-v">' + money(r.cobrado) + '</div><div class="stat-s">Total cobrado este mes</div></div>';
+      var hasPayments = false;
+      r.jobs.forEach(function (j) {
+        var monthPayments = (j.payments || []).filter(function (p) { return inMonth(p.date, d); });
+        if (!monthPayments.length) return;
+        hasPayments = true;
+        html += '<div class="job" data-action="navTrabajo" data-id="' + j.id + '">';
+        html += '<div class="job-head"><b>' + escapeAttr(j.code || 'Cotización') + '</b>' + statusPill(j.status) + '</div>';
+        html += '<small>' + escapeAttr(j.clientName || 'Sin cliente') + '</small>';
+        monthPayments.forEach(function (p) {
+          html += '<div class="row-line"><span class="muted">' + DB.date(p.date) + (p.method ? ' · ' + escapeAttr(p.method) : '') + '</span><b>' + money(p.amount) + '</b></div>';
+        });
+        html += '</div>';
+      });
+      if (!hasPayments) html += emptyBox(WALLET_ICON, 'Sin cobros registrados este mes', {});
+    } else if (kind === 'porCobrar') {
+      html += '<div class="stat" style="--c:' + meta.color + '"><div class="stat-v">' + money(r.porCobrar) + '</div><div class="stat-s">Total pendiente de cobro</div></div>';
+      var pendientes = r.jobs.filter(function (j) { return DB.jobTotals(j).balance > 0; });
+      if (!pendientes.length) {
+        html += emptyBox(FLAG_ICON, 'Todo cobrado este mes', {});
+      } else {
+        pendientes.forEach(function (j) {
+          var t = DB.jobTotals(j);
+          html += '<div class="job" data-action="navTrabajo" data-id="' + j.id + '">';
+          html += '<div class="job-head"><b>' + escapeAttr(j.code || 'Cotización') + '</b>' + statusPill(j.status) + '</div>';
+          html += '<small>' + escapeAttr(j.clientName || 'Sin cliente') + ' · ' + DB.date(j.date) + '</small>';
+          html += '<div class="job-money">';
+          html += '<div class="m">Total <b>' + money(t.total) + '</b></div>';
+          html += '<div class="m">Pagado <b>' + money(t.collected) + '</b></div>';
+          html += '<div class="m pend">Pendiente <b>' + money(t.balance) + '</b></div>';
+          html += '</div></div>';
+        });
+      }
+    } else if (kind === 'gastado') {
+      html += '<div class="stat" style="--c:' + meta.color + '"><div class="stat-v">' + money(r.gastado) + '</div><div class="stat-s">Total gastado en materiales</div></div>';
+      var conGastos = r.jobs.filter(function (j) { return (j.expenses || []).length > 0; });
+      if (!conGastos.length) {
+        html += emptyBox('&#128722;', 'Sin gastos registrados este mes', {});
+      } else {
+        conGastos.forEach(function (j) {
+          var t = DB.jobTotals(j);
+          html += '<div class="job" data-action="navTrabajo" data-id="' + j.id + '">';
+          html += '<div class="job-head"><b>' + escapeAttr(j.code || 'Cotización') + '</b>' + statusPill(j.status) + '</div>';
+          html += '<small>' + escapeAttr(j.clientName || 'Sin cliente') + '</small>';
+          (j.expenses || []).forEach(function (e) {
+            html += '<div class="row-line"><span>' + escapeAttr(e.desc || e.description || 'Gasto') + (e.date ? ' · ' + DB.date(e.date) : '') + '</span><b>' + money(e.amount) + '</b></div>';
+          });
+          html += '<div class="job-money"><div class="m">Total gastos <b>' + money(t.cost) + '</b></div></div>';
+          html += '</div>';
+        });
+      }
+    } else if (kind === 'ganancia') {
+      html += '<div class="stat" style="--c:' + meta.color + '"><div class="stat-v">' + money(r.ganancia) + '</div><div class="stat-s">Ganancia neta del mes</div></div>';
+      if (!r.jobs.length) {
+        html += emptyBox(TOOLS_ICON, 'Sin trabajos este mes', {});
+      } else {
+        r.jobs.forEach(function (j) {
+          var t = DB.jobTotals(j);
+          var color = t.margin >= 0 ? '#10b981' : '#ef4444';
+          html += '<div class="job" data-action="navTrabajo" data-id="' + j.id + '">';
+          html += '<div class="job-head"><b>' + escapeAttr(j.code || 'Cotización') + '</b>' + statusPill(j.status) + '</div>';
+          html += '<small>' + escapeAttr(j.clientName || 'Sin cliente') + ' · ' + DB.date(j.date) + '</small>';
+          html += '<div class="job-money">';
+          html += '<div class="m">Facturado <b>' + money(t.total) + '</b></div>';
+          html += '<div class="m">Gastos <b>' + money(t.cost) + '</b></div>';
+          html += '<div class="m" style="color:' + color + '">Ganancia <b>' + money(t.margin) + '</b></div>';
+          html += '</div></div>';
+        });
+      }
+    }
+
     return html;
   }
 
@@ -455,6 +566,7 @@ let html = '<form class="card form" data-form="cliente">';
       return '<option value="' + t.id + '"' + (i && i.type === t.id ? ' selected' : '') + '>' + escapeAttr(t.label) + '</option>';
     }).join('') + '</select>';
     html += '<label>Precio (RD$) *</label><input type="number" step="0.01" min="0" name="price" value="' + (i ? i.price : '') + '" placeholder="0.00">';
+    html += '<label>Costo de compra (RD$, opcional)</label><input type="number" step="0.01" min="0" name="cost" value="' + (i && Number(i.cost) ? i.cost : '') + '" placeholder="Lo que te cuesta a ti">';
     html += '<details class="pack-fields"><summary>' + PLUS_ICON + ' Se vende por caja (opcional)</summary>';
     html += '<label>Unidad de medida</label><input type="text" name="unit" value="' + escapeAttr(i ? i.unit || '' : '') + '" placeholder="Ej. pieza, metro, libra">';
     html += '<label>Unidades por caja</label><input type="number" step="1" min="0" name="packQty" value="' + (i && i.packQty ? i.packQty : '') + '" placeholder="Ej. 12">';
@@ -531,6 +643,7 @@ let html = '<form class="card form" data-form="cliente">';
       h += '<div class="q-item"><input class="qi-qty" type="number" min="0" step="1" data-qf="qty" data-qi="' + idx + '" value="' + (it.qty || 1) + '">';
       h += '<input class="qi-desc" type="text" data-qf="desc" data-qi="' + idx + '" placeholder="Descripción" value="' + escapeAttr(it.desc || '') + '">';
       h += '<input class="qi-price" type="number" min="0" step="0.01" data-qf="price" data-qi="' + idx + '" value="' + (it.price || '') + '">';
+      h += '<input class="qi-cost" type="number" min="0" step="0.01" data-qf="cost" data-qi="' + idx + '" placeholder="costo" value="' + (it.cost != null ? it.cost : '') + '">';
       h += '<span class="qi-sub" id="qi-sub-' + idx + '">' + money((it.qty || 0) * (it.price || 0)) + '</span>';
       h += '<button class="icon-btn danger qi-del" data-action="removeQuoteItem" data-id="' + idx + '">' + X_ICON + '</button>';
       h += '</div>';
@@ -543,7 +656,10 @@ let html = '<form class="card form" data-form="cliente">';
     return '<section class="card totals"><div class="t-row"><span>Subtotal</span><b>' + money(t.subtotal) + '</b></div>'
       + (t.discount > 0 ? '<div class="t-row"><span>Descuento</span><b style="color:#ef4444">-' + money(t.discount) + '</b></div>' : '')
       + '<div class="t-row"><span>ITBIS (' + (j.itbis || 0) + '%)</span><b>' + money(t.tax) + '</b></div>'
-      + '<div class="t-row total"><span>Total</span><b class="big">' + money(t.total) + '</b></div></section>';
+      + (t.itemsCost > 0 ? '<div class="t-row"><span>Costo de productos</span><b style="color:#ef4444">-' + money(t.itemsCost) + '</b></div>' : '')
+      + '<div class="t-row total"><span>Total</span><b class="big">' + money(t.total) + '</b></div>'
+      + (t.itemsCost > 0 ? '<div class="t-row"><span>Ganancia neta</span><b class="big" style="color:#16a34a">' + money(t.margin) + '</b></div>' : '')
+      + '</section>';
   }
 
   function jobsView() {
@@ -659,7 +775,7 @@ let html = '<form class="card form" data-form="cliente">';
       j.expenses.forEach(function (e) {
         html += '<div class="row-line"><span>' + escapeAttr(e.name) + '<small>' + DB.date(e.date) + '</small></span><b>' + money(e.amount) + '</b><button class="icon-btn danger" data-action="removeExpense" data-id="' + j.id + '" data-ex="' + e.id + '">' + X_ICON + '</button></div>';
       });
-      html += '<div class="t-row"><span>Costo total materiales</span><b>' + money(DB.jobTotals(j).cost) + '</b></div>';
+      html += '<div class="t-row"><span>Total gastos adicionales</span><b>' + money(DB.jobTotals(j).expenses) + '</b></div>';
     } else {
       html += '<p class="muted">Registra qué compraste para este trabajo y calcularemos tu ganancia real.</p>';
     }
@@ -834,6 +950,7 @@ function settingsView() {
     html += '<label>Válida por (días)</label><input type="number" step="1" min="1" name="validityDays" value="' + (s.validityDays || 15) + '">';
     html += '<label>Prefijo de cotización</label><input type="text" name="quotePrefix" value="' + escapeAttr(s.quotePrefix || 'COT') + '">';
     html += '<label>Título del documento</label><input type="text" name="docTitle" value="' + escapeAttr(s.docTitle || 'COTIZACIÓN') + '" placeholder="COTIZACIÓN / PEDIDO / FACTURA">';
+    html += '<button class="btn small primary" type="submit">' + SAVE_ICON + ' Guardar</button>';
     html += '</section>';
 
     html += '<section class="card form">';
@@ -888,6 +1005,16 @@ function settingsView() {
     html += '<p class="muted">Instala la app: menú del navegador → "Añadir a pantalla de inicio" para usarla sin conexión como una app real.</p>';
     html += '</section>';
 
+    html += '<section class="card"><h3>' + ITEM_ICON + ' Cargar catálogo base</h3>';
+    html += '<p class="muted">Importa productos dominicanos predefinidos (arroz, aceite, habichuelas, café, etc.) a tu catálogo.</p>';
+    html += '<button class="btn primary block" type="button" data-action="seedCatalog">' + ITEM_ICON + ' Cargar productos</button>';
+    html += '<p class="muted" style="margin-top:12px">Importa tu propio catálogo desde un archivo CSV o JSON. Se creará un respaldo antes de aplicar cambios.</p>';
+    html += '<p class="muted"><b>Formato CSV:</b> nombre, precio, tipo (precio y tipo son opcionales)</p>';
+    html += '<p class="muted"><b>Formato JSON:</b> [{"name":"Producto","price":100,"type":"PRODUCTO"}]</p>';
+    html += '<button class="btn block" type="button" data-action="pickImportFile">' + SAVE_ICON + ' Importar desde archivo</button>';
+    html += '<input type="file" id="catalog-import-file" accept=".csv,.json,.txt" style="display:none">';
+    html += '</section>';
+
     html += '<section class="card"><h3>' + INFO_ICON + ' Acerca de CotizaTec</h3>';
     html += '<p class="muted">CotizaTec ' + APP_VERSION + ' · Crea, envía y gestiona cotizaciones en menos de 60 segundos.</p>';
     html += '<p class="muted"><b>Guía rápida:</b></p>';
@@ -918,12 +1045,23 @@ function settingsView() {
     const s = DB.state;
     let html = '<div class="sheet"><div class="sheet-head"><b>Catálogo</b><button class="icon-btn" data-action="closeSheet">' + X_ICON + '</button></div>';
     html += '<div class="sheet-body">';
+    html += '<input type="search" id="catalog-search" class="sheet-input" placeholder="Buscar producto o servicio..." oninput="window._filterCatalogPicker(this.value)">';
+    html += '<div id="catalog-picker-list">';
     s.catalog.sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (i) {
-      html += '<button class="sheet-item" data-action="pickCatalogItem" data-id="' + i.id + '"><span>' + (DB.itemType(i.type).id === 'PRODUCTO' ? ITEM_ICON : TOOLS_ICON) + ' ' + escapeAttr(i.name) + (Number(i.packQty) > 0 ? ' <small class="pack-hint">caja ×' + i.packQty + '</small>' : '') + '</span><b>' + money(i.price) + '</b></button>';
+      html += '<button class="sheet-item" data-action="pickCatalogItem" data-id="' + i.id + '" data-name="' + escapeAttr(i.name.toLowerCase()) + '"><span>' + (DB.itemType(i.type).id === 'PRODUCTO' ? ITEM_ICON : TOOLS_ICON) + ' ' + escapeAttr(i.name) + (Number(i.packQty) > 0 ? ' <small class="pack-hint">caja ×' + i.packQty + '</small>' : '') + '</span><b>' + money(i.price) + '</b></button>';
     });
-    html += '</div></div>';
+    html += '</div></div></div>';
     return html;
   }
+
+  window._filterCatalogPicker = function (query) {
+    var q = (query || '').toLowerCase().trim();
+    var items = document.querySelectorAll('#catalog-picker-list .sheet-item');
+    for (var i = 0; i < items.length; i++) {
+      var name = items[i].getAttribute('data-name') || '';
+      items[i].style.display = (!q || name.indexOf(q) >= 0) ? '' : 'none';
+    }
+  };
 
   function render() {
     parseHash();
@@ -942,7 +1080,8 @@ function settingsView() {
       case 'cotizacion': inner = quoteEditor(); break;
 case 'trabajos': inner = jobsView(); break;
   case 'trabajo': inner = jobDetail(); break;
-  case 'reportes': inner = reportesView(); break;
+      case 'reportes': inner = reportesView(); break;
+  case 'reporte-detalle': inner = reportDetailView(); break;
   case 'ajustes': inner = settingsView(); break;
       case 'catalogo-item': inner = catalogFormView(); break;
       default: inner = dashboard();
@@ -974,6 +1113,175 @@ case 'trabajos': inner = jobsView(); break;
     window.location.hash = hash;
   }
 
+  function seedBaseCatalog() {
+    var items = [
+      { name: 'Arroz Selecto Campo', type: 'PRODUCTO' },
+      { name: 'Arroz Pimco', type: 'PRODUCTO' },
+      { name: 'Aceite Manicero', type: 'PRODUCTO' },
+      { name: 'Aceite Crisol', type: 'PRODUCTO' },
+      { name: 'Aceite La Famous', type: 'PRODUCTO' },
+      { name: 'Habichuelas Victorina', type: 'PRODUCTO' },
+      { name: 'Habichuelas Linda', type: 'PRODUCTO' },
+      { name: 'Habichuelas Goya', type: 'PRODUCTO' },
+      { name: 'Guandules Victorina', type: 'PRODUCTO' },
+      { name: 'Guandules Linda', type: 'PRODUCTO' },
+      { name: 'Guandules Goya', type: 'PRODUCTO' },
+      { name: 'Harina de maíz Mazorca', type: 'PRODUCTO' },
+      { name: 'Harina Blanquita', type: 'PRODUCTO' },
+      { name: 'Azúcar Central Romana', type: 'PRODUCTO' },
+      { name: 'Sal Refina', type: 'PRODUCTO' },
+      { name: 'Pastas Milani', type: 'PRODUCTO' },
+      { name: 'Pastas Milano', type: 'PRODUCTO' },
+      { name: 'Pastas Princesa', type: 'PRODUCTO' },
+      { name: 'Sazón Ranchero', type: 'PRODUCTO' },
+      { name: 'Pasta de tomate Victorina', type: 'PRODUCTO' },
+      { name: 'Caldo Doña Gallina', type: 'PRODUCTO' },
+      { name: 'Sopitas Maggi', type: 'PRODUCTO' },
+      { name: 'Salami Super Especial Induveca', type: 'PRODUCTO' },
+      { name: 'Salami Checo', type: 'PRODUCTO' },
+      { name: 'Salami Mallén', type: 'PRODUCTO' },
+      { name: 'Queso Gouda/Cheddar Michel', type: 'PRODUCTO' },
+      { name: 'Queso de freír Sosúa', type: 'PRODUCTO' },
+      { name: 'Leche Rica', type: 'PRODUCTO' },
+      { name: 'Leche Milex', type: 'PRODUCTO' },
+      { name: 'Leche Evaporada Carnation', type: 'PRODUCTO' },
+      { name: 'Café Santo Domingo', type: 'PRODUCTO' },
+      { name: 'Café Induban', type: 'PRODUCTO' },
+      { name: 'Café Monte Real', type: 'PRODUCTO' },
+      { name: 'Galletas Guarina Club Max', type: 'PRODUCTO' },
+      { name: 'Galletas Guarina Soda', type: 'PRODUCTO' },
+      { name: 'Galletas Hatuey', type: 'PRODUCTO' },
+      { name: 'Platanitos La Mascotica', type: 'PRODUCTO' },
+      { name: 'Chicharrones La Mascotica', type: 'PRODUCTO' },
+      { name: 'Frituras Quisqueya', type: 'PRODUCTO' },
+      { name: 'Jabón Hispano', type: 'PRODUCTO' },
+      { name: 'Jabón Candado', type: 'PRODUCTO' },
+      { name: 'Detergente Fab', type: 'PRODUCTO' },
+      { name: 'Detergente Brillante', type: 'PRODUCTO' },
+      { name: 'Clorox', type: 'PRODUCTO' },
+      { name: 'Limpiador Fabuloso', type: 'PRODUCTO' },
+      { name: 'Papel higiénico Rosal', type: 'PRODUCTO' },
+      { name: 'Servilletas Flamingo', type: 'PRODUCTO' },
+      { name: 'Jabón Baff', type: 'PRODUCTO' },
+      { name: 'Jabón Palmolive', type: 'PRODUCTO' },
+      { name: 'Crema dental Colgate', type: 'PRODUCTO' },
+      { name: 'Shampoo Capilo', type: 'PRODUCTO' },
+      { name: 'Acondicionador Capilo', type: 'PRODUCTO' },
+      { name: 'Productos Boé', type: 'PRODUCTO' },
+      { name: 'Sopita Maggi Sabor a Pollo', type: 'PRODUCTO' },
+      { name: 'Sopita Maggi Pollo con Verduras', type: 'PRODUCTO' },
+      { name: 'Sopita Doña Gallina Pollo', type: 'PRODUCTO' },
+      { name: 'Sopita Doña Gallina Pollo con Tomate', type: 'PRODUCTO' },
+      { name: 'Sopita Doña Gallina Bajo en Grasa', type: 'PRODUCTO' },
+      { name: 'Sopita Knorr Sabor a Pollo', type: 'PRODUCTO' },
+      { name: 'Sopita Rico Pollo', type: 'PRODUCTO' },
+      { name: 'Maggi Sabor Acompañado (cubo)', type: 'PRODUCTO' },
+      { name: 'Maggi Sabor de Reyes (cubo)', type: 'PRODUCTO' },
+      { name: 'Maggi Sabor Acompañado (sobre)', type: 'PRODUCTO' },
+      { name: 'Maggi Sabor de Reyes (sobre)', type: 'PRODUCTO' },
+      { name: 'Doña Gallina Sopita de Gallina Criolla', type: 'PRODUCTO' },
+      { name: 'Sazón Completo Maggi (sobre)', type: 'PRODUCTO' },
+      { name: 'Sazón Completo Maggi (frasco)', type: 'PRODUCTO' },
+      { name: 'Sazón Completo Baldom', type: 'PRODUCTO' },
+      { name: 'Sazón Completo Ranchero', type: 'PRODUCTO' },
+      { name: 'Sazón Líquido Ranchero', type: 'PRODUCTO' },
+      { name: 'Sazón Completo Badia', type: 'PRODUCTO' }
+    ];
+    var count = 0;
+    items.forEach(function (item) {
+      var exists = DB.state.catalog.some(function (c) { return c.name === item.name; });
+      if (!exists) {
+        item.id = 'c' + DB.incr('catalog');
+        item.price = 0;
+        DB.state.catalog.push(item);
+        count++;
+      }
+    });
+    DB.save();
+    return count;
+  }
+
+  var _importStaging = [];
+
+  function parseCatalogFile(text, filename) {
+    var ext = (filename || '').split('.').pop().toLowerCase();
+    var items = [];
+    if (ext === 'json') {
+      try {
+        var arr = JSON.parse(text);
+        if (!Array.isArray(arr)) arr = [arr];
+        arr.forEach(function (row, i) {
+          var name = (row.name || row.nombre || row.Nombre || row.producto || '').trim();
+          if (!name) { items.push({ _error: 'Fila ' + (i + 1) + ': sin nombre' }); return; }
+          var price = Number(row.price || row.precio || row.Precio) || 0;
+          var type = (row.type || row.tipo || row.Tipo || 'PRODUCTO').trim().toUpperCase();
+          items.push({ name: name, price: price, type: type });
+        });
+      } catch (e) {
+        items.push({ _error: 'JSON inválido: ' + e.message });
+      }
+    } else {
+      var lines = text.replace(/\r/g, '').split('\n').filter(function (l) { return l.trim(); });
+      lines.forEach(function (line, i) {
+        if (i === 0 && /^(nombre|name|producto|item)/i.test(line.trim())) return;
+        var parts = line.split(',').map(function (p) { return p.replace(/^[\s"]+|[\s"]+$/g, ''); });
+        var name = (parts[0] || '').trim();
+        if (!name) { items.push({ _error: 'Línea ' + (i + 1) + ': sin nombre' }); return; }
+        var price = Number(parts[1]) || 0;
+        var type = ((parts[2] || 'PRODUCTO').trim()).toUpperCase();
+        if (['MO', 'MANO DE OBRA'].indexOf(type) >= 0) type = 'MO';
+        else type = 'PRODUCTO';
+        items.push({ name: name, price: price, type: type });
+      });
+    }
+    return items;
+  }
+
+  function catalogPreviewSheet(parsed) {
+    var newItems = [];
+    var dupes = [];
+    var errors = [];
+    parsed.forEach(function (item) {
+      if (item._error) { errors.push(item._error); return; }
+      var exists = DB.state.catalog.some(function (c) { return c.name === item.name; });
+      if (exists) dupes.push(item);
+      else newItems.push(item);
+    });
+    var html = '<div class="sheet"><div class="sheet-head"><b>' + ITEM_ICON + ' Vista previa de importación</b><button class="icon-btn" data-action="closeSheet">' + X_ICON + '</button></div><div class="sheet-body">';
+    html += '<p class="muted">Se creará un respaldo antes de importar.</p>';
+    if (errors.length) {
+      html += '<p style="color:var(--danger);font-weight:600">' + X_ICON + ' ' + errors.length + ' error(es):</p>';
+      errors.forEach(function (e) { html += '<p class="muted" style="color:var(--danger)">' + escapeHtml(e) + '</p>'; });
+    }
+    if (newItems.length) {
+      html += '<p style="color:var(--success);font-weight:600">' + CHECK_ICON + ' ' + newItems.length + ' producto(s) nuevo(s):</p>';
+      html += '<div class="list">';
+      newItems.forEach(function (it) {
+        html += '<div class="item"><div><b>' + escapeHtml(it.name) + '</b>';
+        if (it.price > 0) html += '<br><span class="muted">' + formatCOP(it.price) + '</span>';
+        html += '<br><span class="muted">' + escapeHtml(it.type) + '</span></div></div>';
+      });
+      html += '</div>';
+    }
+    if (dupes.length) {
+      html += '<p style="color:var(--accent);font-weight:600">' + WARNING_ICON + ' ' + dupes.length + ' ya existen (se saltarán):</p>';
+      html += '<div class="list">';
+      dupes.forEach(function (it) {
+        html += '<div class="item"><div><b>' + escapeHtml(it.name) + '</b> <span class="muted">(duplicado)</span></div></div>';
+      });
+      html += '</div>';
+    }
+    if (newItems.length === 0 && errors.length === 0) {
+      html += '<p class="muted">No hay productos nuevos para importar.</p>';
+    }
+    html += '<div class="btns-row">';
+    html += '<button class="btn block" type="button" data-action="closeSheet">' + X_ICON + ' Cancelar</button>';
+    if (newItems.length > 0) html += '<button class="btn primary block" type="button" data-action="confirmCatalogImport">' + CHECK_ICON + ' Confirmar importación</button>';
+    html += '</div></div></div>';
+    _importStaging = newItems;
+    return html;
+  }
+
   const ACTIONS = {
 
     nav: function (el) { go('#/' + el.dataset.to); },
@@ -983,6 +1291,8 @@ case 'trabajos': inner = jobsView(); break;
     reportNext: function () { shiftMonth(1); },
 
     reportPdf: function () { exportReportPdf(); },
+
+    reportDetail: function (el) { go('#/reporte-detalle/' + el.dataset.kind); },
 
     recordarDeudores: function () { openSheet(deudoresSheet()); },
 
@@ -1134,7 +1444,7 @@ case 'trabajos': inner = jobsView(); break;
       }
       ensureDraft();
       if (!draft.items) draft.items = [];
-      draft.items.push({ desc: it.name, qty: 1, price: it.price, type: it.type });
+      draft.items.push({ desc: it.name, qty: 1, price: it.price, cost: Number(it.cost) || 0, type: it.type });
       const close = document.getElementById('sheet-holder');
       if (close) close.remove();
       const lst = document.getElementById('item-list');
@@ -1148,7 +1458,7 @@ case 'trabajos': inner = jobsView(); break;
       ensureDraft();
       if (!draft.items) draft.items = [];
       const unitLabel = it.unit ? (it.unit + ' (unidad)') : '';
-      draft.items.push({ desc: unitLabel ? (it.name + ' · ' + unitLabel) : it.name, qty: 1, price: it.price, type: it.type });
+      draft.items.push({ desc: unitLabel ? (it.name + ' · ' + unitLabel) : it.name, qty: 1, price: it.price, cost: Number(it.cost) || 0, type: it.type });
       const close = document.getElementById('sheet-holder');
       if (close) close.remove();
       const lst = document.getElementById('item-list');
@@ -1163,7 +1473,7 @@ case 'trabajos': inner = jobsView(); break;
       const packPrice = Number(it.packPrice) > 0 ? it.packPrice : (Number(it.price) * packQty);
       ensureDraft();
       if (!draft.items) draft.items = [];
-      draft.items.push({ desc: it.name + ' · caja × ' + packQty, qty: 1, price: packPrice, type: it.type });
+      draft.items.push({ desc: it.name + ' · caja × ' + packQty, qty: 1, price: packPrice, cost: (Number(it.cost) || 0) * packQty, type: it.type });
       const close = document.getElementById('sheet-holder');
       if (close) close.remove();
       const lst = document.getElementById('item-list');
@@ -1174,7 +1484,7 @@ case 'trabajos': inner = jobsView(); break;
     addManualLine: function () {
       ensureDraft();
       if (!draft.items) draft.items = [];
-      draft.items.push({ desc: '', qty: 1, price: 0 });
+      draft.items.push({ desc: '', qty: 1, price: 0, cost: 0 });
       const lst = document.getElementById('item-list');
       if (lst) lst.innerHTML = itemsListHtml(draft);
       refreshTotals();
@@ -1547,6 +1857,37 @@ case 'trabajos': inner = jobsView(); break;
 
     forceUnlock: function () {
       unlockApp();
+    },
+
+    seedCatalog: function () {
+      var n = seedBaseCatalog();
+      toast(n > 0 ? n + ' productos agregados al catálogo' : 'Todos los productos ya están en el catálogo', n > 0);
+      render();
+    },
+
+    pickImportFile: function () {
+      var f = document.getElementById('catalog-import-file');
+      if (f) f.click();
+    },
+
+    confirmCatalogImport: function () {
+      if (!_importStaging.length) { toast('No hay productos para importar', false); return; }
+      var backupJson = JSON.stringify(DB.state);
+      localStorage.setItem('cotizatec_import_backup', backupJson);
+      var count = 0;
+      _importStaging.forEach(function (item) {
+        var exists = DB.state.catalog.some(function (c) { return c.name === item.name; });
+        if (!exists) {
+          item.id = 'c' + DB.incr('catalog');
+          DB.state.catalog.push(item);
+          count++;
+        }
+      });
+      DB.save();
+      _importStaging = [];
+      toast(count + ' producto(s) importados. Respaldo creado.', true);
+      closeSheet();
+      render();
     }
   };
 
@@ -1556,11 +1897,15 @@ case 'trabajos': inner = jobsView(); break;
     const fn = ACTIONS[el.dataset.action];
     if (!fn) return;
     e.preventDefault();
-    fn(el);
+    try { fn(el); } catch (err) { console.error('CotizaTec: acción fallida', el.dataset.action, err); toast('Error: ' + (err.message || 'acción fallida'), false); }
   });
 
   document.addEventListener('submit', function (e) {
     e.preventDefault();
+    try { _handleSubmit(e); } catch (err) { console.error('CotizaTec: formulario fallido', err); toast('Error: ' + (err.message || 'formulario fallido'), false); }
+  });
+
+  function _handleSubmit(e) {
     const form = e.target;
     const dataForm = form.dataset.form;
 
@@ -1615,6 +1960,8 @@ case 'trabajos': inner = jobsView(); break;
       const price = Number(form.elements.price.value);
       if (!name || isNaN(price) || price < 0) { toast('Nombre y precio obligatorios', false); return; }
       const patch = { name: name, type: form.elements.type.value, price: price };
+      const costVal = form.elements.cost ? Number(form.elements.cost.value) : 0;
+      patch.cost = costVal > 0 ? costVal : null;
       if (form.elements.unit) patch.unit = form.elements.unit.value.trim();
       const packQty = form.elements.packQty ? (Number(form.elements.packQty.value) || 0) : 0;
       patch.packQty = packQty > 0 ? packQty : null;
@@ -1635,7 +1982,7 @@ case 'trabajos': inner = jobsView(); break;
       s.phone = form.elements.phone.value.trim();
       s.address = form.elements.address.value.trim();
       s.itbis = Number(form.elements.itbis.value) || 0;
-      s.validityDays = Number(form.elements.validityDays.value) || 15;
+      s.validityDays = form.elements.validityDays.value.trim() === '' ? 0 : Math.max(1, Number(form.elements.validityDays.value) || 1);
       s.quotePrefix = form.elements.quotePrefix.value.trim() || 'COT';
       if (form.elements.docTitle) s.docTitle = form.elements.docTitle.value.trim() || 'COTIZACIÓN';
       s.lockOnStart = form.elements.lockOnStart.checked;
@@ -1644,13 +1991,33 @@ case 'trabajos': inner = jobsView(); break;
       toast('Ajustes guardados', true);
       render();
     }
-  });
+  }
 
   document.addEventListener('change', function (e) {
     if (e.target && e.target.id === 'backup-file') {
       const f = e.target.files && e.target.files[0];
       e.target.value = '';
       if (f) importBackupFile(f);
+      return;
+    }
+    if (e.target && e.target.id === 'catalog-import-file') {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = function (ev) {
+        var parsed = parseCatalogFile(ev.target.result, f.name);
+        var hasErrors = parsed.some(function (p) { return p._error; });
+        var allDupes = parsed.filter(function (p) { return !p._error; }).every(function (p) {
+          return DB.state.catalog.some(function (c) { return c.name === p.name; });
+        });
+        if (hasErrors && parsed.filter(function (p) { return !p._error; }).length === 0) {
+          toast('Archivo con errores: revisa el formato', false);
+          return;
+        }
+        openSheet(catalogPreviewSheet(parsed));
+      };
+      reader.readAsText(f);
       return;
     }
     const up = e.target.closest('[data-upload]');
@@ -1679,6 +2046,7 @@ case 'trabajos': inner = jobsView(); break;
     if (key === 'qty') items[idx].qty = Number(f.value) || 0;
     if (key === 'desc') items[idx].desc = f.value;
     if (key === 'price') items[idx].price = Number(f.value) || 0;
+    if (key === 'cost') items[idx].cost = Number(f.value) || 0;
     const sub = document.getElementById('qi-sub-' + idx);
     if (sub) sub.textContent = money(items[idx].qty * items[idx].price);
     refreshTotals();
@@ -1901,43 +2269,60 @@ case 'trabajos': inner = jobsView(); break;
   return { init: init, applyLockScreen: applyLockScreen, compressImage: compressImage, showLockFirst: showLockFirst, showLicenseScreen: showLicenseScreen, setLicenseStatus: function (st) { licenseStatus = st; } };
 })();
 
+window.addEventListener('error', function (e) {
+  console.error('CotizaTec: error global', e.message, e.filename, e.lineno);
+});
+window.addEventListener('unhandledrejection', function (e) {
+  console.error('CotizaTec: promise rechazada', e.reason);
+});
+
 document.addEventListener('DOMContentLoaded', function () {
     License.requestNotificationPermission();
-    License.check().then(function (st) {
-      if (st.status === 'active' || st.status === 'grace') {
-        UI.setLicenseStatus(st);
-        return DB.boot().then(function (mode) {
-          if (mode === 'locked') { UI.showLockFirst(); return; }
-          return License.getDeviceId().then(function (deviceId) {
-            if (mode === 'blank') {
-              // Tras "Reiniciar la app" se marca este flag para NO restaurar el
-              // respaldo de la nube (el usuario quiere empezar de cero).
-              const skipCloud = (function () {
-                try { return !!localStorage.getItem('cotizatec_skip_cloud_restore'); } catch (e) { return false; }
-              })();
-              try { localStorage.removeItem('cotizatec_skip_cloud_restore'); } catch (e) {}
-              if (skipCloud) {
-                UI.init();
-                Util.toast('Datos reiniciados', true);
-                try { Reminders.scheduleToday(); } catch (e) {}
-                return;
-              }
-              return Backups.pullFromCloud(deviceId).then(function (restored) {
-                UI.init();
-                if (restored) Util.toast('Datos restaurados desde la nube', true);
-                else Util.toast('No hay datos en la nube para restaurar', false);
-                Backups.pushToCloud(deviceId);
-                try { Reminders.scheduleToday(); } catch (e) {}
-              });
-            }
-            UI.init();
-            Backups.pushToCloud(deviceId);
-            try { Reminders.scheduleToday(); } catch (e) {}
-          });
-        });
+
+    function afterBoot(mode, deviceId) {
+      if (mode === 'locked') { UI.showLockFirst(); return; }
+      if (mode === 'blank') {
+        var skipCloud = (function () {
+          try { return !!localStorage.getItem('cotizatec_skip_cloud_restore'); } catch (e) { return false; }
+        })();
+        try { localStorage.removeItem('cotizatec_skip_cloud_restore'); } catch (e) {}
+        if (skipCloud) {
+          UI.init();
+          Util.toast('Datos reiniciados', true);
+          try { Reminders.scheduleToday(); } catch (e) {}
+          return;
+        }
+        UI.init();
+        Backups.pullFromCloud(deviceId).then(function (restored) {
+          if (restored) Util.toast('Datos restaurados desde la nube', true);
+          Backups.pushToCloud(deviceId);
+          try { Reminders.scheduleToday(); } catch (e) {}
+        }).catch(function () {});
+        return;
       }
-      UI.showLicenseScreen(st);
+      UI.init();
+      Backups.pushToCloud(deviceId);
+      try { Reminders.scheduleToday(); } catch (e) {}
+    }
+
+    DB.boot().then(function (mode) {
+      return License.getDeviceId().then(function (deviceId) {
+        afterBoot(mode, deviceId);
+
+        License.check().then(function (st) {
+          if (st && (st.status === 'active' || st.status === 'grace')) {
+            UI.setLicenseStatus(st);
+          } else {
+            UI.showLicenseScreen(st);
+          }
+        }).catch(function () {});
+      }).catch(function () {
+        afterBoot(mode, null);
+      });
+    }).catch(function () {
+      UI.init();
     });
+
     startLicenseWatch();
   });
 

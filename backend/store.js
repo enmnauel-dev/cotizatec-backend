@@ -57,6 +57,71 @@ function save() {
   fs.renameSync(tmp, DATA_FILE);
 }
 
+// ===== Cuentas web de clientes (usuario + contraseña) =====
+function listWebAccounts() {
+  const db = load();
+  if (!db.webAccounts) db.webAccounts = {};
+  return db.webAccounts;
+}
+
+function saveWebAccounts(accounts) {
+  const db = load();
+  db.webAccounts = accounts;
+  save();
+  if (DATABASE_URL) {
+    pgSet('webAccounts', accounts).catch(function (e) { console.error('[pg] save webAccounts:', e.message); });
+  }
+}
+
+function getWebAccountByUsername(username) {
+  const clean = String(username || '').toLowerCase().trim();
+  const accounts = listWebAccounts();
+  return accounts[clean] || null;
+}
+
+function getWebAccountById(anyId) {
+  const accounts = listWebAccounts();
+  const list = Object.keys(accounts).map((k) => accounts[k]);
+  return list.find((a) => a.userId && String(a.userId) === String(anyId)) ||
+         list.find((a) => String(a.clientId) === String(anyId)) || null;
+}
+
+// Todos los usuarios web de un negocio (clientId). Cada usuario lleva
+// userId, role (owner/empleado), status (activo/inactivo) y deviceId para
+// preparar la futura identidad por operador.
+function listWebAccountsByClient(clientId) {
+  const accounts = listWebAccounts();
+  return Object.keys(accounts)
+    .map((k) => accounts[k])
+    .filter((a) => a.clientId === clientId)
+    .sort((a, b) => (a.role === 'owner' ? -1 : 0) - (b.role === 'owner' ? -1 : 0) || (a.name || '').localeCompare(b.name || ''));
+}
+
+function countWebAccountsByClient(clientId) {
+  const accounts = listWebAccounts();
+  return Object.keys(accounts).filter((k) => accounts[k].clientId === clientId).length;
+}
+
+function setWebAccount(username, account) {
+  const accounts = listWebAccounts();
+  // Garantizar el userId (identidad única por usuario) y el rol por defecto.
+  if (!account.userId) account.userId = 'u-' + Math.random().toString(36).slice(2, 10);
+  accounts[String(username).toLowerCase().trim()] = account;
+  saveWebAccounts(accounts);
+  return account;
+}
+
+function setWebAccountPasswordByUserId(userId, newHash) {
+  const accounts = listWebAccounts();
+  const list = Object.keys(accounts);
+  let hit = null;
+  list.forEach((k) => {
+    if (accounts[k].userId && String(accounts[k].userId) === String(userId)) { accounts[k].passHash = newHash; accounts[k].updatedAt = Date.now(); hit = accounts[k]; }
+  });
+  if (hit) saveWebAccounts(accounts);
+  return hit;
+}
+
 function registerDevice(deviceId, meta) {
   const db = load();
   if (!db.devices[deviceId]) {
@@ -474,6 +539,13 @@ module.exports = {
   deviceCount,
   licenseCount,
   listClients,
+  listWebAccounts,
+  getWebAccountByUsername,
+  getWebAccountById,
+  setWebAccount,
+  listWebAccountsByClient,
+  countWebAccountsByClient,
+  setWebAccountPasswordByUserId,
   getClient,
   createClient,
   updateClient,

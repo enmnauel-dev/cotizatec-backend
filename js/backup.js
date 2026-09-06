@@ -296,15 +296,33 @@ var Backups = (function () {
   // Auto-respaldo: cada vez que se guardan datos locales, se sube el respaldo
   // cifrado a la nube (debounce para agrupar cambios consecutivos).
   let _autoTimer = null;
+  let _retryTimer = null;
+  let _lastFailedPush = 0;
+  let _retryCount = 0;
+  const MAX_RETRY_DELAY = 300000;
+
+  function _doPush() {
+    if (typeof License === 'undefined' || !License.getDeviceId) return;
+    License.getDeviceId().then(function (deviceId) {
+      if (!deviceId) return;
+      pushToCloud(deviceId).then(function (ok) {
+        if (ok) { _retryCount = 0; _lastFailedPush = 0; }
+        else _scheduleRetry();
+      }).catch(function () { _scheduleRetry(); });
+    }).catch(function () {});
+  }
+
+  function _scheduleRetry() {
+    _retryCount++;
+    _lastFailedPush = Date.now();
+    var delay = Math.min(5000 * Math.pow(2, _retryCount - 1), MAX_RETRY_DELAY);
+    if (_retryTimer) clearTimeout(_retryTimer);
+    _retryTimer = setTimeout(function () { _doPush(); }, delay);
+  }
+
   function _autoPush() {
     if (_autoTimer) clearTimeout(_autoTimer);
-    _autoTimer = setTimeout(function () {
-      if (typeof License === 'undefined' || !License.getDeviceId) return;
-      License.getDeviceId().then(function (deviceId) {
-        if (!deviceId) return;
-        Backups.pushToCloud(deviceId);
-      }).catch(function () {});
-    }, 2500);
+    _autoTimer = setTimeout(_doPush, 5000);
   }
   if (typeof DB !== 'undefined' && DB.onSave) DB.onSave(_autoPush);
 

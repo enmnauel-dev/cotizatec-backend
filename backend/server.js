@@ -5,6 +5,7 @@ const store = require('./store');
 const license = require('./license');
 const bot = require('./bot');
 const admin = require('./admin');
+const webclients = require('./webclients');
 
 const PORT = process.env.PORT || 3000;
 
@@ -31,7 +32,7 @@ app.get('/api/health', (req, res) => {
 app.post('/api/register', (req, res) => {
   const deviceId = String(req.body.deviceId || '').trim();
   if (!deviceId || deviceId.length < 8 || deviceId.length > 128) {
-    return res.status(400).json({ error: 'deviceId inválido' });
+    return res.status(400).json({ error: 'deviceId invÃ¡lido' });
   }
   const meta = {
     appVersion: req.body.appVersion || '',
@@ -63,8 +64,8 @@ app.get('/api/license/:deviceId', (req, res) => {
     return res.json({ ok: true, status: 'grace', supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, token: l.token });
   }
   const message = l.trial
-    ? 'Tu período de prueba terminó. Actívala contactando al administrador por WhatsApp.'
-    : 'Licencia vencida y período de gracia agotado. Contacta al administrador para renovar.';
+    ? 'Tu perÃ­odo de prueba terminÃ³. ActÃ­vala contactando al administrador por WhatsApp.'
+    : 'Licencia vencida y perÃ­odo de gracia agotado. Contacta al administrador para renovar.';
   return res.json({ ok: false, status: 'expired', supportPhone, message });
 });
 
@@ -79,11 +80,11 @@ app.get('/api/device/:deviceId', (req, res) => {
 app.post('/api/backup/:deviceId', async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId || deviceId.length < 8 || deviceId.length > 128) {
-    return res.status(400).json({ error: 'deviceId inválido' });
+    return res.status(400).json({ error: 'deviceId invÃ¡lido' });
   }
   const data = String(req.body.data || '').trim();
   if (!data || data.length < 32) {
-    return res.status(400).json({ error: 'Respaldo vacío o inválido' });
+    return res.status(400).json({ error: 'Respaldo vacÃ­o o invÃ¡lido' });
   }
   if (data.length > 4 * 1024 * 1024) {
     return res.status(413).json({ error: 'Respaldo demasiado grande' });
@@ -99,8 +100,8 @@ app.get('/api/backup/:deviceId', async (req, res) => {
   res.json({ ok: true, savedAt: b.savedAt, data: b.data });
 });
 
-// Reclamo de migración: el equipo nuevo pregunta si tiene un respaldo que
-// heredar de un dispositivo viejo (mismo usuario, otro teléfono).
+// Reclamo de migraciÃ³n: el equipo nuevo pregunta si tiene un respaldo que
+// heredar de un dispositivo viejo (mismo usuario, otro telÃ©fono).
 app.get('/api/backup/claim/:deviceId', async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   const oldId = await store.getClaim(deviceId);
@@ -122,17 +123,218 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
+// ===== Panel web del cliente =====
+app.get('/panel', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'panel.html'));
+});
+
+// Cambio de contraseÃ±a del cliente ya autenticado. La cuenta se crea desde el
+// panel del administrador; aquÃ­ el cliente solo puede cambiar su propia clave.
+app.post('/api/client/change-password', async (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const { account } = auth;
+  try {
+    const current = String(req.body.currentPassword || '');
+    const next = String(req.body.newPassword || '');
+    const ok = await webclients.verifyPassword(current, account.passHash);
+    if (!ok) {
+      return res.status(401).json({ error: 'La contraseÃ±a actual es incorrecta.' });
+    }
+    if (next.length < 6) {
+      return res.status(400).json({ error: 'La nueva contraseÃ±a debe tener al menos 6 caracteres.' });
+    }
+    const hash = await webclients.hashPassword(next);
+    account.passHash = hash;
+    account.updatedAt = Date.now();
+    store.setWebAccount(account.username, account);
+    res.json({ ok: true, message: 'ContraseÃ±a actualizada.' });
+  } catch (e) {
+    console.error('[client] change-password error:', e.message);
+    res.status(500).json({ error: 'Error al cambiar la contraseÃ±a.' });
+  }
+});
+
+app.post('/api/client/login', async (req, res) => {
+  try {
+    const username = String(req.body.username || '').trim();
+    const password = String(req.body.password || '');
+    const account = store.getWebAccountByUsername(username);
+    if (!account) {
+      return res.status(401).json({ error: 'Usuario o contraseÃ±a incorrectos.' });
+    }
+    const ok = await webclients.verifyPassword(password, account.passHash);
+    if (!ok) {
+      return res.status(401).json({ error: 'Usuario o contraseÃ±a incorrectos.' });
+    }
+    const token = webclients.issueToken(account);
+    res.json({ ok: true, token, role: account.role || 'owner', userId: account.userId, name: account.name || (store.getClient(account.clientId) || {}).name || username });
+  } catch (e) {
+    console.error('[client] login error:', e.message);
+    res.status(500).json({ error: 'Error al iniciar sesiÃ³n.' });
+  }
+});
+
+function requireClient(req, res) {
+  const auth = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const info = webclients.verifyToken(auth);
+  if (!info) {
+    res.status(401).json({ error: 'SesiÃ³n invÃ¡lida o expirada.' });
+    return null;
+  }
+  const account = store.getWebAccountById(info.sub);
+  if (!account) {
+    res.status(401).json({ error: 'Cuenta no encontrada.' });
+    return null;
+  }
+  if (account.status === 'inactivo') {
+    res.status(403).json({ error: 'Tu cuenta estÃ¡ desactivada.' });
+    return null;
+  }
+  return { info, account };
+}
+
+app.get('/api/client/report', async (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const { account } = auth;
+  try {
+    const devices = account.deviceIds || [];
+    let state = null;
+    for (const deviceId of devices) {
+      const b = await store.getBackup(deviceId);
+      if (b && b.data) {
+        const plain = await webclients.decryptBackup(deviceId, b.data);
+        if (plain) {
+          try {
+            const parsed = JSON.parse(plain);
+            if (parsed && parsed.data) state = parsed.data;
+            break;
+          } catch (e) { /* siguiente dispositivo */ }
+        }
+      }
+    }
+    if (!state) {
+      return res.json({ ok: true, hasData: false, report: null, message: 'TodavÃ­a no hay datos de ventas para este cliente.' });
+    }
+    const report = webclients.computeReport(state);
+    res.json({ ok: true, hasData: true, report });
+  } catch (e) {
+    console.error('[client] report error:', e.message);
+    res.status(500).json({ error: 'Error al leer los datos.' });
+  }
+});
+
+// ===== GestiÃ³n de usuarios del portal (solo el dueÃ±o del negocio) =====
+// El dueÃ±o (role: owner) administra los usuarios web de SU PROPIO negocio.
+// Se garantiza aislamiento total: solo puede operar sobre su clientId.
+function requireOwner(req, res) {
+  const auth = requireClient(req, res);
+  if (!auth) return null;
+  if (auth.info.role !== 'owner') {
+    res.status(403).json({ error: 'Solo el dueÃ±o del negocio puede administrar usuarios.' });
+    return null;
+  }
+  return auth;
+}
+
+const PORTAL_MAX_USERS = parseInt(process.env.PORTAL_MAX_USERS || '10', 10);
+
+app.get('/api/client/users', (req, res) => {
+  const auth = requireOwner(req, res);
+  if (!auth) return;
+  const clientId = auth.account.clientId;
+  const client = store.getClient(clientId) || {};
+  const limit = (client.planLimit != null ? parseInt(client.planLimit, 10) : PORTAL_MAX_USERS) || PORTAL_MAX_USERS;
+  const users = store.listWebAccountsByClient(clientId).map((u) => ({
+    userId: u.userId,
+    username: u.username,
+    name: u.name || '',
+    role: u.role || 'owner',
+    status: u.status || 'activo',
+    createdAt: u.createdAt,
+    deviceId: u.deviceIds ? u.deviceIds[0] : null
+  }));
+  res.json({ ok: true, limit, users });
+});
+
+app.post('/api/client/users', async (req, res) => {
+  const auth = requireOwner(req, res);
+  if (!auth) return;
+  const clientId = auth.account.clientId;
+  const name = String(req.body.name || '').trim();
+  const username = String(req.body.username || '').toLowerCase().trim();
+  const role = req.body.role === 'owner' ? 'owner' : 'empleado';
+  if (!username || !/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
+    return res.status(400).json({ error: 'Usuario invÃ¡lido (3-30: letras, nÃºmeros, . _ -).' });
+  }
+  if (store.getWebAccountByUsername(username)) {
+    return res.status(409).json({ error: 'Ese usuario ya existe en el portal.' });
+  }
+  const client = store.getClient(clientId) || {};
+  const limit = (client.planLimit != null ? parseInt(client.planLimit, 10) : PORTAL_MAX_USERS) || PORTAL_MAX_USERS;
+  const count = store.countWebAccountsByClient(clientId);
+  if (count >= limit) {
+    return res.status(403).json({ error: 'Alcanzaste el lÃ­mite de ' + limit + ' usuarios de tu plan.' });
+  }
+  // ContraseÃ±a temporal generada: se muestra una sola vez, nunca se guarda en claro.
+  const temp = Math.random().toString(36).slice(2, 8) + String(Math.floor(Math.random() * 100));
+  const hash = await webclients.hashPassword(temp);
+  const account = {
+    username,
+    clientId,
+    name: name || username,
+    role,
+    status: 'activo',
+    passHash: hash,
+    deviceIds: (store.getClient(clientId) || { devices: [] }).devices.map((d) => d.deviceId),
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  store.setWebAccount(username, account);
+  res.json({ ok: true, createdAtPassword: temp, account: { userId: account.userId, username, name: account.name, role, status: 'activo' } });
+});
+
+app.post('/api/client/users/:userId/toggle', (req, res) => {
+  const auth = requireOwner(req, res);
+  if (!auth) return;
+  const acc = store.getWebAccountById(req.params.userId);
+  if (!acc || acc.clientId !== auth.account.clientId) {
+    return res.status(404).json({ error: 'Usuario no encontrado en tu negocio.' });
+  }
+  if (acc.role === 'owner') {
+    return res.status(400).json({ error: 'No puedes desactivar la cuenta del dueÃ±o.' });
+  }
+  acc.status = acc.status === 'inactivo' ? 'activo' : 'inactivo';
+  acc.updatedAt = Date.now();
+  store.setWebAccount(acc.username, acc);
+  res.json({ ok: true, status: acc.status });
+});
+
+app.post('/api/client/users/:userId/reset-password', async (req, res) => {
+  const auth = requireOwner(req, res);
+  if (!auth) return;
+  const acc = store.getWebAccountById(req.params.userId);
+  if (!acc || acc.clientId !== auth.account.clientId) {
+    return res.status(404).json({ error: 'Usuario no encontrado en tu negocio.' });
+  }
+  const temp = Math.random().toString(36).slice(2, 8) + String(Math.floor(Math.random() * 100));
+  const hash = await webclients.hashPassword(temp);
+  store.setWebAccountPasswordByUserId(acc.userId, hash);
+  res.json({ ok: true, resetPassword: temp });
+});
+
 function requireAdmin(req, res) {
   const raw = req.query.initData || '';
   if (!raw) {
-    console.log('[admin] petición sin initData (' + req.path + ')');
+    console.log('[admin] peticiÃ³n sin initData (' + req.path + ')');
     res.status(401).json({ error: 'No autorizado. Falta initData de Telegram.' });
     return null;
   }
   const info = admin.validateInitData(raw);
   if (!info) {
-    console.log('[admin] initData inválido: token len=' + String(process.env.TELEGRAM_TOKEN || '').length + ' user=' + raw.slice(0, 60));
-    res.status(401).json({ error: 'No autorizado. initData de Telegram inválido.' });
+    console.log('[admin] initData invÃ¡lido: token len=' + String(process.env.TELEGRAM_TOKEN || '').length + ' user=' + raw.slice(0, 60));
+    res.status(401).json({ error: 'No autorizado. initData de Telegram invÃ¡lido.' });
     return null;
   }
   if (!admin.isAdmin(info.user && info.user.id)) {
@@ -153,7 +355,7 @@ function licenseStatus(deviceId, l) {
 }
 
 function licenseLabel(st) {
-  return st === 'active' ? '🟢 Activa' : st === 'grace' ? '🟡 Por Vencer' : st === 'expired' ? '🔴 Vencida' : st === 'blocked' ? '🔒 Bloqueada' : '⚪ Sin licencia';
+  return st === 'active' ? 'ðŸŸ¢ Activa' : st === 'grace' ? 'ðŸŸ¡ Por Vencer' : st === 'expired' ? 'ðŸ”´ Vencida' : st === 'blocked' ? 'ðŸ”’ Bloqueada' : 'âšª Sin licencia';
 }
 
 function enrichClient(c) {
@@ -274,6 +476,40 @@ app.put('/api/admin/clients/:id', (req, res) => {
   res.json({ ok: true, client: enrichClient(c) });
 });
 
+// Crea (o resetea la clave de) la cuenta web de un cliente. Solo el
+// administrador puede hacerlo; el cliente solo inicia sesiÃ³n con lo que aquÃ­
+// se configura.
+app.post('/api/admin/clients/:id/webaccount', async (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const c = store.getClient(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
+  const username = String(req.body.username || '').trim();
+  const password = String(req.body.password || '');
+  if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
+    return res.status(400).json({ error: 'Usuario invÃ¡lido (3-30: letras, nÃºmeros, . _ -).' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'La contraseÃ±a debe tener al menos 6 caracteres.' });
+  }
+  // Verificar que el usuario no estÃ© usado por OTRO cliente
+  const existing = store.getWebAccountByUsername(username);
+  if (existing && existing.clientId !== c.id) {
+    return res.status(409).json({ error: 'Ese usuario ya estÃ¡ en uso por otro cliente.' });
+  }
+  const hash = await webclients.hashPassword(password);
+  const account = {
+    username: username.toLowerCase().trim(),
+    clientId: c.id,
+    deviceIds: (c.devices || []).map((d) => d.deviceId),
+    passHash: hash,
+    createdAt: (existing && existing.createdAt) || Date.now(),
+    updatedAt: Date.now()
+  };
+  store.setWebAccount(username, account);
+  res.json({ ok: true, account: { username: account.username, clientId: account.clientId, deviceIds: account.deviceIds } });
+});
+
 app.delete('/api/admin/clients/:id', (req, res) => {
   const info = requireAdmin(req, res);
   if (!info) return;
@@ -287,7 +523,7 @@ app.post('/api/admin/clients/:id/devices', (req, res) => {
   const deviceId = String(req.body.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'Falta deviceId.' });
   const owner = store.deviceInOtherClient(req.params.id, deviceId);
-  if (owner) return res.status(409).json({ error: 'Ese dispositivo ya está vinculado al cliente "' + owner.name + '". Quítalo de ahí o usa ese cliente.' });
+  if (owner) return res.status(409).json({ error: 'Ese dispositivo ya estÃ¡ vinculado al cliente "' + owner.name + '". QuÃ­talo de ahÃ­ o usa ese cliente.' });
   const c = store.addDeviceToClient(req.params.id, deviceId, req.body.alias);
   if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
   res.json({ ok: true, client: enrichClient(c) });
@@ -340,7 +576,7 @@ app.post('/api/admin/device/:deviceId/migrate', async (req, res) => {
   if (!info) return;
   const toId = String(req.body.toDeviceId || '').trim();
   if (!toId || toId.length < 8 || toId.length > 128) {
-    return res.status(400).json({ error: 'Falta toDeviceId válido.' });
+    return res.status(400).json({ error: 'Falta toDeviceId vÃ¡lido.' });
   }
   const fromId = String(req.params.deviceId || '').trim();
   const result = await store.migrateDevice(fromId, toId);
@@ -359,7 +595,7 @@ app.post('/api/admin/clients/:id/devices/:deviceId/activate', (req, res) => {
   const info = requireAdmin(req, res);
   if (!info) return;
   const owner = store.deviceInOtherClient(req.params.id, req.params.deviceId);
-  if (owner) return res.status(409).json({ error: 'Ese dispositivo ya está vinculado al cliente "' + owner.name + '".' });
+  if (owner) return res.status(409).json({ error: 'Ese dispositivo ya estÃ¡ vinculado al cliente "' + owner.name + '".' });
   const days = parseInt(req.body.days, 10) || 30;
   const graceDays = parseInt(req.body.graceDays, 10) || 15;
   const now = Date.now();
@@ -394,10 +630,10 @@ store.init().then(() => {
   app.listen(PORT, () => {
     console.log('[server] CotizaTec backend en puerto ' + PORT);
     if (!process.env.LICENSE_PRIVATE_KEY && !process.env.LICENSE_PUBLIC_KEY) {
-      console.warn('[server] ⚠️  Faltan claves de licencia. Ejecuta: npm run genkeys y copia a .env');
+      console.warn('[server] âš ï¸  Faltan claves de licencia. Ejecuta: npm run genkeys y copia a .env');
     }
     if (!process.env.TELEGRAM_TOKEN) {
-      console.warn('[server] ⚠️  Falta TELEGRAM_TOKEN en .env. El bot no se iniciará.');
+      console.warn('[server] âš ï¸  Falta TELEGRAM_TOKEN en .env. El bot no se iniciarÃ¡.');
     } else {
       bot.startBot(process.env.TELEGRAM_TOKEN);
       console.log('[bot] Bot de Telegram iniciado.');

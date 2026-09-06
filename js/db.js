@@ -53,6 +53,7 @@ var DB = (function () {
 
   const _seq = { client: 0, catalog: 0, job: 0, expense: 0, payment: 0 };
   let state = null;
+  let _idIndex = {};
 
   const BAK_KEY = 'cotizatec_db_bak_v1';
   const TS_KEY = 'cotizatec_db_ts_v1';
@@ -349,9 +350,19 @@ var DB = (function () {
   }
 
   function isValidState(s) {
-    return !!(s && typeof s === 'object' &&
+    if (!(s && typeof s === 'object' &&
       Array.isArray(s.clients) && Array.isArray(s.catalog) && Array.isArray(s.jobs) &&
-      s.settings && typeof s.settings === 'object');
+      s.settings && typeof s.settings === 'object')) return false;
+    for (var i = 0; i < s.clients.length; i++) {
+      if (!s.clients[i] || typeof s.clients[i] !== 'object' || !s.clients[i].id) return false;
+    }
+    for (var i = 0; i < s.catalog.length; i++) {
+      if (!s.catalog[i] || typeof s.catalog[i] !== 'object' || !s.catalog[i].id) return false;
+    }
+    for (var i = 0; i < s.jobs.length; i++) {
+      if (!s.jobs[i] || typeof s.jobs[i] !== 'object') return false;
+    }
+    return true;
   }
 
   function normalize(s) {
@@ -374,6 +385,7 @@ var DB = (function () {
     const t = s.seq;
     _seq.client = t.client || 0; _seq.catalog = t.catalog || 0; _seq.job = t.job || 0;
     _seq.expense = t.expense || 0; _seq.payment = t.payment || 0;
+    rebuildIndex();
     return s;
   }
 
@@ -422,10 +434,10 @@ var DB = (function () {
     state.seq = { client: _seq.client, catalog: _seq.catalog, job: _seq.job, expense: _seq.expense, payment: _seq.payment };
     if (_encKey) { scheduleEncSave(); notifySave(); return; }
     try {
-      const jsonStr = JSON.stringify(state);
+      var jsonStr = JSON.stringify(state);
       if (!skipMirror) mirrorWrite(jsonStr);
       if (!skipMirror) fsWriteDebounced();
-      const current = localStorage.getItem(KEY);
+      var current = localStorage.getItem(KEY);
       if (current && current !== jsonStr) localStorage.setItem(BAK_KEY, current);
       localStorage.setItem(KEY, jsonStr);
       localStorage.setItem(TS_KEY, String(Date.now()));
@@ -511,6 +523,10 @@ var DB = (function () {
     return v;
   }
 
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
   load();
 
   function esc(s) {
@@ -544,12 +560,26 @@ var DB = (function () {
 
   function push(list, obj) {
     state[list].push(obj);
+    if (obj && obj.id) _idIndex[obj.id] = obj;
     save();
     return obj;
   }
 
   function find(list, id) {
-    return state[list].find(x => String(x.id) === String(id));
+    var sid = String(id);
+    if (_idIndex[sid] && state[list].indexOf(_idIndex[sid]) >= 0) return _idIndex[sid];
+    var found = state[list].find(x => String(x.id) === sid);
+    if (found) _idIndex[sid] = found;
+    return found;
+  }
+
+  function rebuildIndex() {
+    _idIndex = {};
+    ['clients', 'catalog', 'jobs'].forEach(function (list) {
+      (state[list] || []).forEach(function (item) {
+        if (item && item.id) _idIndex[String(item.id)] = item;
+      });
+    });
   }
 
   function update(list, id, patch) {
@@ -560,6 +590,7 @@ var DB = (function () {
 
   function remove(list, id) {
     state[list] = state[list].filter(x => String(x.id) !== String(id));
+    delete _idIndex[String(id)];
     save();
   }
 
@@ -570,11 +601,13 @@ var DB = (function () {
     const itbis = Number(j.itbis) || 0;
     const tax = itbis > 0 ? taxable * itbis / 100 : 0;
     const total = taxable + tax;
-    const cost = (j.expenses || []).reduce((a, e) => a + (Number(e.amount) || 0), 0);
+    const itemsCost = (j.items || []).reduce((a, i) => a + (Number(i.qty) || 0) * (Number(i.cost) || 0), 0);
+    const expenses = (j.expenses || []).reduce((a, e) => a + (Number(e.amount) || 0), 0);
+    const cost = itemsCost + expenses;
     const collected = (j.payments || []).reduce((a, p) => a + (Number(p.amount) || 0), 0);
     const balance = Math.max(0, total - collected);
     const margin = total - cost;
-    return { subtotal, discount, itbis, tax, total, cost, collected, balance, margin };
+    return { subtotal, discount, itbis, tax, total, itemsCost, expenses, cost, collected, balance, margin };
   }
 
   function newJob(client) {
@@ -931,7 +964,7 @@ var DB = (function () {
   const api = {};
   Object.defineProperty(api, 'state', { get: function () { return state; }, enumerable: true });
   Object.assign(api, {
-    load, save, incr, esc, money, date, push, find, update, remove,
+    load, save, incr, esc, money, date, push, find, update, remove, uid,
     jobTotals, newJob, saveJob, captureClient,
     statusLabel, statusColor, STATUS, KEY, BAK_KEY, TS_KEY, FS_KEY, ENC_META,
     buildBackup, parseBackup, applyBackup, backupError,

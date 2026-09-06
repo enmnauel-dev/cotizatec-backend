@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CotizaTec — Panel del cliente</title>
+<style>
+  :root {
+    --ink: #0f172a; --muted: #475569; --line: #e2e8f0;
+    --card: #ffffff; --bg: #f1f5f9; --brand: #6366f1; --brand-d: #4f46e5;
+    --green: #10b981; --red: #ef4444; --amber: #f59e0b;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink);
+  }
+  .wrap { max-width: 520px; margin: 0 auto; padding: 16px; }
+  .top {
+    background: linear-gradient(135deg, var(--brand), var(--brand-d));
+    color: #fff; padding: 20px 16px; border-radius: 16px; margin-bottom: 16px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .top h1 { margin: 0; font-size: 18px; }
+  .top small { opacity: .85; display: block; margin-top: 2px; }
+  .btn-out { background: rgba(255,255,255,.2); border: none; color: #fff; border-radius: 10px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
+
+  .card { background: var(--card); border-radius: 14px; box-shadow: 0 1px 3px rgba(15,23,42,.08); padding: 16px; margin-bottom: 14px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stat { border-radius: 14px; padding: 14px; color: #fff; }
+  .stat .l { font-size: 12px; opacity: .9; }
+  .stat .v { font-size: 20px; font-weight: 800; margin-top: 2px; white-space: nowrap; }
+  .stat.span2 { grid-column: 1 / -1; }
+  .c-blue { background: #3b82f6; } .c-green { background: #10b981; }
+  .c-red { background: #ef4444; } .c-amber { background: #f59e0b; } .c-purple { background: #8b5cf6; }
+
+  .t-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+  .t-row b { color: var(--ink); }
+  .recent-item { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .recent-item:last-child { border-bottom: none; }
+  .recent-item .head { display: flex; justify-content: space-between; font-weight: 600; }
+
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+  .pill.green { background: #d1fae5; color: #065f46; }
+  .pill.amber { background: #fef3c7; color: #92400e; }
+  .pill.red { background: #fee2e2; color: #991b1b; }
+  .pill.gray { background: #e2e8f0; color: #334155; }
+
+  .auth-title { text-align: center; margin: 40px 0 4px; font-size: 22px; font-weight: 800; }
+  .auth-sub { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .tabs { display: flex; background: #e2e8f0; border-radius: 12px; padding: 4px; margin-bottom: 18px; }
+  .tabs button { flex: 1; border: none; background: transparent; padding: 10px; border-radius: 9px; font-weight: 600; color: var(--muted); cursor: pointer; }
+  .tabs button.on { background: #fff; color: var(--brand); box-shadow: 0 1px 2px rgba(15,23,42,.1); }
+  label { font-size: 13px; color: var(--muted); display: block; margin: 12px 0 4px; }
+  input[type=text], input[type=password] {
+    width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 15px; background: #fff;
+  }
+  .btn { width: 100%; padding: 13px; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .btn.primary { background: var(--brand); color: #fff; }
+  .msg { text-align: center; font-size: 13px; margin-top: 12px; }
+  .msg.err { color: var(--red); } .msg.ok { color: var(--green); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+  .empty { text-align: center; color: var(--muted); padding: 30px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  .sub-tab { display: none; }
+
+  /* ===== Comparativa ===== */
+  .cmp { display: flex; align-items: center; gap: 14px; }
+  .cmp .big { font-size: 24px; font-weight: 800; }
+  .cmp .arrow { font-size: 28px; }
+  .cmp .arrow.up { color: var(--green); } .cmp .arrow.down { color: var(--red); }
+  .cmp-txt { margin-top: 8px; font-size: 13px; color: var(--muted); line-height: 1.45; }
+  .cmp-txt.note { color: var(--amber); font-weight: 600; }
+  .row2 { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .row2 > div { flex: 1; padding: 12px; text-align: center; }
+  .row2 > div + div { border-left: 1px solid var(--line); }
+  .row2 .lb { font-size: 11px; color: var(--muted); }
+  .row2 .vl { font-size: 17px; font-weight: 800; margin-top: 2px; }
+
+  /* ===== Gráfico ===== */
+  canvas#chart { width: 100%; height: 180px; }
+  .chart-legend { font-size: 12px; color: var(--muted); margin-top: 4px; text-align: center; }
+
+  .btn.print { background: var(--brand); color: #fff; }
+
+  @media print {
+    body { background: #fff; }
+    .no-print { display: none !important; }
+    .wrap { max-width: none; padding: 0; }
+    .top { display: none; }
+    .card { box-shadow: none; border: 1px solid var(--line); break-inside: avoid; }
+    .auth-view-wrap { display: none !important; }
+  }
+  .print-header { display: none; }
+  @media print {
+    .print-header { display: block; text-align: center; margin-bottom: 14px; }
+    .print-header h1 { margin: 0; font-size: 18px; }
+    .print-header .sub { font-size: 12px; color: var(--muted); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app-root">
+
+  <!-- LOGIN -->
+  <div id="auth-view">
+    <div class="auth-title">CotizaTec</div>
+    <div class="auth-sub">Accede a tus ventas y reportes</div>
+    <div class="card">
+      <div id="tab-login-pane">
+        <label>Usuario</label>
+        <input type="text" id="login-user" autocomplete="username" placeholder="Tu usuario">
+        <label>Contraseña</label>
+        <input type="password" id="login-pass" autocomplete="current-password" placeholder="Tu contraseña">
+        <div style="height:14px"></div>
+        <button class="btn primary" onclick="doLogin()">Entrar</button>
+        <div class="msg err" id="login-msg"></div>
+        <div class="hint">Tu cuenta fue creada por el administrador. Si aún no tienes usuario y contraseña, pídelos al administrador.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dash-view" style="display:none">
+    <div class="top no-print">
+      <div><h1>Hola, <span id="dash-name">CotizaTec</span></h1><small id="dash-sub">Resumen de tu negocio</small></div>
+      <div style="display:flex; gap:8px">
+        <button class="btn-out" onclick="doPrint()">Imprimir</button>
+        <button class="btn-out" onclick="openChangePass()">Cambiar clave</button>
+        <button class="btn-out" onclick="doLogout()">Salir</button>
+      </div>
+    </div>
+    <div class="print-header"><h1><span id="ph-name">Reporte de ventas</span></h1><div class="sub" id="ph-date"></div></div>
+    <div id="change-pass-card" class="card no-print" style="display:none">
+      <div style="font-weight:700; margin-bottom:8px">Cambiar contraseña</div>
+      <label>Contraseña actual</label>
+      <input type="password" id="cp-current" autocomplete="current-password">
+      <label>Nueva contraseña</label>
+      <input type="password" id="cp-new" autocomplete="new-password">
+      <div style="height:10px"></div>
+      <button class="btn primary" onclick="doChangePass()">Guardar nueva contraseña</button>
+      <div class="msg" id="cp-msg"></div>
+    </div>
+    <div id="dash-empty" class="card empty" style="display:none"></div>
+    <div id="dash-content" style="display:none">
+
+      <!-- Comparativa mes actual vs. mismo período del mes anterior -->
+      <div class="card" id="cmp-card" style="display:none">
+        <div class="cmp">
+          <div class="arrow" id="cmp-arrow">▲</div>
+          <div style="flex:1">
+            <div class="lb" id="cmp-title">Este mes</div>
+            <div class="big" id="cmp-current">RD$ 0</div>
+          </div>
+          <div style="flex:1;text-align:right">
+            <div class="lb">Mismo período mes anterior</div>
+            <div class="big" id="cmp-prev">RD$ 0</div>
+          </div>
+        </div>
+        <div class="cmp-txt" id="cmp-msg"></div>
+      </div>
+
+      <div class="grid2">
+        <div class="stat c-green"><div class="l">Ventas</div><div class="v" id="s-ventas">0</div></div>
+        <div class="stat c-blue"><div class="l">Cotizaciones</div><div class="v" id="s-cotizaciones">0</div></div>
+        <div class="stat c-green"><div class="l">Cobrado</div><div class="v" id="s-cobrado">0</div></div>
+        <div class="stat c-amber"><div class="l">Por cobrar</div><div class="v" id="s-porcobrar">0</div></div>
+        <div class="stat c-purple span2"><div class="l">Ganancia neta</div><div class="v" id="s-ganancia">0</div></div>
+      </div>
+
+      <div id="facturado-row" class="card"><div class="t-row"><span>Facturado (total)</span><b id="s-facturado">0</b></div></div>
+
+      <div class="card">
+        <div style="font-weight:700; margin-bottom:8px">Actividad (últimos 12 meses)</div>
+        <canvas id="chart"></canvas>
+        <div class="chart-legend">Facturado por mes (RD$)</div>
+      </div>
+
+      <div class="card">
+        <div class="t-row"><span>Operaciones totales</span><b id="s-trabajos">0</b></div>
+        <div class="t-row"><span>Trabajos con saldo pendiente</span><b id="s-pendientes">0</b></div>
+        <div class="t-row"><span>Clientes registrados</span><b id="s-clientes">0</b></div>
+        <div class="t-row"><span>Total gastado (costo)</span><b id="s-gastado">0</b></div>
+        <div class="t-row"><span>Productos y servicios</span><b id="s-productos">0</b></div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:700; margin-bottom:8px">Historial mensual</div>
+        <div id="monthly-table"></div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:700; margin-bottom:8px">Trabajos recientes</div>
+        <div id="recent-list"></div>
+      </div>
+
+      <div id="users-card" class="card" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-weight:700">Usuarios de mi negocio</div>
+          <div>
+            <button class="btn small" style="width:auto;padding:7px 12px;background:var(--brand);color:#fff;border:none;border-radius:9px;font-weight:600;cursor:pointer" onclick="openUserModal()">+ Crear usuario</button>
+          </div>
+        </div>
+        <div id="users-limit" style="font-size:12px;color:var(--muted);margin-bottom:8px"></div>
+        <div id="users-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL CREAR USUARIO -->
+  <div id="user-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:50;align-items:center;justify-content:center;padding:16px">
+    <div style="background:#fff;border-radius:14px;padding:20px;max-width:400px;width:100%">
+      <div style="font-weight:700;margin-bottom:12px" id="user-modal-title">Crear usuario</div>
+      <div id="user-form">
+        <label>Nombre</label>
+        <input type="text" id="u-name" placeholder="Ej. Pedro López">
+        <label>Usuario (para entrar al portal)</label>
+        <input type="text" id="u-username" placeholder="Ej. pedro" autocomplete="off">
+        <label>Rol</label>
+        <select id="u-role" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font-size:15px;background:#fff">
+          <option value="empleado">Empleado</option>
+          <option value="owner">Dueño (mismo acceso total)</option>
+        </select>
+        <div style="height:12px"></div>
+        <button class="btn primary" onclick="createUser()">Crear usuario</button>
+        <div class="msg err" id="u-msg"></div>
+      </div>
+      <div id="user-result" style="display:none">
+        <div class="msg ok" style="text-align:left">Usuario creado. Guarda estas credenciales: se muestran una sola vez.</div>
+        <div style="background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0">
+          <div class="t-row"><span>Usuario</span><b id="res-username">—</b></div>
+          <div class="t-row"><span>Contraseña</span><b id="res-password">—</b></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn primary" style="flex:1" onclick="copyCreds()">📋 Copiar</button>
+          <button class="btn primary" style="flex:1;background:#25D366" onclick="shareWhatsApp()">💬 WhatsApp</button>
+        </div>
+        <div class="msg" id="res-copy"></div>
+        <button class="btn" style="margin-top:10px;background:var(--line);color:var(--ink)" onclick="closeUserModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = ''; // relativo: mismo origen (el panel vive en la misma URL del backend)
+
+let token = localStorage.getItem('ct_token') || '';
+
+function money(n) {
+  const v = Number(n) || 0;
+  return 'RD$ ' + v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtDate(iso) {
+  try { return new Date(iso).toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' }); }
+  catch (e) { return iso; }
+}
+const MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+// Hora/amigable para "actividad reciente": "Hoy 8:42 PM", "Ayer 7:15 PM", "12 ago"
+function fmtWhen(iso) {
+  try {
+    const d = new Date(iso); const now = new Date();
+    const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    const time = d.toLocaleTimeString('es-DO', { hour: 'numeric', minute: '2-digit' });
+    if (sameDay(d, now)) return 'Hoy ' + time;
+    const yest = new Date(now); yest.setDate(now.getDate() - 1);
+    if (sameDay(d, yest)) return 'Ayer ' + time;
+    return d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3) + (d.getFullYear() !== now.getFullYear() ? ' ' + d.getFullYear() : '');
+  } catch (e) { return iso; }
+}
+function doPrint() {
+  const ph = document.getElementById('ph-name'), pd = document.getElementById('ph-date');
+  const biz = document.getElementById('dash-name').textContent;
+  ph.textContent = biz === 'CotizaTec' ? 'Reporte de ventas' : 'Reporte de ventas — ' + biz;
+  pd.textContent = new Date().toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' });
+  window.print();
+}
+function drawChart(series) {
+  const cv = document.getElementById('chart');
+  if (!cv || !series || !series.length) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 300, h = 180;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+  const max = Math.max.apply(null, series.map(s => s.facturado).concat([1]));
+  const padL = 8, padR = 8, padT = 10, padB = 20;
+  const cw = (w - padL - padR) / series.length;
+  series.forEach((s, i) => {
+    const bh = Math.max(2, (s.facturado / max) * (h - padT - padB));
+    const x = padL + i * cw + cw * 0.18;
+    const bw = cw * 0.64;
+    const y = h - padB - bh;
+    const isCur = i === series.length - 1;
+    ctx.fillStyle = isCur ? '#6366f1' : '#c7d2fe';
+    ctx.fillRect(x, y, bw, bh);
+    ctx.fillStyle = '#475569'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(s.label, padL + i * cw + cw / 2, h - 6);
+  });
+}
+function statusPill(s) {
+  s = s || 'COTIZADO';
+  const cls = s === 'CANCELADO' ? 'red' : s === 'COBRADO' ? 'green' : s === 'TRABAJANDO' ? 'amber' : 'gray';
+  return '<span class="pill ' + cls + '">' + s + '</span>';
+}
+
+async function api(path, opts) {
+  const o = opts || {};
+  o.headers = o.headers || {};
+  if (token) o.headers['Authorization'] = 'Bearer ' + token;
+  if (o.body) o.headers['Content-Type'] = 'application/json';
+  const r = await fetch(API + path, o);
+  let j = null;
+  try { j = await r.json(); } catch (e) {}
+  if (!r.ok) { const msg = (j && j.error) || 'Error del servidor'; } 
+  return j;
+}
+
+function showAuth() {
+  document.getElementById('auth-view').style.display = 'block';
+  document.getElementById('dash-view').style.display = 'none';
+}
+function showDash() {
+  document.getElementById('auth-view').style.display = 'none';
+  document.getElementById('dash-view').style.display = 'block';
+}
+
+async function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  document.getElementById('login-msg').textContent = '';
+  if (!user || !pass) { document.getElementById('login-msg').textContent = 'Escribe usuario y contraseña.'; return; }
+  const j = await api('/api/client/login', { method: 'POST', body: JSON.stringify({ username: user, password: pass }) });
+  if (!j || !j.ok) {
+    document.getElementById('login-msg').textContent = (j && j.error) || 'No se pudo iniciar sesión.';
+    return;
+  }
+  token = j.token;
+  localStorage.setItem('ct_token', token);
+  document.getElementById('dash-name').textContent = j.name || user;
+  initUsers(j.role);
+  await loadReport();
+}
+
+function openChangePass() {  const card = document.getElementById('change-pass-card');
+  card.style.display = card.style.display === 'none' ? 'block' : 'none';
+  if (card.style.display === 'block') {
+    document.getElementById('cp-current').value = '';
+    document.getElementById('cp-new').value = '';
+    document.getElementById('cp-msg').textContent = '';
+    document.getElementById('cp-msg').className = 'msg';
+  }
+}
+
+async function doChangePass() {
+  const cur = document.getElementById('cp-current').value;
+  const next = document.getElementById('cp-new').value;
+  const msg = document.getElementById('cp-msg');
+  msg.className = 'msg';
+  msg.textContent = '';
+  if (!cur || !next) { msg.className = 'msg err'; msg.textContent = 'Completa ambos campos.'; return; }
+  const j = await api('/api/client/change-password', { method: 'POST', body: JSON.stringify({ currentPassword: cur, newPassword: next }) });
+  if (!j || !j.ok) {
+    msg.className = 'msg err';
+    msg.textContent = (j && j.error) || 'No se pudo cambiar la contraseña.';
+    return;
+  }
+  msg.className = 'msg ok';
+  msg.textContent = '¡Contraseña actualizada!';
+  document.getElementById('cp-current').value = '';
+  document.getElementById('cp-new').value = '';
+}
+
+async function loadReport() {
+  const j = await api('/api/client/report');
+  if (!j || !j.ok) {
+    if (j && j.error && j.error.indexOf('Sesión') === 0) { localStorage.removeItem('ct_token'); token=''; showAuth(); return; }
+    document.getElementById('dash-empty').style.display = 'block';
+    document.getElementById('dash-content').style.display = 'none';
+    document.getElementById('dash-empty').textContent = 'No se pudieron cargar tus datos.';
+    return;
+  }
+  if (!j.hasData || !j.report) {
+    document.getElementById('dash-empty').style.display = 'block';
+    document.getElementById('dash-content').style.display = 'none';
+    document.getElementById('dash-empty').textContent = j.message || 'Todavía no hay datos de ventas.';
+    return;
+  }
+  const t = j.report.totals;
+  const meta = j.report.meta || {};
+  // Saludo: usa el nombre del negocio desde la app cuando existe
+  if (meta.businessName) {
+    document.getElementById('dash-name').textContent = meta.businessName;
+    document.getElementById('dash-sub').textContent = 'Resumen de tu negocio';
+  } else {
+    document.getElementById('dash-sub').textContent = 'Resumen de tu negocio';
+  }
+  document.getElementById('dash-empty').style.display = 'none';
+  document.getElementById('dash-content').style.display = 'block';
+  document.getElementById('s-facturado').textContent = money(t.facturado);
+  document.getElementById('s-cobrado').textContent = money(t.cobrado);
+  document.getElementById('s-porcobrar').textContent = money(t.porCobrar);
+  document.getElementById('s-gastado').textContent = money(t.gastado);
+  document.getElementById('s-ganancia').textContent = money(t.ganancia);
+  document.getElementById('s-trabajos').textContent = t.trabajos;
+  document.getElementById('s-pendientes').textContent = t.pendientes;
+  document.getElementById('s-clientes').textContent = t.clientes;
+  document.getElementById('s-productos').textContent = t.productos;
+  document.getElementById('s-ventas').textContent = t.ventas || 0;
+  document.getElementById('s-cotizaciones').textContent = t.cotizaciones || 0;
+
+  // Comparativa mes actual vs. mismo período del mes anterior
+  const cmp = meta.comparison || {};
+  if (cmp.current != null || cmp.prev != null) {
+    const card = document.getElementById('cmp-card');
+    card.style.display = 'block';
+    document.getElementById('cmp-title').textContent = 'Facturado este mes (' + (cmp.monthName || '') + ' hasta hoy)';
+    document.getElementById('cmp-current').textContent = money(cmp.current);
+    document.getElementById('cmp-prev').textContent = money(cmp.prev) + ' (' + (cmp.prevName || '') + ' 1–' + (cmp.dayOfMonth != null ? cmp.dayOfMonth : '') + ')';
+    const arrow = document.getElementById('cmp-arrow');
+    if (cmp.pctDiff == null || cmp.pctDiff === 0) { arrow.textContent = '—'; arrow.className = 'arrow'; }
+    else if (cmp.pctDiff > 0) { arrow.textContent = '▲'; arrow.className = 'arrow up'; }
+    else { arrow.textContent = '▼'; arrow.className = 'arrow down'; }
+    const msg = document.getElementById('cmp-msg');
+    msg.textContent = cmp.vsText || cmp.comparisonMsg || '';
+    msg.className = 'cmp-txt' + (cmp.vsText && cmp.vsText.indexOf('No hubo') === 0 ? ' note' : '');
+  }
+
+  // Gráfico de 12 meses
+  drawChart(j.report.series || []);
+
+  // Tabla mensual
+  let mh = '<table><tr><th>Mes</th><th class="num">Facturado</th><th class="num">Cobrado</th><th class="num">Ganancia</th></tr>';
+  (j.report.monthly || []).slice(0, 12).forEach((m) => {
+    mh += '<tr><td>' + m.month + '</td><td class="num">' + money(m.facturado) + '</td><td class="num">' + money(m.cobrado) + '</td><td class="num">' + money(m.ganancia) + '</td></tr>';
+  });
+  mh += '</table>';
+  document.getElementById('monthly-table').innerHTML = mh || '<div class="empty">Sin datos mensuales.</div>';
+
+  let rh = '';
+  (j.report.recent || []).forEach((r) => {
+    const accion = (r.status || '').toUpperCase() === 'COTIZADO' ? 'Nueva cotización' : (r.status === 'CANCELADO' ? 'Cancelada' : 'Venta registrada');
+    rh += '<div class="recent-item"><div class="head"><span>' + accion + ' · ' + r.client + '</span>' + statusPill(r.status) + '</div>'
+      + '<div style="font-size:12px;color:var(--muted)">' + fmtWhen(r.date) + '</div>'
+      + '<div class="t-row"><span>Total</span><b>' + money(r.total) + '</b></div>';
+    if (r.balance > 0) rh += '<div class="t-row"><span style="color:var(--red)">Saldo pendiente</span><b style="color:var(--red)">' + money(r.balance) + '</b></div>';
+    rh += '<div class="t-row"><span style="color:var(--green)">Ganancia</span><b style="color:var(--green)">' + money(r.margin) + '</b></div></div>';
+  });
+  document.getElementById('recent-list').innerHTML = rh || '<div class="empty">Sin trabajos.</div>';
+
+  // Actualizar encabezado del reporte imprimible
+  const biz = meta.businessName || document.getElementById('dash-name').textContent;
+  document.getElementById('ph-name').textContent = biz ? 'Reporte de ventas — ' + biz : 'Reporte de ventas';
+  document.getElementById('ph-date').textContent = new Date().toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+// ===== Gestión de usuarios del portal (dueño) =====
+let myRole = (localStorage.getItem('ct_role') || '').toLowerCase();
+let myCreds = { username: '', password: '' };
+
+function initUsers(role) {
+  myRole = (role || myRole || '').toLowerCase();
+  localStorage.setItem('ct_role', myRole);
+  if (myRole === 'owner') {
+    document.getElementById('users-card').style.display = 'block';
+    loadUsers();
+  }
+}
+
+function renderUsers(data) {
+  const list = data.users || [];
+  const used = list.filter(u => u.role !== 'owner' || true).length;
+  document.getElementById('users-limit').textContent = 'Usuarios: ' + used + ' de ' + (data.limit || 10);
+  if (!list.length) {
+    document.getElementById('users-list').innerHTML = '<div class="empty">Aún no hay usuarios.</div>';
+    return;
+  }
+  document.getElementById('users-list').innerHTML = list.map(function (u) {
+    const active = u.status !== 'inactivo';
+    return '<div class="recent-item" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:120px"><div style="font-weight:600">' + esc(u.name) + '</div>' +
+      '<div style="font-size:12px;color:var(--muted)">@' + esc(u.username) + '</div></div>' +
+      '<span class="pill ' + (active ? 'green' : 'gray') + '">' + (active ? '● Activo' : '○ Inactivo') + '</span>' +
+      '<div style="display:flex;gap:6px">' +
+        (u.role === 'owner' ? '' :
+          '<button class="btn small" style="padding:5px 9px;font-size:12px;background:' + (active ? '#fee2e2;color:#991b1b' : '#d1fae5;color:#065f46') + ';border:none;border-radius:8px;cursor:pointer" onclick="toggleUser(\'' + u.userId + '\')">' + (active ? 'Desactivar' : 'Activar') + '</button>') +
+        '<button class="btn small" style="padding:5px 9px;font-size:12px;background:#e2e8f0;color:#334155;border:none;border-radius:8px;cursor:pointer" onclick="resetUserPass(\'' + u.userId + '\')">Resetear clave</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+async function loadUsers() {
+  const j = await api('/api/client/users');
+  if (!j || !j.ok) return;
+  renderUsers(j);
+}
+
+function openUserModal() {
+  document.getElementById('user-form').style.display = 'block';
+  document.getElementById('user-result').style.display = 'none';
+  document.getElementById('u-name').value = '';
+  document.getElementById('u-username').value = '';
+  document.getElementById('u-role').value = 'empleado';
+  document.getElementById('u-msg').textContent = '';
+  document.getElementById('user-modal').style.display = 'flex';
+  document.getElementById('u-name').focus();
+  document.getElementById('user-modal-title').textContent = 'Crear usuario';
+}
+function closeUserModal() { document.getElementById('user-modal').style.display = 'none'; }
+
+async function createUser() {
+  const name = document.getElementById('u-name').value.trim();
+  const username = document.getElementById('u-username').value.trim();
+  const role = document.getElementById('u-role').value;
+  const msg = document.getElementById('u-msg');
+  msg.className = 'msg err'; msg.textContent = '';
+  if (!name || !username) { msg.textContent = 'Completa nombre y usuario.'; return; }
+  const j = await api('/api/client/users', { method: 'POST', body: JSON.stringify({ name, username, role }) });
+  if (!j || !j.ok) {
+    msg.textContent = (j && j.error) || 'No se pudo crear el usuario.';
+    return;
+  }
+  myCreds = { username: j.account.username, password: j.createdAtPassword };
+  document.getElementById('res-username').textContent = j.account.username;
+  document.getElementById('res-password').textContent = j.createdAtPassword;
+  document.getElementById('user-form').style.display = 'none';
+  document.getElementById('user-result').style.display = 'block';
+  loadUsers();
+}
+
+async function toggleUser(userId) {
+  const j = await api('/api/client/users/' + encodeURIComponent(userId) + '/toggle', { method: 'POST' });
+  if (!j || !j.ok) { alert((j && j.error) || 'No se pudo cambiar el estado.'); return; }
+  loadUsers();
+}
+
+async function resetUserPass(userId) {
+  if (!confirm('¿Resetear la contraseña de este usuario?')) return;
+  const j = await api('/api/client/users/' + encodeURIComponent(userId) + '/reset-password', { method: 'POST' });
+  if (!j || !j.ok) { alert((j && j.error) || 'No se pudo resetear la clave.'); return; }
+  myCreds = { username: '', password: j.resetPassword };
+  document.getElementById('user-modal-title').textContent = 'Clave reseteada';
+  document.getElementById('res-username').textContent = '—';
+  document.getElementById('res-password').textContent = j.resetPassword;
+  document.getElementById('user-form').style.display = 'none';
+  document.getElementById('user-result').style.display = 'block';
+}
+
+function copyCreds() {
+  const txt = 'Tu acceso al panel CotizaTec\nUsuario: ' + myCreds.username + '\nContraseña: ' + myCreds.password;
+  const el = document.createElement('textarea'); el.value = txt; document.body.appendChild(el); el.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(el);
+  if (navigator.clipboard) { navigator.clipboard.writeText(txt).catch(function(){}); }
+  document.getElementById('res-copy').textContent = '¡Copiado!';
+  document.getElementById('res-copy').className = 'msg ok';
+}
+
+function shareWhatsApp() {
+  const txt = encodeURIComponent('Tu acceso al panel de CotizaTec\nUsuario: ' + myCreds.username + '\nContraseña: ' + myCreds.password + '\nEntra en: /panel');
+  window.open('https://wa.me/?text=' + txt, '_blank');
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+  });
+}
+
+function doLogout() {
+  token = '';
+  localStorage.removeItem('ct_token');
+  showAuth();
+}
+
+// Iniciar automáticamente si ya hay sesión
+window.addEventListener('DOMContentLoaded', function () {
+  if (token) {
+    // probar sesión cargando el reporte
+    (async function () {
+      const j = await api('/api/client/report');
+      if (j && j.ok) { showDash(); initUsers(); loadReport(); }
+      else { localStorage.removeItem('ct_token'); token=''; }
+    })();
+  }
+});
+</script>
+</body>
+</html>

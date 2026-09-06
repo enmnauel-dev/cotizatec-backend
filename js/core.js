@@ -52,6 +52,7 @@ var Util = (function () {
   const X_ICON = '&#10005;';
   const LOCK_ICON = '&#128274;';
   const INFO_ICON = '&#8505;';
+  const WARNING_ICON = '&#9888;';
   const APP_VERSION = '1.3.0';
 
   const api = {};

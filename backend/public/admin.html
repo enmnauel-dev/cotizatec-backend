@@ -263,6 +263,7 @@
           '<div><div class="client-name">' + esc(cl.name) + '</div><div class="client-phone">' + (cl.phone || '') + '</div></div>' +
           '<div style="display:flex;gap:6px">' +
             '<button class="btn small secondary" onclick="openDevModal(\'' + cl.id + '\')">+ Dispositivo</button>' +
+            '<button class="btn small secondary" onclick="webAccount(\'' + cl.id + '\')">Cuenta web</button>' +
             '<button class="btn small secondary" onclick="editClient(\'' + cl.id + '\')">✎</button>' +
             '<button class="btn small red" onclick="delClient(\'' + cl.id + '\')">🗑</button>' +
           '</div>' +
@@ -414,6 +415,19 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
   }
 
   function closeDevModal() { document.getElementById('devModal').classList.remove('open'); }
+
+  function webAccount(clientId) {
+    var user = prompt('Usuario web para este cliente (ej. taller1):');
+    if (user === null) return;
+    user = user.trim();
+    if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(user)) { toast('Usuario inválido (3-30: letras, números, . _ -).'); return; }
+    var pass = prompt('Contraseña inicial (mínimo 6 caracteres):');
+    if (pass === null) return;
+    if (pass.length < 6) { toast('La contraseña debe tener al menos 6 caracteres.'); return; }
+    api('/api/admin/clients/' + encodeURIComponent(clientId) + '/webaccount', { method: 'POST', body: JSON.stringify({ username: user, password: pass }) })
+      .then(function () { toast('Cuenta web configurada. El cliente entra en /panel'); loadAll(); })
+      .catch(function (e) { toast('Error: ' + (e.message || 'no se pudo crear')); });
+  }
 
   function saveDevice() {
     var deviceId = document.getElementById('devId').value.trim();
