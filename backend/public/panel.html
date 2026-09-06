@@ -59,6 +59,14 @@
   .btn.primary { background: var(--brand); color: #fff; }
   .msg { text-align: center; font-size: 13px; margin-top: 12px; }
   .msg.err { color: var(--red); } .msg.ok { color: var(--green); }
+  .modal { position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal-box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; width: 100%; max-width: 560px; max-height: 82vh; overflow: auto; }
+  .doc-row { display: flex; align-items: center; gap: 10px; padding: 9px 8px; border-bottom: 1px solid var(--line); cursor: pointer; border-radius: 8px; }
+  .doc-row:hover { background: var(--bg); }
+  .doc-row-sel { background: var(--bg); outline: 1px solid var(--blue); }
+  .doc-live { cursor: pointer; }
+  .doc-live:hover { background: var(--bg); }
+  .doc-soon.go { background: var(--blue); color: #fff; border-color: transparent; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 600; border: none; }
   .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
   .empty { text-align: center; color: var(--muted); padding: 30px 0; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -174,6 +182,20 @@
         <div style="font-weight:700; margin-bottom:4px">📄 Documentos</div>
         <div class="muted" style="font-size:12px; margin-bottom:10px">Centro de gestión de documentos del negocio. Se generarán con los datos de tus clientes y trabajos.</div>
         <div id="docs-list"></div>
+      </div>
+
+      <!-- Modal: selector de cliente/trabajo para generar documento -->
+      <div class="modal" id="doc-modal" style="display:none">
+        <div class="modal-box">
+          <div style="font-weight:700; margin-bottom:6px" id="doc-modal-title">Generar documento</div>
+          <input type="text" id="doc-search" placeholder="Buscar cliente o operación…" style="width:100%;margin-bottom:8px">
+          <div id="doc-jobs" style="max-height:220px;overflow:auto;margin-bottom:10px"></div>
+          <div class="msg err" id="doc-err" style="display:none;margin-bottom:8px"></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" id="doc-gen" onclick="doGenDoc()" style="flex:1">Generar documento</button>
+            <button class="btn-out" onclick="closeDocModal()">Cancelar</button>
+          </div>
+        </div>
       </div>
 
       <div class="grid2">
@@ -393,34 +415,128 @@ async function doChangePass() {
 }
 
 // ===== Catálogo de documentos del portal (módulo 'documentos') =====
-// Cada documento se generará en la web con los datos del negocio (cliente,
-// trabajo, montos, saldo). Por ahora quedan marcados como próximamente.
+// La generación de cada documento se hace en la web con los datos del negocio
+// (cliente, trabajo, montos, saldo). 'Carta de Saldo' y 'Debo y Pagaré' ya
+// se pueden generar; los demás llegan como próximamente.
 const DOC_TYPES = [
-  { icon: '🪪', name: 'Testigos', desc: 'Registrar nombres, documentos de identidad y firmas de los testigos que validan un contrato o pagaré.' },
-  { icon: '🏛️', name: 'Pagaré Notarial', desc: 'Deuda formalizada ante notario con fuerza ejecutiva para cobro judicial.' },
-  { icon: '🛡️', name: 'Pagaré con Garantía', desc: 'Compromiso de pago respaldado por un bien (vehículo, propiedad, electrodoméstico).' },
-  { icon: '🤝', name: 'Entrega Voluntaria', desc: 'Acuerdo de entrega voluntaria del bien para saldar la deuda sin juicio.' },
-  { icon: '📝', name: 'Debo y Pagaré', desc: 'Promesa simple y formal de pago con monto y fecha de cumplimiento.' },
-  { icon: '🔐', name: 'Debo y Pagaré con Garantía', desc: 'Compromiso de pago incluyendo una prenda o bien como aval.' },
-  { icon: '📩', name: 'Intimación de Pago', desc: 'Notificación legal de cobro por cuotas vencidas antes de una demanda.' },
-  { icon: '✅', name: 'Carta de Saldo', desc: 'Certificación de finiquito: el cliente pagó la totalidad y queda libre.' }
+  { key: 'testigos', icon: '🪪', name: 'Testigos', desc: 'Registrar nombres, documentos de identidad y firmas de los testigos que validan un contrato o pagaré.', enabled: false },
+  { key: 'pagare-notarial', icon: '🏛️', name: 'Pagaré Notarial', desc: 'Deuda formalizada ante notario con fuerza ejecutiva para cobro judicial.', enabled: false },
+  { key: 'pagare-garantia', icon: '🛡️', name: 'Pagaré con Garantía', desc: 'Compromiso de pago respaldado por un bien (vehículo, propiedad, electrodoméstico).', enabled: false },
+  { key: 'entrega-voluntaria', icon: '🤝', name: 'Entrega Voluntaria', desc: 'Acuerdo de entrega voluntaria del bien para saldar la deuda sin juicio.', enabled: false },
+  { key: 'debo-pagare', icon: '📝', name: 'Debo y Pagaré', desc: 'Promesa simple y formal de pago con monto y fecha de cumplimiento.', enabled: true },
+  { key: 'debo-pagare-garantia', icon: '🔐', name: 'Debo y Pagaré con Garantía', desc: 'Compromiso de pago incluyendo una prenda o bien como aval.', enabled: false },
+  { key: 'intimacion', icon: '📩', name: 'Intimación de Pago', desc: 'Notificación legal de cobro por cuotas vencidas antes de una demanda.', enabled: false },
+  { key: 'carta-saldo', icon: '✅', name: 'Carta de Saldo', desc: 'Certificación de finiquito: el cliente pagó la totalidad y queda libre.', enabled: true }
 ];
+const DOC_SERVERS = { 'debo-pagare': 'debo-pagare', 'carta-saldo': 'carta-saldo' };
 
 function renderDocs(modules) {
   const has = (modules || []).indexOf('documentos') !== -1;
   document.getElementById('docs-card').style.display = has ? 'block' : 'none';
   if (!has) return;
   const items = DOC_TYPES.map(function (d) {
-    return '<div class="doc-item">' +
+    const badge = d.enabled
+      ? '<button class="doc-soon go" onclick="openDocModal(\'' + d.key + '\')">Generar ›</button>'
+      : '<div class="doc-soon">🔒 Próximamente</div>';
+    return '<div class="doc-item' + (d.enabled ? ' doc-live' : '') + '">' +
       '<div style="font-size:20px">' + d.icon + '</div>' +
       '<div style="flex:1;min-width:0">' +
         '<div style="font-weight:600;font-size:14px">' + d.name + '</div>' +
         '<div class="muted" style="font-size:12px">' + d.desc + '</div>' +
       '</div>' +
-      '<div class="doc-soon">🔒 Próximamente</div>' +
+      badge +
     '</div>';
   }).join('');
   document.getElementById('docs-list').innerHTML = items;
+}
+
+// ===== Generación de documentos =====
+let docType = null;
+let docJobs = [];
+let docClients = [];
+let docSelJob = null;
+
+function openDocModal(type) {
+  docType = type;
+  docSelJob = null;
+  document.getElementById('doc-err').style.display = 'none';
+  document.getElementById('doc-search').value = '';
+  const title = document.getElementById('doc-modal-title');
+  const found = DOC_TYPES.filter(function (d) { return d.key === type; })[0];
+  title.textContent = 'Generar — ' + (found ? found.name : type);
+  document.getElementById('doc-modal').style.display = 'block';
+  document.getElementById('doc-jobs').innerHTML = '<div class="muted">Cargando datos…</div>';
+  api('/api/client/data').then(function (j) {
+    if (!j || !j.ok) {
+      showDocErr((j && j.error) || 'No se pudieron cargar los datos.');
+      return;
+    }
+    docClients = j.clients || [];
+    docJobs = j.jobs || [];
+    renderDocJobs();
+  }).catch(function (e) { showDocErr(e.message); });
+}
+
+function showDocErr(msg) { const el = document.getElementById('doc-err'); el.textContent = msg; el.style.display = 'block'; }
+
+function closeDocModal() {
+  document.getElementById('doc-modal').style.display = 'none';
+  docType = null; docJobs = []; docClients = []; docSelJob = null;
+}
+
+function renderDocJobs() {
+  const q = (document.getElementById('doc-search').value || '').toLowerCase().trim();
+  const list = docJobs.filter(function (job) {
+    if (docType === 'carta-saldo' && job.balance > 0) return false;
+    if (docType === 'debo-pagare' && job.balance <= 0) return false;
+    if (q && (job.clientName || '').toLowerCase().indexOf(q) === -1 && (job.code || '').toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+  if (!list.length) {
+    document.getElementById('doc-jobs').innerHTML = '<div class="muted" style="padding:12px 0">No hay trabajos disponibles para este documento.</div>';
+    return;
+  }
+  document.getElementById('doc-jobs').innerHTML = list.map(function (job) {
+    const selected = docSelJob && String(docSelJob.id) === String(job.id) ? ' doc-row-sel' : '';
+    return '<div class="doc-row' + selected + '" onclick="docPickJob(\'' + job.id + '\')">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-weight:600;font-size:13px">' + esc(job.clientName || 'Cliente') + '</div>' +
+        '<div class="muted" style="font-size:11px">' + esc(job.code || ('Operación ' + job.number)) + ' · ' + (job.status || '') + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;font-size:12px">' +
+        '<div class="muted">Total ' + money(job.total) + '</div>' +
+        (job.balance > 0 ? '<div style="color:#b45309">Saldo ' + money(job.balance) + '</div>' : '<div style="color:#047857">Pagado ✓</div>') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function docPickJob(id) {
+  docSelJob = docJobs.filter(function (j) { return String(j.id) === String(id); })[0] || null;
+  renderDocJobs();
+}
+
+function doGenDoc() {
+  if (!docType || !docSelJob) { showDocErr('Selecciona un trabajo.'); return; }
+  showDocErr('Generando…');
+  api('/api/client/documents', { method: 'POST', body: JSON.stringify({ type: docType, jobId: docSelJob.id }) })
+    .then(function (r) {
+      if (!r || !r.ok || !r.html) { showDocErr((r && r.error) || 'No se pudo generar el documento.'); return; }
+      printDocHTML(r.html);
+      closeDocModal();
+    })
+    .catch(function (e) { showDocErr(e.message); });
+}
+
+function printDocHTML(html) {
+  const w = window.open('', '_blank');
+  if (!w) { alert('Permite las ventanas emergentes para ver el documento.'); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function () {
+    try { w.focus(); w.print(); } catch (e) { window.open(w.document.title); }
+  }, 450);
 }
 
 async function loadReport() {

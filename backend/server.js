@@ -240,6 +240,237 @@ app.get('/api/client/report', async (req, res) => {
   }
 });
 
+// ===== Documentos del portal web (módulo 'documentos') =====
+// Se generan SOLO desde la web con los datos del negocio (cliente, trabajo,
+// montos, pagos, saldo) y se almacenan en el backend aislados por clientId.
+function docMoney(n) {
+  const v = Number(n) || 0;
+  return 'RD$ ' + v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function docFmtDate(iso) {
+  try {
+    return new Date(iso).toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' });
+  } catch (e) { return iso; }
+}
+function docNumber() {
+  return 'DOC-' + String(Date.now()).slice(-6) + '-' + Math.floor(Math.random() * 90 + 10);
+}
+// Replica la fórmula de la app (js/db.js -> jobTotals)
+function jobTotalsWeb(j) {
+  const subtotal = (j.items || []).reduce((a, i) => a + (Number(i.qty) || 0) * (Number(i.price) || 0), 0);
+  const taxable = Math.max(0, subtotal - (Number(j.discount) || 0));
+  const itbis = Number(j.itbis) || 0;
+  const tax = itbis > 0 ? taxable * itbis / 100 : 0;
+  const total = taxable + tax;
+  const collected = (j.payments || []).reduce((a, p) => a + (Number(p.amount) || 0), 0);
+  const balance = Math.max(0, total - collected);
+  return { subtotal, discount: Number(j.discount) || 0, itbis, tax, total, collected, balance };
+}
+const DOC_ENABLED = { 'carta-saldo': true, 'debo-pagare': true };
+const DOC_TITLES = { 'carta-saldo': 'Carta de Saldo', 'debo-pagare': 'Debo y Pagaré' };
+
+function docHTML(doc) {
+  const c = doc.data || {};
+  const biz = c.businessName || 'CotizaTec';
+  const ciudad = c.ciudad || 'Santiago de los Caballeros';
+  const hoy = docFmtDate(doc.createdAt) || docFmtDate(new Date());
+  if (doc.type === 'debo-pagare') {
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<style>
+  body { font-family: Georgia, serif; color:#111; max-width: 720px; margin: 0 auto; padding: 48px 40px; font-size:15px; line-height:1.6; }
+  h1 { text-align:center; font-size:22px; letter-spacing:2px; text-transform:uppercase; margin:0 0 4px; }
+  .biz { text-align:center; font-size:14px; margin-bottom:4px; }
+  .line { border-bottom:3px double #111; margin:14px 0 26px; }
+  .doc-no { text-align:right; font-size:12px; color:#444; margin-bottom:20px; }
+  p { text-align: justify; }
+  .mount { display:inline-block; border-bottom:1px solid #111; padding:0 30px; font-weight:bold; }
+  table { width:100%; border-collapse: collapse; margin: 22px 0; }
+  td, th { border:1px solid #aaa; padding:8px 10px; font-size:14px; }
+  .amt { text-align:right; white-space:nowrap; }
+  .sign { display:flex; justify-content:space-between; margin-top:64px; }
+  .sign .box { text-align:center; }
+  .sign .line2 { border-top:1px solid #111; margin-top:52px; width:220px; font-size:13px; }
+  .foot { margin-top:40px; font-size:11px; color:#555; text-align:center; }
+</style></head><body>
+  <div class="doc-no">No.: ${doc.number}</div>
+  <h1>Declaración de Deuda</h1>
+  <div class="biz">PAGARÉ NO NEGOCIABLE</div>
+  <div class="line"></div>
+  <p>En la ciudad de ${ciudad}, República Dominicana, a los ${hoy}, por medio del presente documento y con valor de Carta de Pago y Finiquito entre partes, <b>YO, ${c.debtor || c.clientName || '____________________'}</b>, con documento de identidad No. <b>${c.debtorId || '____________________'}</b>, mayor de edad, domiciliado(a) en <b>${c.debtorAddr || '____________________'}</b>, en mi calidad de <b>DEUDOR(A)</b>, declaro tener y reconocer expresamente la obligación de pagar a favor de <b>${biz}</b> la suma de <b>${docMoney(c.balance)} (${c.montoLetras || '_________________________________'})</b>, equivalente al saldo pendiente de la operación ${c.jobCode || '________________'}, por los conceptos y servicios prestados.</p>
+  <p>Me obligo a pagar el monto total adeudado en fecha <b>${c.fechaPago ? docFmtDate(c.fechaPago) : '____________________'}</b>, en moneda de curso legal, sin necesidad de intimación ni requerimiento previo.</p>
+  <p>En caso de incumplimiento, autorizo expresamente a ${biz} a ejercer las acciones legales correspondientes, incluyendo el cobro judicial, por lo que este documento constituye un título suficiente.</p>
+  <table><tr><th>Concepto / Operación</th><th>Monto original</th><th>Abonado</th><th>Saldo pendiente</th></tr>
+    <tr><td>${c.jobCode || '________________'}</td><td class="amt">${docMoney(c.total)}</td><td class="amt">${docMoney(c.collected)}</td><td class="amt"><b>${docMoney(c.balance)}</b></td></tr>
+  </table>
+  <p>Firmado en ${ciudad} a los ${hoy}.</p>
+  <div class="sign">
+    <div class="box"><div>.</div><div class="line2">Firma del DEUDOR(A)</div></div>
+    <div class="box"><div>.</div><div class="line2">Sello y firma — ${escHTML(biz)}</div></div>
+  </div>
+  <div class="foot">Documento generado por el portal web de CotizaTec — No. ${doc.number} · Plantilla v1.0</div>
+</body></html>`;
+  }
+  // carta-saldo
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<style>
+  body { font-family: Georgia, serif; color:#111; max-width: 720px; margin:0 auto; padding:48px 40px; font-size:15px; line-height:1.6; }
+  h1 { text-align:center; font-size:22px; letter-spacing:2px; text-transform:uppercase; margin:0 0 4px; }
+  .biz { text-align:center; font-size:14px; margin-bottom:4px; }
+  .line { border-bottom:3px double #111; margin:14px 0 26px; }
+  .doc-no { text-align:right; font-size:12px; color:#444; margin-bottom:20px; }
+  p { text-align: justify; }
+  table { width:100%; border-collapse: collapse; margin:22px 0; }
+  td, th { border:1px solid #aaa; padding:8px 10px; font-size:14px; }
+  .amt { text-align:right; white-space:nowrap; }
+  .sign { display:flex; justify-content:space-between; margin-top:64px; }
+  .sign .box { text-align:center; }
+  .sign .line2 { border-top:1px solid #111; margin-top:52px; width:220px; font-size:13px; }
+  .foot { margin-top:40px; font-size:11px; color:#555; text-align:center; }
+</style></head><body>
+  <div class="doc-no">No.: ${doc.number}</div>
+  <h1>Carta de Saldo</h1>
+  <div class="biz">FINIQUITO Y CARTA DE PAGO</div>
+  <div class="line"></div>
+  <p>Por medio de la presente, <b>${biz}</b>, establecimiento comercial con domicilio en ${ciudad}, República Dominicana, hace constar y CERTIFICA que el/la señor(a) <b>${c.clientName || '____________________'}</b>, con documento de identidad No. <b>${c.debtorId || '____________________'}</b>, ha cancelado en su totalidad la obligación derivada de la operación <b>${c.jobCode || '________________'}</b>, por el monto de <b>${docMoney(c.total)}</b>.</p>
+  <p>Que al día de la fecha, el referido cliente <b>no adeuda suma alguna</b> a favor de ${biz}, quedando de esta manera finiquitado y libre de cualquier compromiso pendiente con la presente operación.</p>
+  <table><tr><th>Concepto / Operación</th><th>Monto total</th><th>Total abonado</th><th>Saldo</th></tr>
+    <tr><td>${c.jobCode || '________________'}</td><td class="amt">${docMoney(c.total)}</td><td class="amt">${docMoney(c.collected)}</td><td class="amt"><b>RD$ 0.00</b></td></tr>
+  </table>
+  <p>Esta carta de saldo se expide a solicitud de la parte interesada, a los ${hoy}.</p>
+  <div class="sign">
+    <div class="box"><div>.</div><div class="line2">Firma del CLIENTE</div></div>
+    <div class="box"><div>.</div><div class="line2">Sello y firma — ${escHTML(biz)}</div></div>
+  </div>
+  <div class="foot">Documento generado por el portal web de CotizaTec — No. ${doc.number} · Plantilla v1.0</div>
+</body></html>`;
+}
+function escHTML(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]; }); }
+
+// Estado operativo (clientes + trabajos con saldos) para alimentar selección
+app.get('/api/client/data', async (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const { account } = auth;
+  const client = store.getClient(account.clientId);
+  const modules = (client && client.modules) || [];
+  if (modules.indexOf('documentos') === -1) return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de Documentos.' });
+  try {
+    const data = await readClientData(account.clientId);
+    if (!data.ok || !data.state) return res.json({ ok: true, clients: [], jobs: [] });
+    const st = data.state;
+    const clients = (st.clients || []).map((c) => ({ id: c.id, name: c.name, phone: c.phone || '' }));
+    const jobs = (st.jobs || []).map((j) => {
+      const t = jobTotalsWeb(j);
+      return { id: j.id, code: j.code || '', number: j.number, date: j.date, clientId: j.clientId, clientName: j.clientName || '', status: j.status || 'COTIZADO', total: t.total, collected: t.collected, balance: t.balance };
+    });
+    res.json({ ok: true, clients, jobs });
+  } catch (e) {
+    console.error('[client] data error:', e.message);
+    res.status(500).json({ error: 'Error al leer los datos.' });
+  }
+});
+
+// Generar un documento (gate módulo documentos; válido para tipos habilitados)
+app.post('/api/client/documents', async (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const { account } = auth;
+  const client = store.getClient(account.clientId);
+  const modules = (client && client.modules) || [];
+  if (modules.indexOf('documentos') === -1) return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de Documentos.' });
+  const type = String(req.body.type || '').trim();
+  const jobId = String(req.body.jobId || '').trim();
+  if (!DOC_ENABLED[type]) return res.status(400).json({ error: 'Tipo de documento no disponible todavía.' });
+  if (!jobId) return res.status(400).json({ error: 'Selecciona un trabajo.' });
+  try {
+    const data = await readClientData(account.clientId);
+    if (!data.ok || !data.state) return res.status(404).json({ error: 'No hay datos del negocio.' });
+    const job = (data.state.jobs || []).find((j) => String(j.id) === String(jobId));
+    if (!job) return res.status(404).json({ error: 'Trabajo no encontrado.' });
+    const t = jobTotalsWeb(job);
+    const c = data.state.clients || [];
+    const clientRow = c.find((x) => String(x.id) === String(job.clientId)) || null;
+    if (type === 'carta-saldo' && (t.balance > 0 || job.status === 'COTIZADO')) {
+      return res.status(400).json({ error: 'La Carta de Saldo solo se emite para trabajos totalmente cobrados (saldo RD$ 0).' });
+    }
+    if (type === 'debo-pagare' && t.balance <= 0) {
+      return res.status(400).json({ error: 'El Debo y Pagaré requiere un saldo pendiente mayor a RD$ 0.' });
+    }
+    const doc = {
+      id: 'doc-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      number: docNumber(),
+      businessId: account.clientId,
+      clientId: job.clientId || null,
+      jobId: job.id,
+      jobCode: job.code || (job.number || ''),
+      type,
+      status: 'emitido',
+      createdAt: Date.now(),
+      amount: t.total,
+      collected: t.collected,
+      balance: t.balance,
+      paidInFull: t.balance <= 0,
+      templateVersion: 'v1.0',
+      data: {
+        businessName: (data.state.settings && data.state.settings.businessName) || (client && client.name) || '',
+        clientName: job.clientName || (clientRow && clientRow.name) || '',
+        clientPhone: job.clientPhone || (clientRow && clientRow.phone) || '',
+        debtorId: clientRow && clientRow.document || '',
+        debtorAddr: clientRow && clientRow.address || '',
+        jobCode: job.code || (job.number || ''),
+        total: t.total,
+        collected: t.collected,
+        balance: t.balance,
+        fechaPago: null
+      }
+    };
+    store.addDocument(doc);
+    res.json({ ok: true, doc: publicDoc(doc), html: docHTML(doc) });
+  } catch (e) {
+    console.error('[client] doc create error:', e.message);
+    res.status(500).json({ error: 'Error al generar el documento.' });
+  }
+});
+
+function publicDoc(d) {
+  return { id: d.id, number: d.number, type: d.type, title: DOC_TITLES[d.type] || d.type, status: d.status, createdAt: d.createdAt, clientName: d.data && d.data.clientName || '', jobCode: d.jobCode, amount: d.amount, collected: d.collected, balance: d.balance, paidInFull: d.paidInFull };
+}
+
+// Listar documentos del negocio (con filtro opcional por clienteId)
+app.get('/api/client/documents', (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const client = store.getClient(auth.account.clientId);
+  if ((client && client.modules || []).indexOf('documentos') === -1) return res.status(403).json({ error: 'Módulo de Documentos no contratado.' });
+  const clientIdParam = String(req.query.clientId || '').trim();
+  let docs = store.listDocumentsByClient(auth.account.clientId);
+  if (clientIdParam) docs = docs.filter((d) => String(d.clientId) === String(clientIdParam));
+  res.json({ ok: true, documents: docs.map(publicDoc) });
+});
+
+// Obtener un documento (HTML para imprimir) — aislado por negocio
+app.get('/api/client/documents/:id', (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const doc = store.getDocument(String(req.params.id || '').trim());
+  if (!doc || String(doc.businessId) !== String(auth.account.clientId)) {
+    return res.status(404).json({ error: 'Documento no encontrado.' });
+  }
+  res.json({ ok: true, doc: publicDoc(doc), html: docHTML(doc) });
+});
+
+// Eliminar documento — solo del propio negocio
+app.delete('/api/client/documents/:id', (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const doc = store.getDocument(String(req.params.id || '').trim());
+  if (!doc || String(doc.businessId) !== String(auth.account.clientId)) {
+    return res.status(404).json({ error: 'Documento no encontrado.' });
+  }
+  store.removeDocument(doc.id);
+  res.json({ ok: true });
+});
+
 // ===== GestiÃ³n de usuarios del portal (solo el dueÃ±o del negocio) =====
 // El dueÃ±o (role: owner) administra los usuarios web de SU PROPIO negocio.
 // Se garantiza aislamiento total: solo puede operar sobre su clientId.

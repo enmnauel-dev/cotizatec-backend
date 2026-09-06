@@ -46,6 +46,7 @@ function load() {
   if (!cache.clients) cache.clients = [];
   if (!cache.backups) cache.backups = {};
   if (!cache.claims) cache.claims = {};
+  if (!cache.documents) cache.documents = [];
   return cache;
 }
 
@@ -513,6 +514,41 @@ async function clearClaim(newId) {
   save();
 }
 
+// ===== Documentos generados desde el portal web (por negocio) =====
+function listDocumentsByClient(clientId) {
+  const db = load();
+  if (!db.documents) db.documents = [];
+  return db.documents.filter((d) => String(d.businessId) === String(clientId)).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+function getDocument(docId) {
+  const db = load();
+  return (db.documents || []).find((d) => String(d.id) === String(docId)) || null;
+}
+
+function addDocument(doc) {
+  const db = load();
+  if (!db.documents) db.documents = [];
+  db.documents.push(doc);
+  save();
+  if (DATABASE_URL) {
+    pgSet('documents', db.documents).catch(function (e) { console.error('[pg] save documents:', e.message); });
+  }
+  return doc;
+}
+
+function removeDocument(docId) {
+  const db = load();
+  const before = db.documents ? db.documents.length : 0;
+  db.documents = (db.documents || []).filter((d) => String(d.id) !== String(docId));
+  if (db.documents.length !== before) {
+    save();
+    if (DATABASE_URL) {
+      pgSet('documents', db.documents).catch(function (e) { console.error('[pg] save documents:', e.message); });
+    }
+  }
+}
+
 // Registra el reclamo de migración y mueve la licencia (solo si es real, no
 // trial). El respaldo queda intacto bajo el ID viejo. Devuelve { backupExists }.
 async function migrateDevice(fromId, toId) {
@@ -582,5 +618,9 @@ module.exports = {
   resolveMigration,
   getClaim,
   setClaim,
-  clearClaim
+  clearClaim,
+  listDocumentsByClient,
+  getDocument,
+  addDocument,
+  removeDocument
 };
