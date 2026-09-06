@@ -677,6 +677,7 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
   }
 
   function renderFile(r) {
+    var body = document.getElementById('clfBody');
     var cl = r.client, p = r.props, u = r.users, act = r.activity, mods = r.modules;
     var plan = cl.plan || 'Básico';
     var ownerName = p && p.owner ? (p.owner.name || p.owner.username) : '—';

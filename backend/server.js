@@ -1093,10 +1093,11 @@ app.get('/api/admin/clients/:id/summary', async (req, res) => {
   let activity = null;
   if (data.ok && data.state) {
     const report = webclients.computeReport(data.state);
+    const monthly = report.monthly || [];
     activity = {
       ventas: report.totals && report.totals.ventas || 0,
       cotizaciones: report.totals && report.totals.cotizaciones || 0,
-      facturadoMes: report.monthly ? report.monthly[report.monthly.length - 1].facturado || 0 : 0
+      facturadoMes: monthly.length ? monthly[monthly.length - 1].facturado || 0 : 0
     };
   }
 
