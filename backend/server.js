@@ -77,6 +77,19 @@ app.get('/api/device/:deviceId', (req, res) => {
   } : null });
 });
 
+// Módulos y plan del negocio al que pertenece un dispositivo (para que la APP
+// sepa qué funcionalidades tiene contratadas su cliente).
+app.get('/api/device/:deviceId/modules', (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  const client = store.getClientByDeviceId(deviceId);
+  if (!client) {
+    return res.json({ ok: true, plan: null, modules: [], planLimit: null,
+      warning: 'Dispositivo no vinculado a ningún negocio. Los módulos aparecerán cuando el administrador lo vincule.' });
+  }
+  const mods = client.modules || ['cotizaciones', 'clientes', 'ventas', 'reportes'];
+  res.json({ ok: true, plan: client.plan || 'Básico', modules: mods, planLimit: client.planLimit != null ? client.planLimit : null });
+});
+
 app.post('/api/backup/:deviceId', async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId || deviceId.length < 8 || deviceId.length > 128) {

@@ -391,6 +391,14 @@ function deviceInOtherClient(clientKey, deviceId) {
   return found || null;
 }
 
+// ¿A qué cliente pertenece un deviceId? (null si no está vinculado)
+function getClientByDeviceId(deviceId) {
+  const db = load();
+  const clean = String(deviceId || '').trim();
+  if (!clean) return null;
+  return (db.clients || []).find((c) => (c.devices || []).some((d) => d.deviceId === clean)) || null;
+}
+
 function addDeviceToClient(clientKey, deviceId, alias) {
   const db = load();
   const c = getClient(clientKey);
@@ -561,6 +569,7 @@ module.exports = {
   addDeviceToClient,
   removeDeviceFromClient,
   deviceInOtherClient,
+  getClientByDeviceId,
   allDevices,
   removeDevice,
   blockDevice,
