@@ -1,73 +1,39 @@
 # Contrato API — GPS / Rastreo de Flota
 
-Contrato único de referencia entre el backend CotizaTec y la **app móvil** instalada en los
-vehículos de la flota. Cualquier cambio en este contrato debe reflejarse aquí antes de entrar
-al código.
+Contrato único de referencia entre el backend CotizaTec, la **app móvil** (los teléfonos de los
+operadores) y el **panel web del dueño**. Cualquier cambio debe reflejarse aquí antes de entrar al código.
 
-Base URL: `https://cotizatec-backend.onrender.com` (producción)
+Base URL: `https://cotizatec-backend.onrender.com`
 
-Convenciones generales del API:
+Identidad: la **app móvil** no usa cuentas web; se identifica por **deviceId** (el mismo que ya usa
+para licencia y backups) y autentica con el **token de licencia firmado** que el servidor le entrega
+en `GET /api/license/:deviceId`. El dueño ve cada dispositivo de su negocio (con su `alias`), y la
+posición de dichos dispositivos es lo que muestra la tarjeta GPS.
 
-- Toda respuesta exitosa incluye `ok: true`. Toda respuesta de error incluye `error` (texto legible)
-  y, cuando corresponde, un `code` estable para que la app pueda decidir sin parsear texto en español.
-- Los errores con `code: "UNAUTHORIZED"` significan token ausente, inválido o expirado: la app debe
-  volver a autenticar (login) y reintentar.
-- Los `timestamp` de servidor se envían en ISO 8601 UTC (`YYYY-MM-DDTHH:MM:SSZ`). Los `ts` de posición
-  son epoch en milisegundos (UTC), tanto si los envía la app como si los genera el servidor.
+Convenciones:
 
----
-
-## 1. Autenticación
-
-### POST `/api/client/login`
-
-Obtiene el token que debe acompañar después a las llamadas de GPS.
-
-**Request body (JSON):**
-
-```json
-{
-  "username": "chofer1",
-  "password": "PasswordSeguro123"
-}
-```
-
-**Response 200 OK:**
-
-```json
-{
-  "ok": true,
-  "token": "eyJhbGciOiJIUzI1NiIs...",
-  "role": "empleado",
-  "userId": "usr_987",
-  "name": "Carlos Reyes"
-}
-```
-
-- `role`: `owner` (dueño) o `empleado` (operador). La app móvil usa cuentas `empleado`.
-- `userId`: id interno de la cuenta web; en la app suele bastar como referencia local.
-
-**Errores:**
-
-| Código | Error | Código HTTP | `code` |
-| --- | --- | --- | --- |
-| Credenciales incorrectas | "Usuario o contraseña incorrectos." | 401 | `INVALID_CREDENTIALS` |
-
-> Nota: se usa el mismo pool de usuarios del portal web (`Crear usuario` del admin). Algo que la app
-> movil deba soportar cuando el dueño desactiva la cuenta.
+- Respuestas exitosas incluyen `ok: true`. Errores incluyen `error` (texto legible) y `code` estable.
+- `UNAUTHORIZED` en el POST de GPS = token de licencia ausente/vencido: la app debe refrescarlo con
+  `GET /api/license/:deviceId` y reintentar.
+- `ts` de posición: epoch en milisegundos (UTC). `timestamp` en respuestas: ISO 8601 UTC.
 
 ---
+
+## 1. Identidad y token (app móvil)
+
+### GET `/api/license/:deviceId`
+
+Ya existente (lo usa la app). Devuelve `{status, token}`; el `token` es firmado y es el que se usa como
+Bearer en el POST de GPS.
 
 ## 2. Reporte de ubicación (app móvil → servidor)
 
 ### POST `/api/client/gps`
 
-Envía la posición actual del vehículo/operador.
-
 **Headers:**
 
 ```
-Authorization: Bearer <JWT_TOKEN_DEL_EMPLEADO>
+Authorization: Bearer <TOKEN_DE_LICENCIA_DEL_DISPOSITIVO>
 Content-Type: application/json
 ```
 
@@ -89,7 +55,10 @@ Content-Type: application/json
 | `lon` | number | sí | longitud, entre -180 y 180 |
 | `acc` | number | no | precisión en metros (≥ 0) |
 | `speed` | number | no | velocidad km/h (≥ 0) |
-| `ts` | number | no | epoch ms del momento de lectura del GPS. Si se omite, el servidor usa su reloj. |
+| `ts` | number | no | epoch ms de la lectura del GPS. Si se omite, usa el reloj del servidor. |
+
+El deviceId se toma del token firmado (no se confía en el body). El servidor guarda **solo la última
+posición** por dispositivo.
 
 **Response 200 OK:**
 
@@ -101,21 +70,22 @@ Content-Type: application/json
 }
 ```
 
-El servidor conserva **solo la última posición** por usuario del negocio.
-
 **Errores:**
 
-| Código | Código HTTP | `code` |
+| Código HTTP | `code` | Significado |
 | --- | --- | --- |
-| Token ausente, inválido o expirado | 401 | `UNAUTHORIZED` |
-| El negocio no tiene el módulo GPS contratado | 403 | `MODULE_DISABLED` |
-| `lat`/`lon` fuera de rango o no numéricos | 400 | `INVALID_COORDINATES` |
+| 401 | `UNAUTHORIZED` | Token de licencia ausente, inválido o vencido |
+| 403 | `DEVICE_UNASSIGNED` | El dispositivo no está vinculado a un negocio |
+| 403 | `MODULE_DISABLED` | El negocio no tiene contratado el módulo GPS |
+| 400 | `INVALID_COORDINATES` | `lat`/`lon` fuera de rango o no numéricos |
 
-## 3. Vista de flota (panel web / dueño)
+## 3. Vista de flota (panel web del dueño)
 
 ### GET `/api/client/gps`
 
-Solo el **dueño** (`role: owner`) del negocio puede ver la flota. Intento con cuenta `empleado` → 403.
+Se autentica con el token web del dueño (`POST /api/client/login`). Solo `role: owner`.
+Devuelve la posición actual de **cada dispositivo del negocio** que haya reportado al menos una vez,
+con su `alias` (nombre asignado por el dueño en el admin) como `name`.
 
 **Response 200 OK:**
 
@@ -126,49 +96,36 @@ Solo el **dueño** (`role: owner`) del negocio puede ver la flota. Intento con c
   "timestamp": "2026-09-06T19:58:44Z",
   "positions": [
     {
-      "username": "chofer1",
-      "userId": "usr_987",
-      "name": "Carlos Reyes",
-      "role": "empleado",
-      "status": "activo",
+      "deviceId": "cotizatec-abcd1234",
+      "name": "Furgón 1",
       "pos": { "lat": 19.4512, "lon": -70.6973, "acc": 12.5, "speed": 45, "ts": 1725681523000 }
     }
   ]
 }
 ```
 
-- Solo aparecen operadores que ya reportaron al menos una posición.
-- `ts`: epoch ms de la última lectura; el panel marca "En línea" si `now - ts < 5 min`.
-
-**Errores:**
-
-| Código | Código HTTP | `code` |
-| --- | --- | --- |
-| No autenticado / token expirado | 401 | `UNAUTHORIZED` |
-| La cuenta no es del dueño | 403 | `OWNER_ONLY` |
-| El negocio no tiene el módulo GPS contratado | 403 | `MODULE_DISABLED` |
+**Errores:** 401 `UNAUTHORIZED`, 403 `OWNER_ONLY`, 403 `MODULE_DISABLED`.
 
 ---
 
 ## 4. Recomendaciones de integración (app móvil)
 
-- **Sin cobertura / fuera de línea:** almacenar los pings en buffer local (SQLite/Room) y reenviarlos
-  en orden al recuperar red. Actualmente el servidor guarda solo la última posición, así que al reenviar
-  un lote el resultado será la posición más reciente del lote.
-- **Frecuencia:** enviar por umbral de distancia (ej. cada 15–30 m) o por tiempo (ej. cada 10–15 s en
-  movimiento); pausar cuando el vehículo está apagado/estacionado. No enviar más de un ping cada ~5 s.
-- **Encendido:** registrar el token obtenido en `POST /api/client/login` y renovarlo cuando el servidor
-  devuelva 401 (`UNAUTHORIZED`).
-- **Prefijar el `ts` con la hora local de captura** del GPS, no la de envío, para medir correctamente la
-  antigüedad si hay cola offline.
+- La app envía cada **15 s** mientras está abierta y visible. Con pantalla apagada no envía (requiere
+  fondo/foreground service, fuera de alcance de esta versión).
+- **Sin cobertura:** se ignora el envío y se reintenta en el próximo ciclo. El servidor guarda una sola
+  posición por dispositivo, así que al recuperar red el mapa muestra la posición más reciente.
+- **403 `MODULE_DISABLED` / `DEVICE_UNASSIGNED`:** la app pausa 5 minutos y reintenta (el dueño puede
+  activar el módulo mientras tanto).
+- **401:** refrescar token vía `GET /api/license/:deviceId` antes de reintentar.
 
 ## 5. Códigos de error estables (resumen)
 
 | `code` | HTTP | Significado |
 | --- | --- | --- |
-| `UNAUTHORIZED` | 401 | Token ausente/inválido/expirado → re-login |
-| `INVALID_CREDENTIALS` | 401 | Usuario o contraseña incorrectos |
+| `UNAUTHORIZED` | 401 | Token (web o dispositivo) ausente/inválido/expirado |
+| `INVALID_CREDENTIALS` | 401 | Usuario o contraseña incorrectos (login web) |
 | `MODULE_DISABLED` | 403 | Módulo GPS no contratado en el negocio |
-| `OWNER_ONLY` | 403 | Solo acciones del dueño |
+| `OWNER_ONLY` | 403 | Solo acciones del dueño (web) |
 | `ACCOUNT_DISABLED` | 403 | La cuenta web está desactivada |
+| `DEVICE_UNASSIGNED` | 403 | Dispositivo sin negocio vinculado |
 | `INVALID_COORDINATES` | 400 | `lat`/`lon` fuera de rango o no numérico |

@@ -584,9 +584,15 @@ const PORTAL_MAX_USERS = parseInt(process.env.PORTAL_MAX_USERS || '10', 10);
 // La app móvil de los operadores reporta su posición con el token de su
 // cuenta web; el dueño del negocio la consulta desde el panel web.
 app.post('/api/client/gps', (req, res) => {
-  const auth = requireClient(req, res);
-  if (!auth) return;
-  const client = store.getClient(auth.account.clientId) || {};
+  const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const payload = license.verifyLicense(bearer);
+  if (!payload || !payload.deviceId) {
+    return res.status(401).json({ error: 'Token de dispositivo inválido o expirado.', code: 'UNAUTHORIZED' });
+  }
+  const client = store.getClientByDeviceId(payload.deviceId);
+  if (!client) {
+    return res.status(403).json({ error: 'Este dispositivo no está vinculado a un negocio.', code: 'DEVICE_UNASSIGNED' });
+  }
   if ((client.modules || []).indexOf('gps') === -1) {
     return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de GPS.', code: 'MODULE_DISABLED' });
   }
@@ -603,7 +609,7 @@ app.post('/api/client/gps', (req, res) => {
     speed: isFinite(Number(req.body.speed)) ? round2(Number(req.body.speed)) : null,
     ts: req.body.ts ? Number(req.body.ts) : Date.now()
   };
-  store.setGpsPosition(auth.account.clientId, String(auth.account.username || '').toLowerCase().trim(), pos);
+  store.setGpsPosition(client.id, String(payload.deviceId), pos);
   res.json({ ok: true, pos, timestamp: new Date().toISOString() });
 });
 
@@ -614,12 +620,11 @@ app.get('/api/client/gps', (req, res) => {
   if ((client.modules || []).indexOf('gps') === -1) {
     return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de GPS.', code: 'MODULE_DISABLED' });
   }
-  const map = store.getGpsMap(auth.account.clientId) || {};
-  const users = store.listWebAccountsByClient(auth.account.clientId);
-  const positions = users.map((u) => {
-    const key = String(u.username || '').toLowerCase().trim();
-    const pos = map[key] || map[u.userId] || null;
-    return pos ? { username: u.username, userId: u.userId, name: u.name || u.username, role: u.role, status: u.status, pos } : null;
+  const map = store.getGpsMap(client.id) || {};
+  const devices = client.devices || [];
+  const positions = devices.map((d) => {
+    const pos = map[d.deviceId] || null;
+    return pos ? { deviceId: d.deviceId, name: d.alias || d.deviceId, pos } : null;
   }).filter(Boolean);
   res.json({ ok: true, updated: Date.now(), timestamp: new Date().toISOString(), positions });
 });
