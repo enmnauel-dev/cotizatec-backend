@@ -174,11 +174,11 @@ app.post('/api/client/login', async (req, res) => {
     const password = String(req.body.password || '');
     const account = store.getWebAccountByUsername(username);
     if (!account) {
-      return res.status(401).json({ error: 'Usuario o contraseÃ±a incorrectos.' });
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos.', code: 'INVALID_CREDENTIALS' });
     }
     const ok = await webclients.verifyPassword(password, account.passHash);
     if (!ok) {
-      return res.status(401).json({ error: 'Usuario o contraseÃ±a incorrectos.' });
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos.', code: 'INVALID_CREDENTIALS' });
     }
     const token = webclients.issueToken(account);
     res.json({ ok: true, token, role: account.role || 'owner', userId: account.userId, name: account.name || (store.getClient(account.clientId) || {}).name || username });
@@ -192,16 +192,16 @@ function requireClient(req, res) {
   const auth = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   const info = webclients.verifyToken(auth);
   if (!info) {
-    res.status(401).json({ error: 'SesiÃ³n invÃ¡lida o expirada.' });
+    res.status(401).json({ error: 'Sesión inválida o expirada.', code: 'UNAUTHORIZED' });
     return null;
   }
   const account = store.getWebAccountById(info.sub);
   if (!account) {
-    res.status(401).json({ error: 'Cuenta no encontrada.' });
+    res.status(401).json({ error: 'Cuenta no encontrada.', code: 'UNAUTHORIZED' });
     return null;
   }
   if (account.status === 'inactivo') {
-    res.status(403).json({ error: 'Tu cuenta estÃ¡ desactivada.' });
+    res.status(403).json({ error: 'Tu cuenta está desactivada.', code: 'ACCOUNT_DISABLED' });
     return null;
   }
   return { info, account };
@@ -572,7 +572,7 @@ function requireOwner(req, res) {
   const auth = requireClient(req, res);
   if (!auth) return null;
   if (auth.info.role !== 'owner') {
-    res.status(403).json({ error: 'Solo el dueÃ±o del negocio puede administrar usuarios.' });
+    res.status(403).json({ error: 'Solo el dueño del negocio puede administrar usuarios.', code: 'OWNER_ONLY' });
     return null;
   }
   return auth;
@@ -588,12 +588,12 @@ app.post('/api/client/gps', (req, res) => {
   if (!auth) return;
   const client = store.getClient(auth.account.clientId) || {};
   if ((client.modules || []).indexOf('gps') === -1) {
-    return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de GPS.' });
+    return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de GPS.', code: 'MODULE_DISABLED' });
   }
   const lat = Number(req.body.lat);
   const lon = Number(req.body.lon);
   if (!isFinite(lat) || !isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-    return res.status(400).json({ error: 'Coordenadas inválidas (lat -90..90, lon -180..180).' });
+    return res.status(400).json({ error: 'Coordenadas inválidas (lat -90..90, lon -180..180).', code: 'INVALID_COORDINATES' });
   }
   const round2 = (n) => Math.round(n * 100) / 100;
   const pos = {
@@ -604,7 +604,7 @@ app.post('/api/client/gps', (req, res) => {
     ts: req.body.ts ? Number(req.body.ts) : Date.now()
   };
   store.setGpsPosition(auth.account.clientId, String(auth.account.username || '').toLowerCase().trim(), pos);
-  res.json({ ok: true, pos });
+  res.json({ ok: true, pos, timestamp: new Date().toISOString() });
 });
 
 app.get('/api/client/gps', (req, res) => {
@@ -612,7 +612,7 @@ app.get('/api/client/gps', (req, res) => {
   if (!auth) return;
   const client = store.getClient(auth.account.clientId) || {};
   if ((client.modules || []).indexOf('gps') === -1) {
-    return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de GPS.' });
+    return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de GPS.', code: 'MODULE_DISABLED' });
   }
   const map = store.getGpsMap(auth.account.clientId) || {};
   const users = store.listWebAccountsByClient(auth.account.clientId);
@@ -621,7 +621,7 @@ app.get('/api/client/gps', (req, res) => {
     const pos = map[key] || map[u.userId] || null;
     return pos ? { username: u.username, userId: u.userId, name: u.name || u.username, role: u.role, status: u.status, pos } : null;
   }).filter(Boolean);
-  res.json({ ok: true, updated: Date.now(), positions });
+  res.json({ ok: true, updated: Date.now(), timestamp: new Date().toISOString(), positions });
 });
 
 app.get('/api/client/users', (req, res) => {
