@@ -228,10 +228,12 @@ app.get('/api/client/report', async (req, res) => {
       }
     }
     if (!state) {
-      return res.json({ ok: true, hasData: false, report: null, message: 'TodavÃ­a no hay datos de ventas para este cliente.' });
+      const client0 = store.getClient(account.clientId);
+      return res.json({ ok: true, hasData: false, report: null, modules: client0 && client0.modules || [], plan: client0 && client0.plan || null, message: 'TodavÃ­a no hay datos de ventas para este cliente.' });
     }
     const report = webclients.computeReport(state);
-    res.json({ ok: true, hasData: true, report });
+    const client = store.getClient(account.clientId);
+    res.json({ ok: true, hasData: true, report, modules: client && client.modules || [], plan: client && client.plan || null });
   } catch (e) {
     console.error('[client] report error:', e.message);
     res.status(500).json({ error: 'Error al leer los datos.' });
@@ -824,10 +826,12 @@ function next_(req, res) {
       }
     }
     if (!state) {
-      return res.json({ ok: true, hasData: false, report: null, message: 'Todavía no hay datos de ventas para este cliente.', viewOnly: true });
+      const client0 = store.getClient(clientId);
+      return res.json({ ok: true, hasData: false, report: null, modules: client0 && client0.modules || [], plan: client0 && client0.plan || null, message: 'Todavía no hay datos de ventas para este cliente.', viewOnly: true });
     }
     const report = webclients.computeReport(state);
-    res.json({ ok: true, hasData: true, report, viewOnly: true });
+    const client = store.getClient(clientId);
+    res.json({ ok: true, hasData: true, report, modules: client && client.modules || [], plan: client && client.plan || null, viewOnly: true });
   })().catch((e) => {
     console.error('[client] view report error:', e.message);
     res.status(500).json({ error: 'Error al leer los datos.' });
