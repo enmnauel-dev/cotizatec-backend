@@ -31,9 +31,19 @@ function formatDate(ts) {
   return new Date(ts).toLocaleString('es-DO', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+let botRef = null;
+
+function notifyAdmin(text) {
+  if (!botRef || !ADMIN_CHAT_ID) return;
+  botRef.sendMessage(ADMIN_CHAT_ID, text, { parse_mode: 'HTML' }).catch(function (e) {
+    console.error('[bot] notifyAdmin error:', e.message);
+  });
+}
+
 function startBot(token) {
   const clean = String(token || '').replace(/["'\s,;\r\n]+/g, '');
   const bot = new TelegramBot(clean, { polling: true });
+  botRef = bot;
   bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const text = (msg.text || '').trim();
@@ -56,6 +66,7 @@ function startBot(token) {
         '',
         '/dashboard — abrir panel de administración',
         '/usuarios — usuarios registrados y licencias activas',
+        '/dispositivos — todos los dispositivos registrados (hash o sin licencia)',
         '/activar <deviceId> [días] — activar licencia (por defecto ' + LICENSE_DAYS + ' días)',
         '/renovar <deviceId> [días] — renovar/ampliar licencia',
         '/bloquear <deviceId> — revocar licencia',
@@ -87,6 +98,30 @@ function startBot(token) {
         const vence = l && l.expiresAt > Date.now() ? '✅ hasta ' + formatDate(l.expiresAt) : '⛔ vencida';
         lines.push('• ' + d.slice(0, 10) + '… ' + vence);
       });
+      bot.sendMessage(chatId, lines.join('\n'));
+      return;
+    }
+
+    if (cmd === '/dispositivos') {
+      const all = store.allDevices();
+      const lic = store.allLicenses();
+      const keys = Object.keys(all).sort(function (a, b) { return all[b].lastSeen - all[a].lastSeen; });
+      const lines = ['📱 DISPOSITIVOS REGISTRADOS (' + keys.length + ')', ''];
+      if (keys.length === 0) lines.push('(sin dispositivos registrados aún)');
+      keys.slice(0, 40).forEach((d) => {
+        const rec = all[d];
+        const l = lic[d];
+        const now = Date.now();
+        let st = '• ';
+        if (store.isBlocked(d)) st += '🔒';
+        else if (l && now < l.expiresAt) st += l.trial ? '🧪' : '✅';
+        else if (l && now < l.graceUntil) st += '⏳';
+        else if (l) st += '❌';
+        else st += '⚪';
+        const last = rec.lastSeen ? ' · visto ' + formatDate(rec.lastSeen) : '';
+        lines.push(st + ' ' + d.slice(0, 22) + (d.length > 22 ? '…' : '') + last);
+      });
+      lines.push('', 'Activa con: /activar <deviceId> [días]');
       bot.sendMessage(chatId, lines.join('\n'));
       return;
     }
@@ -170,4 +205,4 @@ if (!arg) { bot.sendMessage(chatId, 'Usa: /bloquear <deviceId>'); return; }
   return bot;
 }
 
-module.exports = { startBot, isAdmin, buildLicense, formatDate };
+module.exports = { startBot, isAdmin, buildLicense, formatDate, notifyAdmin };

@@ -38,7 +38,13 @@ app.post('/api/register', (req, res) => {
     appVersion: req.body.appVersion || '',
     platform: req.body.platform || ''
   };
+  const wasNew = !Object.prototype.hasOwnProperty.call(store.allDevices(), deviceId);
   store.registerDevice(deviceId, meta);
+  if (wasNew) {
+    try {
+      bot.notifyAdmin('🆕 Nuevo dispositivo registrado\n\n<code>' + deviceId + '</code>\nPlataforma: ' + (meta.platform || '?') + '\nVersión: ' + (meta.appVersion || '?') + '\n\nActívalo: <code>/activar ' + deviceId + '</code>');
+    } catch (e) {}
+  }
   res.json({ ok: true });
 });
 
