@@ -47,6 +47,7 @@ function load() {
   if (!cache.backups) cache.backups = {};
   if (!cache.claims) cache.claims = {};
   if (!cache.documents) cache.documents = [];
+  if (!cache.gps) cache.gps = {};
   return cache;
 }
 
@@ -101,6 +102,26 @@ function listWebAccountsByClient(clientId) {
 function countWebAccountsByClient(clientId) {
   const accounts = listWebAccounts();
   return Object.keys(accounts).filter((k) => accounts[k].clientId === clientId).length;
+}
+
+// ===== GPS / rastreo de flota =====
+// Última posición reportada por cada operador (web account) de un negocio.
+// Clave: businessId -> { username: { lat, lon, acc, speed, ts } }
+function getGpsMap(clientId) {
+  const db = load();
+  return (db.gps && db.gps[clientId]) || {};
+}
+
+function setGpsPosition(clientId, userKey, pos) {
+  const db = load();
+  if (!db.gps) db.gps = {};
+  if (!db.gps[clientId]) db.gps[clientId] = {};
+  db.gps[clientId][String(userKey)] = pos;
+  save();
+  if (DATABASE_URL) {
+    pgSet('gps', db.gps).catch(function (e) { console.error('[pg] save gps:', e.message); });
+  }
+  return pos;
 }
 
 function setWebAccount(username, account) {
@@ -177,10 +198,12 @@ async function loadFromPg() {
     const licenses = await pgGet('licenses');
     const clients = await pgGet('clients');
     const blocked = await pgGet('blocked');
+    const gps = await pgGet('gps');
     if (devices) cache.devices = devices;
     if (licenses) cache.licenses = licenses;
     if (clients) cache.clients = clients;
     if (blocked) cache.blocked = blocked;
+    if (gps) cache.gps = gps;
     if (!cache.blocked) cache.blocked = {};
   } catch (e) {
     console.error('[pg] load:', e.message);
@@ -622,5 +645,7 @@ module.exports = {
   listDocumentsByClient,
   getDocument,
   addDocument,
-  removeDocument
+  removeDocument,
+  getGpsMap,
+  setGpsPosition
 };

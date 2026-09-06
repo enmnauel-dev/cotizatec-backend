@@ -239,11 +239,21 @@
         <div class="cmp-txt" id="cmp-msg"></div>
       </div>
 
-      <!-- Documentos (catálogo del portal web) -->
+<!-- Documentos (catálogo del portal web) -->
       <div class="card" id="docs-card" style="display:none">
         <div style="font-weight:700; margin-bottom:4px">📄 Documentos</div>
         <div class="muted" style="font-size:12px; margin-bottom:10px">Centro de gestión de documentos del negocio. Se generarán con los datos de tus clientes y trabajos.</div>
         <div id="docs-list"></div>
+      </div>
+
+      <!-- GPS / Flota -->
+      <div class="card" id="gps-card" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px">
+          <div style="font-weight:700">📡 GPS — Flota</div>
+          <button class="doc-soon go" onclick="refreshGps()">Actualizar</button>
+        </div>
+        <div class="muted" style="font-size:12px;margin-bottom:10px">Ubicación en tiempo real de los operadores que usan la app en los vehículos de la flota. Se actualiza cada 30 segundos.</div>
+        <div id="gps-list"></div>
       </div>
 
       <!-- Modal: selector de cliente/trabajo para generar documento -->
@@ -557,6 +567,64 @@ const items = DOC_TYPES.map(function (d) {
   document.getElementById('docs-list').innerHTML = items;
 }
 
+// ===== GPS / Flota =====
+let gpsTimer = null;
+
+function renderGps(modules) {
+  const card = document.getElementById('gps-card');
+  if (!card) return;
+  const has = (modules || []).indexOf('gps') !== -1;
+  card.style.display = has ? 'block' : 'none';
+  if (has) {
+    refreshGps();
+    if (!gpsTimer) gpsTimer = setInterval(refreshGps, 30000);
+  } else if (gpsTimer) {
+    clearInterval(gpsTimer);
+    gpsTimer = null;
+  }
+}
+
+function refreshGps() {
+  api('/api/client/gps').then(function (j) {
+    if (!j || !j.ok) return;
+    const list = j.positions || [];
+    const el = document.getElementById('gps-list');
+    if (!el) return;
+    if (!list.length) {
+      el.innerHTML = '<div class="empty">Aún no hay reportes de ubicación de la flota.</div>';
+      return;
+    }
+    const now = Date.now();
+    el.innerHTML = list.map(function (p) {
+      const age = now - (p.pos.ts || 0);
+      const online = age < 5 * 60 * 1000;
+      const dot = online ? 'pill green' : 'pill gray';
+      return '<div class="doc-item">' +
+        '<div class="doc-icon" style="background:rgba(59,130,246,.16);color:#93c5fd">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/>' +
+            '<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/>' +
+          '</svg>' +
+        '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-weight:600;font-size:14px">' + esc(p.name) + ' <span class="' + dot + '">' + (online ? 'En línea' : 'Sin señal') + '</span></div>' +
+          '<div class="muted" style="font-size:12px;line-height:1.45">' + p.pos.lat.toFixed(5) + ', ' + p.pos.lon.toFixed(5) + ' · ' + fmtAgo(age) + '</div>' +
+        '</div>' +
+        '<div class="doc-chev"><a href="https://www.google.com/maps?q=' + p.pos.lat + ',' + p.pos.lon + '" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">Mapa ↗</a></div>' +
+      '</div>';
+    }).join('');
+  }).catch(function () { /* sesión expirada u otro error: se ignora */ });
+}
+
+function fmtAgo(ms) {
+  if (ms < 60000) return 'hace un momento';
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return 'hace ' + m + ' min';
+  const h = Math.floor(m / 60);
+  if (h < 24) return 'hace ' + h + ' h';
+  return 'hace ' + Math.floor(h / 24) + ' d';
+}
+
 // ===== Generación de documentos =====
 let docType = null;
 let docJobs = [];
@@ -684,9 +752,10 @@ async function loadReport() {
     document.getElementById('dash-empty').textContent = j.message || 'Todavía no hay datos de ventas.';
     return;
   }
-  const t = j.report.totals;
+const t = j.report.totals;
   const meta = j.report.meta || {};
   renderDocs(j.modules);
+  if (!isView) renderGps(j.modules);
   // Saludo: usa el nombre del negocio desde la app cuando existe
   if (meta.businessName) {
     document.getElementById('dash-name').textContent = meta.businessName;
@@ -886,6 +955,7 @@ function esc(s) {
 function doLogout() {
   token = '';
   localStorage.removeItem('ct_token');
+  if (gpsTimer) { clearInterval(gpsTimer); gpsTimer = null; }
   showAuth();
 }
 

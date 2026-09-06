@@ -580,6 +580,50 @@ function requireOwner(req, res) {
 
 const PORTAL_MAX_USERS = parseInt(process.env.PORTAL_MAX_USERS || '10', 10);
 
+// ===== GPS / rastreo de flota (módulo 'gps') =====
+// La app móvil de los operadores reporta su posición con el token de su
+// cuenta web; el dueño del negocio la consulta desde el panel web.
+app.post('/api/client/gps', (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const client = store.getClient(auth.account.clientId) || {};
+  if ((client.modules || []).indexOf('gps') === -1) {
+    return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de GPS.' });
+  }
+  const lat = Number(req.body.lat);
+  const lon = Number(req.body.lon);
+  if (!isFinite(lat) || !isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    return res.status(400).json({ error: 'Coordenadas inválidas (lat -90..90, lon -180..180).' });
+  }
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const pos = {
+    lat,
+    lon,
+    acc: isFinite(Number(req.body.acc)) ? round2(Number(req.body.acc)) : null,
+    speed: isFinite(Number(req.body.speed)) ? round2(Number(req.body.speed)) : null,
+    ts: req.body.ts ? Number(req.body.ts) : Date.now()
+  };
+  store.setGpsPosition(auth.account.clientId, String(auth.account.username || '').toLowerCase().trim(), pos);
+  res.json({ ok: true, pos });
+});
+
+app.get('/api/client/gps', (req, res) => {
+  const auth = requireOwner(req, res);
+  if (!auth) return;
+  const client = store.getClient(auth.account.clientId) || {};
+  if ((client.modules || []).indexOf('gps') === -1) {
+    return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de GPS.' });
+  }
+  const map = store.getGpsMap(auth.account.clientId) || {};
+  const users = store.listWebAccountsByClient(auth.account.clientId);
+  const positions = users.map((u) => {
+    const key = String(u.username || '').toLowerCase().trim();
+    const pos = map[key] || map[u.userId] || null;
+    return pos ? { username: u.username, userId: u.userId, name: u.name || u.username, role: u.role, status: u.status, pos } : null;
+  }).filter(Boolean);
+  res.json({ ok: true, updated: Date.now(), positions });
+});
+
 app.get('/api/client/users', (req, res) => {
   const auth = requireOwner(req, res);
   if (!auth) return;
