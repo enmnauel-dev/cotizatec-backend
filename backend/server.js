@@ -363,6 +363,9 @@ function enrichClient(c) {
     id: c.id,
     name: c.name,
     phone: c.phone,
+    plan: c.plan || 'Básico',
+    modules: c.modules || ['cotizaciones', 'clientes', 'ventas', 'reportes'],
+    planLimit: c.planLimit != null ? c.planLimit : null,
     createdAt: c.createdAt,
     devices: (c.devices || []).map((d) => {
       const l = store.getLicense(d.deviceId);
@@ -471,7 +474,13 @@ app.post('/api/admin/clients', (req, res) => {
 app.put('/api/admin/clients/:id', (req, res) => {
   const info = requireAdmin(req, res);
   if (!info) return;
-  const c = store.updateClient(req.params.id, { name: req.body.name, phone: req.body.phone });
+  const c = store.updateClient(req.params.id, {
+    name: req.body.name,
+    phone: req.body.phone,
+    plan: req.body.plan,
+    modules: req.body.modules,
+    planLimit: req.body.planLimit
+  });
   if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
   res.json({ ok: true, client: enrichClient(c) });
 });
@@ -685,6 +694,132 @@ app.post('/api/admin/clients/:id/devices/:deviceId/unblock', (req, res) => {
   store.unblockDevice(req.params.deviceId);
   res.json({ ok: true });
 });
+
+// ===== Ficha administrativa del cliente (resumen) =====
+// Reutiliza computeReport sobre los respaldos de TODOS los dispositivos del
+// cliente para mostrar actividad del mes en el panel del administrador.
+async function readClientData(clientId) {
+  const client = store.getClient(clientId);
+  if (!client) return { ok: false };
+  let state = null;
+  for (const d of (client.devices || [])) {
+    const b = await store.getBackup(d.deviceId);
+    if (b && b.data) {
+      const plain = await webclients.decryptBackup(d.deviceId, b.data);
+      if (plain) {
+        try {
+          const parsed = JSON.parse(plain);
+          if (parsed && parsed.data) { state = parsed.data; break; }
+        } catch (e) { /* siguiente dispositivo */ }
+      }
+    }
+  }
+  return { ok: true, state };
+}
+
+function moduleDefs() {
+  return [
+    { key: 'cotizaciones', label: 'Cotizaciones' },
+    { key: 'clientes', label: 'Clientes' },
+    { key: 'ventas', label: 'Ventas' },
+    { key: 'reportes', label: 'Reportes' },
+    { key: 'documentos', label: 'Documentos' },
+    { key: 'garantias', label: 'Garantías' },
+    { key: 'finanzas', label: 'Finanzas' },
+    { key: 'contabilidad', label: 'Contabilidad' },
+    { key: 'gps', label: 'GPS' }
+  ];
+}
+
+// Resumen para la ficha del admin (no expone credenciales ni claves).
+app.get('/api/admin/clients/:id/view-portal-token', (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const c = store.getClient(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
+  res.json({ ok: true, token: webclients.issueViewToken(c.id) });
+});
+
+app.get('/api/admin/clients/:id/summary', async (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const c = store.getClient(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
+
+  const users = store.listWebAccountsByClient(c.id);
+  const owner = users.find((u) => (u.role || 'owner') === 'owner') || users[0] || null;
+  const limit = (c.planLimit != null ? parseInt(c.planLimit, 10) : PORTAL_MAX_USERS) || PORTAL_MAX_USERS;
+
+  const data = await readClientData(c.id);
+  let activity = null;
+  if (data.ok && data.state) {
+    const report = webclients.computeReport(data.state);
+    activity = {
+      ventas: report.totals && report.totals.ventas || 0,
+      cotizaciones: report.totals && report.totals.cotizaciones || 0,
+      facturadoMes: report.monthly ? report.monthly[report.monthly.length - 1].facturado || 0 : 0
+    };
+  }
+
+  res.json({
+    ok: true,
+    client: enrichClient(c),
+    props: {
+      owner: owner ? { name: owner.name || owner.username, username: owner.username, role: owner.role } : null
+    },
+    users: { total: users.length, activo: users.filter((u) => u.status !== 'inactivo').length, limit },
+    activity,
+    modules: moduleDefs().map((m) => ({ key: m.key, label: m.label, active: (c.modules || []).indexOf(m.key) !== -1 }))
+  });
+});
+
+// ===== Ver portal como cliente (rol viewer, SOLO LECTURA, auditado) =====
+// El administrador obtiene un token de vista con rol 'viewer'. El reporte se
+// lee de los dispositivos del cliente y la UI del portal lo muestra en modo
+// solo lectura: no modifica la sesión real del cliente y no expone credenciales.
+app.get('/api/client/report/view', (req, res) => {
+  const token = String((req.headers.authorization || '').replace(/^Bearer\s+/i, ''));
+  const info = webclients.verifyToken(token);
+  if (!info || info.role !== 'viewer') {
+    return res.status(401).json({ error: 'Vista no autorizada.' });
+  }
+  const c = store.getClient(info.clientId);
+  if (!c) return res.status(404).json({ error: 'Cliente no encontrado.' });
+  res.locals.viewToken = info;
+  res.locals.viewClientId = c.id;
+  next_(req, res);
+});
+
+// Middleware encadenado: /api/client/report/view resuelve el cliente y delega
+// en la lógica de reporte compartida (solo lectura, sin mutar sesión).
+function next_(req, res) {
+  const info = res.locals.viewToken;
+  const clientId = res.locals.viewClientId;
+  const devices = store.getClient(clientId).devices.map((d) => d.deviceId);
+  (async () => {
+    let state = null;
+    for (const deviceId of devices) {
+      const b = await store.getBackup(deviceId);
+      if (b && b.data) {
+        const plain = await webclients.decryptBackup(deviceId, b.data);
+        if (plain) {
+          try {
+            const parsed = JSON.parse(plain);
+            if (parsed && parsed.data) { state = parsed.data; break; }
+          } catch (e) { /* siguiente */ }
+        }
+      }
+    }
+    if (!state) {
+      return res.json({ ok: true, hasData: false, report: null, message: 'Todavía no hay datos de ventas para este cliente.', viewOnly: true });
+    }
+    const report = webclients.computeReport(state);
+    res.json({ ok: true, hasData: true, report, viewOnly: true });
+  })().catch((e) => {
+    console.error('[client] view report error:', e.message);
+    res.status(500).json({ error: 'Error al leer los datos.' });
+  });
+}
 
 store.init().then(() => {
   app.listen(PORT, () => {

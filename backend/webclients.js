@@ -56,8 +56,26 @@ function issueToken(account) {
   return body + '.' + sig;
 }
 
-function verifyToken(token) {
-  try {
+// ===== Token de VISTA administrativa (no toca la sesión del cliente) =====
+// Permite al administrador "ver el portal como cliente" en modo SOLO LECTURA.
+// - role: 'viewer' -> la UI del portal trata este token como solo lectura.
+// - No corresponde a ninguna cuenta web real: los datos se leen de los
+//   dispositivos del CLIENTE (account.clientId), no de una cuenta.
+function issueViewToken(clientId) {
+  const payload = {
+    sub: 'view-' + clientId,
+    clientId: clientId,
+    role: 'viewer',
+    viewOf: clientId,
+    iat: Date.now(),
+    exp: Date.now() + 2 * 3600000 // 2 horas: vista administrativa de corta duración
+  };
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', tokenSecret()).update(body).digest('base64url');
+  return body + '.' + sig;
+}
+
+function verifyToken(token) {  try {
     const [body, sig] = String(token || '').split('.');
     if (!body || !sig) return null;
     const expected = crypto.createHmac('sha256', tokenSecret()).update(body).digest('base64url');
@@ -309,6 +327,7 @@ module.exports = {
   hashPassword,
   verifyPassword,
   issueToken,
+  issueViewToken,
   verifyToken,
   decryptBackup,
   computeReport

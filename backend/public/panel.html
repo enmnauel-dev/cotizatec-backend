@@ -125,12 +125,15 @@
 
   <!-- DASHBOARD -->
   <div id="dash-view" style="display:none">
+    <div id="view-banner" style="display:none;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;padding:8px 12px;border-radius:8px;font-size:13px;margin-bottom:10px">
+      👁️ Vista administrativa — Solo lectura. No guarda sesión.
+    </div>
     <div class="top no-print">
       <div><h1>Hola, <span id="dash-name">CotizaTec</span></h1><small id="dash-sub">Resumen de tu negocio</small></div>
       <div style="display:flex; gap:8px">
         <button class="btn-out" onclick="doPrint()">Imprimir</button>
-        <button class="btn-out" onclick="openChangePass()">Cambiar clave</button>
-        <button class="btn-out" onclick="doLogout()">Salir</button>
+        <button id="cp-btn" class="btn-out" onclick="openChangePass()">Cambiar clave</button>
+        <button id="out-btn" class="btn-out" onclick="doLogout()">Salir</button>
       </div>
     </div>
     <div class="print-header"><h1><span id="ph-name">Reporte de ventas</span></h1><div class="sub" id="ph-date"></div></div>
@@ -250,6 +253,9 @@
 const API = ''; // relativo: mismo origen (el panel vive en la misma URL del backend)
 
 let token = localStorage.getItem('ct_token') || '';
+let isView = false;
+
+function viewReportPath() { return '/api/client/report/view'; }
 
 function money(n) {
   const v = Number(n) || 0;
@@ -377,8 +383,9 @@ async function doChangePass() {
 }
 
 async function loadReport() {
-  const j = await api('/api/client/report');
+  const j = await api(isView ? viewReportPath() : '/api/client/report');
   if (!j || !j.ok) {
+    if (isView) { showAuth(); return; }
     if (j && j.error && j.error.indexOf('Sesión') === 0) { localStorage.removeItem('ct_token'); token=''; showAuth(); return; }
     document.getElementById('dash-empty').style.display = 'block';
     document.getElementById('dash-content').style.display = 'none';
@@ -581,8 +588,24 @@ function doLogout() {
   showAuth();
 }
 
-// Iniciar automáticamente si ya hay sesión
+// Iniciar automáticamente si ya hay sesión, o en modo VISTA administrativa (#view=)
 window.addEventListener('DOMContentLoaded', function () {
+  const vp = new URLSearchParams(location.hash.replace(/^#/, '')).get('view');
+  if (vp) {
+    // Vista como cliente (administrador): solo lectura, no persiste sesión
+    token = vp;
+    isView = true;
+    document.getElementById('view-banner').style.display = 'block';
+    document.getElementById('change-pass-card').style.display = 'none';
+    document.getElementById('out-btn').style.display = 'none';
+    document.getElementById('cp-btn').style.display = 'none';
+    (async function () {
+      const j = await api(viewReportPath());
+      if (j && j.ok) { showDash(); loadReport(); }
+      else { document.getElementById('view-banner').style.display = 'none'; showAuth(); }
+    })();
+    return;
+  }
   if (token) {
     // probar sesión cargando el reporte
     (async function () {

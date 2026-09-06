@@ -338,6 +338,11 @@ function createClient(data) {
     id: clientId(),
     name: String(data.name || '').trim(),
     phone: String(data.phone || '').trim(),
+    plan: String(data.plan || 'Básico').trim(),
+    modules: Array.isArray(data.modules) && data.modules.length
+      ? data.modules.slice()
+      : ['cotizaciones', 'clientes', 'ventas', 'reportes'],
+    planLimit: data.planLimit != null ? parseInt(data.planLimit, 10) : null,
     createdAt: Date.now(),
     devices: []
   };
@@ -355,6 +360,9 @@ function updateClient(clientKey, patch) {
   if (!c) return null;
   if (typeof patch.name === 'string') c.name = patch.name.trim();
   if (typeof patch.phone === 'string') c.phone = patch.phone.trim();
+  if (typeof patch.plan === 'string') c.plan = String(patch.plan).trim();
+  if (Array.isArray(patch.modules)) c.modules = patch.modules.slice();
+  if (patch.planLimit !== undefined) c.planLimit = patch.planLimit != null ? parseInt(patch.planLimit, 10) : null;
   save();
   if (DATABASE_URL) {
     pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients:', e.message); });

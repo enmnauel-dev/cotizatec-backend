@@ -106,6 +106,9 @@
   .ua-creds { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: var(--bg); }
   .ua-creds div { font-size: 12px; color: var(--muted); }
   .ua-creds b { font-size: 16px; word-break: break-all; }
+  .clf-box { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+  .clf-k { font-size: 11px; color: var(--muted); }
+  .clf-v { font-size: 15px; font-weight: 600; margin-top: 2px; }
   @media (min-width: 700px) { body { max-width: 860px; margin: 0 auto; } }
 </style>
 </head>
@@ -200,6 +203,18 @@
           <button class="btn" onclick="uaCopy()">📋 Copiar</button>
           <button class="btn" style="background:#25D366;color:#fff" onclick="uaWhatsApp()">💬 WhatsApp</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="clfModal">
+    <div class="modal-box" style="max-width:620px">
+      <h3 id="clfTitle">Ficha del cliente</h3>
+      <div id="clfBody" style="font-size:14px"></div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closeClfModal()">Cerrar</button>
+        <button class="btn secondary" onclick="openUsersModal(clfId)">👥 Usuarios web</button>
+        <button class="btn" onclick="openPortalView()">👁️ Ver portal</button>
       </div>
     </div>
   </div>
@@ -316,6 +331,7 @@
           '<div style="display:flex;gap:6px">' +
             '<button class="btn small secondary" onclick="openDevModal(\'' + cl.id + '\')">+ Dispositivo</button>' +
             '<button class="btn small secondary" onclick="openUsersModal(\'' + cl.id + '\')">Usuarios web</button>' +
+            '<button class="btn small secondary" onclick="openFile(\'' + cl.id + '\')">📋 Ficha</button>' +
             '<button class="btn small secondary" onclick="editClient(\'' + cl.id + '\')">✎</button>' +
             '<button class="btn small red" onclick="delClient(\'' + cl.id + '\')">🗑</button>' +
           '</div>' +
@@ -642,6 +658,75 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
   }
 
   function migDev(clientId, deviceId) { openMigModal(deviceId); }
+
+  // ===== Ficha administrativa del cliente =====
+  var clfId = null;
+
+  function openFile(clientId) {
+    clfId = clientId;
+    var body = document.getElementById('clfBody');
+    body.innerHTML = '<div class="muted" style="padding:20px 0;text-align:center">Cargando ficha…</div>';
+    document.getElementById('clfModal').classList.add('open');
+    api('/api/admin/clients/' + encodeURIComponent(clientId) + '/summary').then(function (r) {
+      if (!r || !r.ok) { body.innerHTML = '<div class="empty">' + esc((r && r.error) || 'Error al cargar la ficha.') + '</div>'; return; }
+      renderFile(r);
+    }).catch(function (e) { body.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; });
+  }
+
+  function renderFile(r) {
+    var cl = r.client, p = r.props, u = r.users, act = r.activity, mods = r.modules;
+    var plan = cl.plan || 'Básico';
+    var chips = mods.map(function (m) {
+      return '<span class="chip ' + (m.active ? 'active' : 'inactive') + '">' + esc(m.label) + '</span>';
+    }).join(' ');
+    var ownerName = p && p.owner ? (p.owner.name || p.owner.username) : '—';
+    var ventas = act ? '$' + fmtN(act.ventas) : '—';
+    var cotiz = act ? fmtN(act.cotizaciones) : '—';
+    var facturado = act ? '$' + fmtN(act.facturadoMes) : '—';
+    var html =
+      '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">' +
+        '<div><div class="client-name" style="font-size:18px">' + esc(cl.name) + lexicalspace() + '</div><div class="muted" style="font-size:12px">' + esc(cl.phone || '') + '</div></div>' +
+        '<div style="text-align:right"><span class="chip active">🟢 Activo</span><br><span class="muted" style="font-size:12px">Plan</span> <b>' + esc(plan) + '</b></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0">' +
+        '<div class="clf-box"><div class="clf-k">Propietario</div><div class="clf-v">' + esc(ownerName) + '</div></div>' +
+        '<div class="clf-box"><div class="clf-k">Usuarios</div><div class="clf-v">' + u.activo + ' / ' + u.limit + '</div></div>' +
+        '<div class="clf-box"><div class="clf-k">Ventas mes</div><div class="clf-v">' + ventas + '</div></div>' +
+        '<div class="clf-box"><div class="clf-k">Cotizaciones</div><div class="clf-v">' + cotiz + '</div></div>' +
+      '</div>' +
+      '<div class="muted" style="font-size:12px;margin:8px 0 4px">Módulos contratados</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">' + chips + '</div>' +
+      '<label style="font-size:12px;color:var(--muted);display:block;margin-top:8px">Plan <span class="muted">(editable)</span></label>' +
+      '<select class="field" id="clfPlan" style="margin-bottom:2px">' +
+        ['Básico', 'Profesional', 'Empresarial'].map(function (pl) { return '<option value="' + pl + '"' + (pl === plan ? ' selected' : '') + '>' + pl + '</option>'; }).join('') +
+      '</select>' +
+      '<div class="modal-actions"><button class="btn" onclick="savePlanClf()">Guardar plan</button></div>';
+    body.innerHTML = html;
+  }
+
+  function lexicalspace() { return ' '; }
+
+  function fmtN(n) {
+    n = Number(n || 0);
+    return n.toLocaleString('en-US');
+  }
+
+  function savePlanClf() {
+    var plan = document.getElementById('clfPlan').value;
+    api('/api/admin/clients/' + encodeURIComponent(clfId), { method: 'PUT', body: JSON.stringify({ plan: plan }) })
+      .then(function (r) { toast(r && r.ok ? 'Plan actualizado' : (r && r.error) || 'Error'); if (r && r.ok) loadAll(); })
+      .catch(function (e) { toast(e.message); });
+  }
+
+  function openPortalView() {
+    if (!clfId) return;
+    api('/api/admin/clients/' + encodeURIComponent(clfId) + '/view-portal-token').then(function (r) {
+      if (!r || !r.ok) { toast((r && r.error) || 'No se pudo abrir la vista'); return; }
+      window.open('/panel#view=' + encodeURIComponent(r.token), '_blank');
+    }).catch(function (e) { toast(e.message); });
+  }
+
+  function closeClfModal() { document.getElementById('clfModal').classList.remove('open'); }
 
   api('/api/admin/verify').then(function (r) {
     loadAll();
