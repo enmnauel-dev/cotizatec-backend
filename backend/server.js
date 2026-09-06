@@ -266,82 +266,169 @@ function jobTotalsWeb(j) {
   const balance = Math.max(0, total - collected);
   return { subtotal, discount: Number(j.discount) || 0, itbis, tax, total, collected, balance };
 }
-const DOC_ENABLED = { 'carta-saldo': true, 'debo-pagare': true };
-const DOC_TITLES = { 'carta-saldo': 'Carta de Saldo', 'debo-pagare': 'Debo y Pagaré' };
+const DOC_ENABLED = {
+  'carta-saldo': true,
+  'debo-pagare': true,
+  'testigos': true,
+  'pagare-notarial': true,
+  'pagare-garantia': true,
+  'entrega-voluntaria': true,
+  'debo-pagare-garantia': true,
+  'intimacion': true
+};
+const DOC_TITLES = {
+  'carta-saldo': 'Carta de Saldo',
+  'debo-pagare': 'Debo y Pagaré',
+  'testigos': 'Declaración de Testigos',
+  'pagare-notarial': 'Pagaré Notarial',
+  'pagare-garantia': 'Pagaré con Garantía',
+  'entrega-voluntaria': 'Entrega Voluntaria del Bien',
+  'debo-pagare-garantia': 'Debo y Pagaré con Garantía',
+  'intimacion': 'Intimación de Pago'
+};
+// Reglas por tipo: unos exigen saldo pendiente, carta-saldo exige saldo RD$ 0.
+const DOC_REQUIRES_PENDING = { 'debo-pagare': true, 'pagare-notarial': true, 'pagare-garantia': true, 'debo-pagare-garantia': true, 'entrega-voluntaria': true, 'intimacion': true };
+const DOC_REQUIRES_BIEN = { 'pagare-garantia': true, 'debo-pagare-garantia': true, 'entrega-voluntaria': true };
+
+const DOC_CSS = `
+<style>
+  body { font-family: Georgia, serif; color: #111; max-width: 720px; margin: 0 auto; padding: 48px 40px; font-size: 15px; line-height: 1.6; }
+  h1 { text-align: center; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; margin: 0 0 4px; }
+  .biz { text-align: center; font-size: 14px; margin-bottom: 4px; }
+  .line { border-bottom: 3px double #111; margin: 14px 0 26px; }
+  .doc-no { text-align: right; font-size: 12px; color: #444; margin-bottom: 20px; }
+  p { text-align: justify; }
+  table { width: 100%; border-collapse: collapse; margin: 22px 0; }
+  td, th { border: 1px solid #aaa; padding: 8px 10px; font-size: 14px; }
+  .amt { text-align: right; white-space: nowrap; }
+  .sign { display: flex; justify-content: space-between; margin-top: 64px; }
+  .sign .box { text-align: center; }
+  .sign .line2 { border-top: 1px solid #111; margin-top: 52px; width: 220px; font-size: 13px; }
+  .foot { margin-top: 40px; font-size: 11px; color: #555; text-align: center; }
+  .list { margin: 20px 0; padding-left: 4px; }
+  .list tr td { border-top: 1px dashed #aaa; }
+  .fill { display: inline-block; border-bottom: 1px solid #111; min-width: 160px; }
+</style>`;
 
 function docHTML(doc) {
   const c = doc.data || {};
   const biz = c.businessName || 'CotizaTec';
   const ciudad = c.ciudad || 'Santiago de los Caballeros';
   const hoy = docFmtDate(doc.createdAt) || docFmtDate(new Date());
-  if (doc.type === 'debo-pagare') {
-    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-<style>
-  body { font-family: Georgia, serif; color:#111; max-width: 720px; margin: 0 auto; padding: 48px 40px; font-size:15px; line-height:1.6; }
-  h1 { text-align:center; font-size:22px; letter-spacing:2px; text-transform:uppercase; margin:0 0 4px; }
-  .biz { text-align:center; font-size:14px; margin-bottom:4px; }
-  .line { border-bottom:3px double #111; margin:14px 0 26px; }
-  .doc-no { text-align:right; font-size:12px; color:#444; margin-bottom:20px; }
-  p { text-align: justify; }
-  .mount { display:inline-block; border-bottom:1px solid #111; padding:0 30px; font-weight:bold; }
-  table { width:100%; border-collapse: collapse; margin: 22px 0; }
-  td, th { border:1px solid #aaa; padding:8px 10px; font-size:14px; }
-  .amt { text-align:right; white-space:nowrap; }
-  .sign { display:flex; justify-content:space-between; margin-top:64px; }
-  .sign .box { text-align:center; }
-  .sign .line2 { border-top:1px solid #111; margin-top:52px; width:220px; font-size:13px; }
-  .foot { margin-top:40px; font-size:11px; color:#555; text-align:center; }
-</style></head><body>
-  <div class="doc-no">No.: ${doc.number}</div>
-  <h1>Declaración de Deuda</h1>
-  <div class="biz">PAGARÉ NO NEGOCIABLE</div>
-  <div class="line"></div>
-  <p>En la ciudad de ${ciudad}, República Dominicana, a los ${hoy}, por medio del presente documento y con valor de Carta de Pago y Finiquito entre partes, <b>YO, ${c.debtor || c.clientName || '____________________'}</b>, con documento de identidad No. <b>${c.debtorId || '____________________'}</b>, mayor de edad, domiciliado(a) en <b>${c.debtorAddr || '____________________'}</b>, en mi calidad de <b>DEUDOR(A)</b>, declaro tener y reconocer expresamente la obligación de pagar a favor de <b>${biz}</b> la suma de <b>${docMoney(c.balance)} (${c.montoLetras || '_________________________________'})</b>, equivalente al saldo pendiente de la operación ${c.jobCode || '________________'}, por los conceptos y servicios prestados.</p>
-  <p>Me obligo a pagar el monto total adeudado en fecha <b>${c.fechaPago ? docFmtDate(c.fechaPago) : '____________________'}</b>, en moneda de curso legal, sin necesidad de intimación ni requerimiento previo.</p>
-  <p>En caso de incumplimiento, autorizo expresamente a ${biz} a ejercer las acciones legales correspondientes, incluyendo el cobro judicial, por lo que este documento constituye un título suficiente.</p>
-  <table><tr><th>Concepto / Operación</th><th>Monto original</th><th>Abonado</th><th>Saldo pendiente</th></tr>
-    <tr><td>${c.jobCode || '________________'}</td><td class="amt">${docMoney(c.total)}</td><td class="amt">${docMoney(c.collected)}</td><td class="amt"><b>${docMoney(c.balance)}</b></td></tr>
-  </table>
-  <p>Firmado en ${ciudad} a los ${hoy}.</p>
-  <div class="sign">
-    <div class="box"><div>.</div><div class="line2">Firma del DEUDOR(A)</div></div>
-    <div class="box"><div>.</div><div class="line2">Sello y firma — ${escHTML(biz)}</div></div>
-  </div>
-  <div class="foot">Documento generado por el portal web de CotizaTec — No. ${doc.number} · Plantilla v1.0</div>
-</body></html>`;
+  const debtor = c.debtor || c.clientName || '____________________';
+  const debtorId = c.debtorId || '____________________';
+  const debtorAddr = c.debtorAddr || '____________________';
+  const jobCode = c.jobCode || '________________';
+  const total = docMoney(c.total);
+  const collected = docMoney(c.collected);
+  const balance = docMoney(c.balance);
+  const bien = c.bien || '______________________________________ (describir el bien entregado en garantía, ejemplo: vehículo marca/modelo, chasis No. ____)';
+  const notario = c.notario || '____________________';
+  const notarioNum = c.notarioNum || '___';
+  const testigos = (c.testigos && c.testigos.length ? c.testigos : []);
+  const witnessesTable = testigos.length
+    ? `<table><tr><th>Nombre del testigo</th><th>Cédula / Documento</th><th>Firma</th></tr>${testigos.map((w) => `<tr><td>${escHTML(w.name)}</td><td>${escHTML(w.doc)}</td><td style="height:34px">·</td></tr>`).join('')}</table>`
+    : `<table><tr><th>Nombre del testigo</th><th>Cédula / Documento</th><th>Firma</th></tr><tr><td>1. ______________</td><td>________</td><td style="height:34px">·</td></tr><tr><td>2. ______________</td><td>________</td><td style="height:34px">·</td></tr></table>`;
+
+  let title, sub, body;
+  switch (doc.type) {
+    case 'carta-saldo':
+      title = 'Carta de Saldo'; sub = 'FINIQUITO Y CARTA DE PAGO';
+      body = `
+        <p>Por medio de la presente, <b>${biz}</b>, establecimiento comercial con domicilio en ${ciudad}, República Dominicana, hace constar y CERTIFICA que el/la señor(a) <b>${debtor}</b>, con documento de identidad No. <b>${debtorId}</b>, ha cancelado en su totalidad la obligación derivada de la operación <b>${jobCode}</b>, por el monto de <b>${total}</b>.</p>
+        <p>Que al día de la fecha, el referido cliente <b>no adeuda suma alguna</b> a favor de ${biz}, quedando de esta manera finiquitado y libre de cualquier compromiso pendiente con la presente operación.</p>
+        <table><tr><th>Concepto / Operación</th><th>Monto total</th><th>Total abonado</th><th>Saldo</th></tr>
+          <tr><td>${jobCode}</td><td class="amt">${total}</td><td class="amt">${collected}</td><td class="amt"><b>RD$ 0.00</b></td></tr></table>
+        <p>Esta carta de saldo se expide a solicitud de la parte interesada, a los ${hoy}.</p>
+        <div class="sign"><div class="box"><div>.</div><div class="line2">Firma del CLIENTE</div></div><div class="box"><div>.</div><div class="line2">Sello y firma — ${escHTML(biz)}</div></div></div>`;
+      break;
+    case 'debo-pagare':
+      title = 'Declaración de Deuda'; sub = 'PAGARÉ NO NEGOCIABLE';
+      body = `
+        <p>En la ciudad de ${ciudad}, República Dominicana, a los ${hoy}, por medio del presente documento y con valor de Carta de Pago y Finiquito entre partes, <b>YO, ${debtor}</b>, con documento de identidad No. <b>${debtorId}</b>, mayor de edad, domiciliado(a) en <b>${debtorAddr}</b>, en mi calidad de <b>DEUDOR(A)</b>, declaro tener y reconocer expresamente la obligación de pagar a favor de <b>${biz}</b> la suma de <b>${balance}</b>, equivalente al saldo pendiente de la operación ${jobCode}, por los conceptos y servicios prestados.</p>
+        <p>Me obligo a pagar el monto total adeudado en fecha <b>${c.fechaPago ? docFmtDate(c.fechaPago) : '____________________'}</b>, en moneda de curso legal, sin necesidad de intimación ni requerimiento previo.</p>
+        <p>En caso de incumplimiento, autorizo expresamente a ${biz} a ejercer las acciones legales correspondientes, incluyendo el cobro judicial, por lo que este documento constituye un título suficiente.</p>
+        <table><tr><th>Concepto / Operación</th><th>Monto original</th><th>Abonado</th><th>Saldo pendiente</th></tr>
+          <tr><td>${jobCode}</td><td class="amt">${total}</td><td class="amt">${collected}</td><td class="amt"><b>${balance}</b></td></tr></table>
+        <p>Firmado en ${ciudad} a los ${hoy}.</p>
+        <div class="sign"><div class="box"><div>.</div><div class="line2">Firma del DEUDOR(A)</div></div><div class="box"><div>.</div><div class="line2">Sello y firma — ${escHTML(biz)}</div></div></div>`;
+      break;
+    case 'testigos':
+      title = 'Declaración de Testigos'; sub = 'VALIDACIÓN DE CONTRATO / PAGARÉ';
+      body = `
+        <p>Por medio de la presente, en la ciudad de ${ciudad}, República Dominicana, a los ${hoy}, los suscritos comparecen como <b>TESTIGOS</b> en el acto relativo a la obligación derivada de la operación <b>${jobCode}</b>, suscrita entre el(la) señor(a) <b>${debtor}</b>, con documento de identidad No. <b>${debtorId}</b>, y <b>${biz}</b>, por un monto de <b>${total}</b>.</p>
+        <p>Los comparecientes declaran, bajo fe de juramento, haber presenciado la firma del documento y dan fe de la veracidad y libre consentimiento de las partes.</p>
+        ${witnessesTable}
+        <div class="sign">
+          <div class="box"><div>.</div><div class="line2">Testigo 1</div></div>
+          <div class="box"><div>.</div><div class="line2">Testigo 2</div></div>
+          <div class="box"><div>.</div><div class="line2">Sello y firma — ${escHTML(biz)}</div></div>
+        </div>`;
+      break;
+    case 'pagare-notarial':
+      title = 'Pagaré Notarial'; sub = 'DEUDA FORMALIZADA ANTE NOTARIO';
+      body = `
+        <p>Ante el <b>Notario Público No. ${notarioNum}</b> del municipio de ${ciudad}, República Dominicana, licenciado(a) <b>${notario}</b>, se hizo presente el(la) señor(a) <b>${debtor}</b>, con documento de identidad No. <b>${debtorId}</b>, mayor de edad, domiciliado(a) en <b>${debtorAddr}</b>, quien DECLARA adeudar a favor de <b>${biz}</b> la suma de <b>${balance}</b>, correspondiente al saldo de la operación <b>${jobCode}</b>, y se obliga a pagarla en fecha <b>${c.fechaPago ? docFmtDate(c.fechaPago) : '____________________'}</b>.</p>
+        <p>El presente pagaré se otorga con <b>fuerza ejecutiva</b> para el cobro judicial en caso de incumplimiento, conforme a las disposiciones legales aplicables de la República Dominicana.</p>
+        <table><tr><th>Concepto / Operación</th><th>Monto original</th><th>Abonado</th><th>Saldo pendiente</th></tr>
+          <tr><td>${jobCode}</td><td class="amt">${total}</td><td class="amt">${collected}</td><td class="amt"><b>${balance}</b></td></tr></table>
+        <p>Firmado y sellado en presencia del Notario, a los ${hoy}.</p>
+        <div class="sign">
+          <div class="box"><div>.</div><div class="line2">Firma del DEUDOR(A)</div></div>
+          <div class="box"><div>.</div><div class="line2">Notario Público No. ${notarioNum} — ${escHTML(notario)}</div></div>
+        </div>`;
+      break;
+    case 'pagare-garantia':
+      title = 'Pagaré con Garantía'; sub = 'COMPROMISO DE PAGO RESPALDADO POR UN BIEN';
+      body = `
+        <p>En la ciudad de ${ciudad}, República Dominicana, a los ${hoy}, <b>YO, ${debtor}</b>, con documento de identidad No. <b>${debtorId}</b>, mayor de edad, domiciliado(a) en <b>${debtorAddr}</b>, en calidad de <b>DEUDOR(A)</b>, reconozco adeudar a favor de <b>${biz}</b> la suma de <b>${balance}</b>, correspondiente al saldo de la operación <b>${jobCode}</b>.</p>
+        <p>Para garantizar el cumplimiento de esta obligación, entrego en <b>GARANTÍA</b> el siguiente bien: <b class="fill">${bien}</b>, el cual responderá por la deuda en caso de no ser satisfecha.</p>
+        <table><tr><th>Concepto / Operación</th><th>Monto original</th><th>Abonado</th><th>Saldo pendiente</th></tr>
+          <tr><td>${jobCode}</td><td class="amt">${total}</td><td class="amt">${collected}</td><td class="amt"><b>${balance}</b></td></tr></table>
+        <p>Autorizo expresamente el cobro judicial en caso de incumplimiento.</p>
+        <div class="sign"><div class="box"><div>.</div><div class="line2">Firma del DEUDOR(A)</div></div><div class="box"><div>.</div><div class="line2">Sello y firma — ${escHTML(biz)}</div></div></div>`;
+      break;
+    case 'debo-pagare-garantia':
+      title = 'Debo y Pagaré con Garantía'; sub = 'COMPROMISO DE PAGO CON PRENDA';
+      body = `
+        <p>En la ciudad de ${ciudad}, República Dominicana, a los ${hoy}, <b>YO, ${debtor}</b>, con documento de identidad No. <b>${debtorId}</b>, domiciliado(a) en <b>${debtorAddr}</b>, DECLARO deber y la obligación de pagar a favor de <b>${biz}</b> la suma de <b>${balance}</b>, por el saldo pendiente de la operación <b>${jobCode}</b>.</p>
+        <p>En señal de garantía de dicho pago, formalizo la inclusión de la siguiente <b>prenda o bien</b> como aval del monto prestado: <b class="fill">${bien}</b>.</p>
+        <table><tr><th>Concepto / Operación</th><th>Monto original</th><th>Abonado</th><th>Saldo pendiente</th></tr>
+          <tr><td>${jobCode}</td><td class="amt">${total}</td><td class="amt">${collected}</td><td class="amt"><b>${balance}</b></td></tr></table>
+        <p>Me obligo a pagar en fecha <b>${c.fechaPago ? docFmtDate(c.fechaPago) : '____________________'}</b>. En caso de incumplimiento, el bien entregado en garantía podrá destinarse al pago de la deuda.</p>
+        <div class="sign"><div class="box"><div>.</div><div class="line2">Firma del DEUDOR(A)</div></div><div class="box"><div>.</div><div class="line2">Sello y firma — ${escHTML(biz)}</div></div></div>`;
+      break;
+    case 'entrega-voluntaria':
+      title = 'Entrega Voluntaria del Bien'; sub = 'ACUERDO DE DEVOLUCIÓN EN GARANTÍA';
+      body = `
+        <p>En la ciudad de ${ciudad}, República Dominicana, a los ${hoy}, entre <b>${biz}</b> y el(la) señor(a) <b>${debtor}</b>, con documento de identidad No. <b>${debtorId}</b>, se ha convenido lo siguiente:</p>
+        <p>Que el deudor, obligado por la operación <b>${jobCode}</b>, por un saldo de <b>${balance}</b>, procede a la <b>ENTREGA VOLUNTARIA</b> del bien: <b class="fill">${bien}</b>, a favor de ${biz}, para saldar la deuda referida sin necesidad de recurrir a juicio de embargo.</p>
+        <p>Otorgada la presente entrega, el deudor queda descargado de la obligación en la medida del valor del bien entregado, quedando constancia de cualquier diferencia pendiente en su caso.</p>
+        <table><tr><th>Concepto / Operación</th><th>Monto original</th><th>Abonado</th><th>Saldo antes de entrega</th></tr>
+          <tr><td>${jobCode}</td><td class="amt">${total}</td><td class="amt">${collected}</td><td class="amt"><b>${balance}</b></td></tr></table>
+        <div class="sign"><div class="box"><div>.</div><div class="line2">Firma del DEUDOR(A)</div></div><div class="box"><div>.</div><div class="line2">Sello y firma — ${escHTML(biz)}</div></div></div>`;
+      break;
+    case 'intimacion':
+      title = 'Intimación de Pago'; sub = 'NOTIFICACIÓN DE COBRO';
+      body = `
+        <p>En cumplimiento de las disposiciones legales, <b>${biz}</b> INTIMA formalmente al(la) señor(a) <b>${debtor}</b>, domiciliado(a) en <b>${debtorAddr}</b>, a regularizar las siguientes obligaciones vencidas derivadas de la operación <b>${jobCode}</b>:</p>
+        <table><tr><th>Concepto / Operación</th><th>Monto original</th><th>Total abonado</th><th>Saldo vencido</th></tr>
+          <tr><td>${jobCode}</td><td class="amt">${total}</td><td class="amt">${collected}</td><td class="amt"><b>${balance}</b></td></tr></table>
+        <p>Se concede un plazo de <b>___ días</b> a partir de la recepción de la presente para saldar el monto adeudado. Vencido este plazo sin el pago correspondiente, se procederá a ejercer las acciones legales pertinentes, incluyendo el embargo y/o demanda judicial.</p>
+        <p>Firmado en ${ciudad}, República Dominicana, a los ${hoy}.</p>
+        <div class="sign"><div class="box"><div>.</div><div class="line2">Firma — ${escHTML(biz)}</div></div><div class="box"><div>.</div><div class="line2">Recibido: firma del DEUDOR</div></div></div>`;
+      break;
+    default:
+      return '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"></head><body><p>Documento no disponible.</p></body></html>';
   }
-  // carta-saldo
-  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-<style>
-  body { font-family: Georgia, serif; color:#111; max-width: 720px; margin:0 auto; padding:48px 40px; font-size:15px; line-height:1.6; }
-  h1 { text-align:center; font-size:22px; letter-spacing:2px; text-transform:uppercase; margin:0 0 4px; }
-  .biz { text-align:center; font-size:14px; margin-bottom:4px; }
-  .line { border-bottom:3px double #111; margin:14px 0 26px; }
-  .doc-no { text-align:right; font-size:12px; color:#444; margin-bottom:20px; }
-  p { text-align: justify; }
-  table { width:100%; border-collapse: collapse; margin:22px 0; }
-  td, th { border:1px solid #aaa; padding:8px 10px; font-size:14px; }
-  .amt { text-align:right; white-space:nowrap; }
-  .sign { display:flex; justify-content:space-between; margin-top:64px; }
-  .sign .box { text-align:center; }
-  .sign .line2 { border-top:1px solid #111; margin-top:52px; width:220px; font-size:13px; }
-  .foot { margin-top:40px; font-size:11px; color:#555; text-align:center; }
-</style></head><body>
+
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">${DOC_CSS}</head><body>
   <div class="doc-no">No.: ${doc.number}</div>
-  <h1>Carta de Saldo</h1>
-  <div class="biz">FINIQUITO Y CARTA DE PAGO</div>
+  <h1>${title}</h1>
+  <div class="biz">${sub}</div>
   <div class="line"></div>
-  <p>Por medio de la presente, <b>${biz}</b>, establecimiento comercial con domicilio en ${ciudad}, República Dominicana, hace constar y CERTIFICA que el/la señor(a) <b>${c.clientName || '____________________'}</b>, con documento de identidad No. <b>${c.debtorId || '____________________'}</b>, ha cancelado en su totalidad la obligación derivada de la operación <b>${c.jobCode || '________________'}</b>, por el monto de <b>${docMoney(c.total)}</b>.</p>
-  <p>Que al día de la fecha, el referido cliente <b>no adeuda suma alguna</b> a favor de ${biz}, quedando de esta manera finiquitado y libre de cualquier compromiso pendiente con la presente operación.</p>
-  <table><tr><th>Concepto / Operación</th><th>Monto total</th><th>Total abonado</th><th>Saldo</th></tr>
-    <tr><td>${c.jobCode || '________________'}</td><td class="amt">${docMoney(c.total)}</td><td class="amt">${docMoney(c.collected)}</td><td class="amt"><b>RD$ 0.00</b></td></tr>
-  </table>
-  <p>Esta carta de saldo se expide a solicitud de la parte interesada, a los ${hoy}.</p>
-  <div class="sign">
-    <div class="box"><div>.</div><div class="line2">Firma del CLIENTE</div></div>
-    <div class="box"><div>.</div><div class="line2">Sello y firma — ${escHTML(biz)}</div></div>
-  </div>
-  <div class="foot">Documento generado por el portal web de CotizaTec — No. ${doc.number} · Plantilla v1.0</div>
+  ${body}
+  <div class="foot">Documento generado por el portal web de CotizaTec — No. ${doc.number} · Plantilla v${doc.templateVersion || '1.0'}</div>
 </body></html>`;
 }
 function escHTML(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]; }); }
@@ -393,8 +480,12 @@ app.post('/api/client/documents', async (req, res) => {
     if (type === 'carta-saldo' && (t.balance > 0 || job.status === 'COTIZADO')) {
       return res.status(400).json({ error: 'La Carta de Saldo solo se emite para trabajos totalmente cobrados (saldo RD$ 0).' });
     }
-    if (type === 'debo-pagare' && t.balance <= 0) {
-      return res.status(400).json({ error: 'El Debo y Pagaré requiere un saldo pendiente mayor a RD$ 0.' });
+    if (DOC_REQUIRES_PENDING[type] && t.balance <= 0) {
+      return res.status(400).json({ error: 'Este documento requiere un trabajo con saldo pendiente mayor a RD$ 0.' });
+    }
+    const bien = String(req.body.bien || '').trim();
+    if (DOC_REQUIRES_BIEN[type] && !bien) {
+      return res.status(400).json({ error: 'Indica la descripción del bien que respalda la garantía.' });
     }
     const doc = {
       id: 'doc-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -421,7 +512,9 @@ app.post('/api/client/documents', async (req, res) => {
         total: t.total,
         collected: t.collected,
         balance: t.balance,
-        fechaPago: null
+        bien: bien,
+        fechaPago: req.body.fechaPago || null,
+        testigos: Array.isArray(req.body.testigos) ? req.body.testigos.slice(0, 5).map((w) => ({ name: String((w && w.name) || '').trim(), doc: String((w && w.doc) || '').trim() })).filter((w) => w.name) : []
       }
     };
     store.addDocument(doc);

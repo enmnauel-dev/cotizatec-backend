@@ -111,6 +111,7 @@
   .doc-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
   .doc-item:last-child { border-bottom: none; }
   .doc-soon { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+  .doc-lbl { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -188,6 +189,7 @@
       <div class="modal" id="doc-modal" style="display:none">
         <div class="modal-box">
           <div style="font-weight:700; margin-bottom:6px" id="doc-modal-title">Generar documento</div>
+          <div id="doc-fields"></div>
           <input type="text" id="doc-search" placeholder="Buscar cliente o operación…" style="width:100%;margin-bottom:8px">
           <div id="doc-jobs" style="max-height:220px;overflow:auto;margin-bottom:10px"></div>
           <div class="msg err" id="doc-err" style="display:none;margin-bottom:8px"></div>
@@ -419,16 +421,40 @@ async function doChangePass() {
 // (cliente, trabajo, montos, saldo). 'Carta de Saldo' y 'Debo y Pagaré' ya
 // se pueden generar; los demás llegan como próximamente.
 const DOC_TYPES = [
-  { key: 'testigos', icon: '🪪', name: 'Testigos', desc: 'Registrar nombres, documentos de identidad y firmas de los testigos que validan un contrato o pagaré.', enabled: false },
-  { key: 'pagare-notarial', icon: '🏛️', name: 'Pagaré Notarial', desc: 'Deuda formalizada ante notario con fuerza ejecutiva para cobro judicial.', enabled: false },
-  { key: 'pagare-garantia', icon: '🛡️', name: 'Pagaré con Garantía', desc: 'Compromiso de pago respaldado por un bien (vehículo, propiedad, electrodoméstico).', enabled: false },
-  { key: 'entrega-voluntaria', icon: '🤝', name: 'Entrega Voluntaria', desc: 'Acuerdo de entrega voluntaria del bien para saldar la deuda sin juicio.', enabled: false },
-  { key: 'debo-pagare', icon: '📝', name: 'Debo y Pagaré', desc: 'Promesa simple y formal de pago con monto y fecha de cumplimiento.', enabled: true },
-  { key: 'debo-pagare-garantia', icon: '🔐', name: 'Debo y Pagaré con Garantía', desc: 'Compromiso de pago incluyendo una prenda o bien como aval.', enabled: false },
-  { key: 'intimacion', icon: '📩', name: 'Intimación de Pago', desc: 'Notificación legal de cobro por cuotas vencidas antes de una demanda.', enabled: false },
+  { key: 'testigos', icon: '🪪', name: 'Testigos', desc: 'Registrar nombres, documentos de identidad y firmas de los testigos que validan un contrato o pagaré.', enabled: true, needs: 'testigos' },
+  { key: 'pagare-notarial', icon: '🏛️', name: 'Pagaré Notarial', desc: 'Deuda formalizada ante notario con fuerza ejecutiva para cobro judicial.', enabled: true, needs: 'fecha' },
+  { key: 'pagare-garantia', icon: '🛡️', name: 'Pagaré con Garantía', desc: 'Compromiso de pago respaldado por un bien (vehículo, propiedad, electrodoméstico).', enabled: true, needs: 'bien' },
+  { key: 'entrega-voluntaria', icon: '🤝', name: 'Entrega Voluntaria', desc: 'Acuerdo de entrega voluntaria del bien para saldar la deuda sin juicio.', enabled: true, needs: 'bien' },
+  { key: 'debo-pagare', icon: '📝', name: 'Debo y Pagaré', desc: 'Promesa simple y formal de pago con monto y fecha de cumplimiento.', enabled: true, needs: 'fecha' },
+  { key: 'debo-pagare-garantia', icon: '🔐', name: 'Debo y Pagaré con Garantía', desc: 'Compromiso de pago incluyendo una prenda o bien como aval.', enabled: true, needs: 'bienfecha' },
+  { key: 'intimacion', icon: '📩', name: 'Intimación de Pago', desc: 'Notificación legal de cobro por cuotas vencidas antes de una demanda.', enabled: true },
   { key: 'carta-saldo', icon: '✅', name: 'Carta de Saldo', desc: 'Certificación de finiquito: el cliente pagó la totalidad y queda libre.', enabled: true }
 ];
-const DOC_SERVERS = { 'debo-pagare': 'debo-pagare', 'carta-saldo': 'carta-saldo' };
+const BIEN_TYPES = { 'pagare-garantia': true, 'entrega-voluntaria': true, 'debo-pagare-garantia': true };
+const FECHA_TYPES = { 'pagare-notarial': true, 'debo-pagare': true, 'debo-pagare-garantia': true };
+const PENDING_TYPES = { 'testigos': false, 'carta-saldo': false, 'debo-pagare': true, 'pagare-notarial': true, 'pagare-garantia': true, 'debo-pagare-garantia': true, 'entrega-voluntaria': true, 'intimacion': true };
+
+function docFieldsHTML(type) {
+  let h = '';
+  if (BIEN_TYPES[type]) {
+    h += '<label class="doc-lbl" for="doc-bien">Bien en garantía</label>' +
+      '<textarea id="doc-bien" rows="2" placeholder="Ej.: Vehículo Toyota Corolla 2018, chasis No. ________" style="width:100%;margin-bottom:8px"></textarea>';
+  }
+  if (FECHA_TYPES[type]) {
+    h += '<label class="doc-lbl" for="doc-fecha">Fecha límite de pago (opcional)</label>' +
+      '<input type="date" id="doc-fecha" style="width:100%;margin-bottom:8px">';
+  }
+  if (type === 'testigos') {
+    h += '<label class="doc-lbl">Testigos (hasta 5)</label>';
+    for (let i = 1; i <= 5; i++) {
+      h += '<div style="display:flex;gap:6px;margin-bottom:4px">' +
+        '<input type="text" id="doc-tw' + i + '" placeholder="Nombre del testigo ' + i + '" style="flex:1;min-width:0">' +
+        '<input type="text" id="doc-td' + i + '" placeholder="Cédula" style="width:130px">' +
+      '</div>';
+    }
+  }
+  return h;
+}
 
 function renderDocs(modules) {
   const has = (modules || []).indexOf('documentos') !== -1;
@@ -464,6 +490,7 @@ function openDocModal(type) {
   const title = document.getElementById('doc-modal-title');
   const found = DOC_TYPES.filter(function (d) { return d.key === type; })[0];
   title.textContent = 'Generar — ' + (found ? found.name : type);
+  document.getElementById('doc-fields').innerHTML = docFieldsHTML(type);
   document.getElementById('doc-modal').style.display = 'block';
   document.getElementById('doc-jobs').innerHTML = '<div class="muted">Cargando datos…</div>';
   api('/api/client/data').then(function (j) {
@@ -488,7 +515,7 @@ function renderDocJobs() {
   const q = (document.getElementById('doc-search').value || '').toLowerCase().trim();
   const list = docJobs.filter(function (job) {
     if (docType === 'carta-saldo' && job.balance > 0) return false;
-    if (docType === 'debo-pagare' && job.balance <= 0) return false;
+    if (PENDING_TYPES[docType] && job.balance <= 0) return false;
     if (q && (job.clientName || '').toLowerCase().indexOf(q) === -1 && (job.code || '').toLowerCase().indexOf(q) === -1) return false;
     return true;
   });
@@ -518,8 +545,26 @@ function docPickJob(id) {
 
 function doGenDoc() {
   if (!docType || !docSelJob) { showDocErr('Selecciona un trabajo.'); return; }
+  const body = { type: docType, jobId: docSelJob.id };
+  if (BIEN_TYPES[docType]) {
+    const bien = (document.getElementById('doc-bien').value || '').trim();
+    if (!bien) { showDocErr('Indica el bien que respalda la garantía.'); return; }
+    body.bien = bien;
+  }
+  if (FECHA_TYPES[docType]) {
+    const fecha = document.getElementById('doc-fecha').value;
+    if (fecha) body.fechaPago = new Date(fecha).toISOString();
+  }
+  if (docType === 'testigos') {
+    const testigos = [];
+    for (let i = 1; i <= 5; i++) {
+      const name = (document.getElementById('doc-tw' + i).value || '').trim();
+      if (name) testigos.push({ name: name, doc: (document.getElementById('doc-td' + i).value || '').trim() });
+    }
+    body.testigos = testigos;
+  }
   showDocErr('Generando…');
-  api('/api/client/documents', { method: 'POST', body: JSON.stringify({ type: docType, jobId: docSelJob.id }) })
+  api('/api/client/documents', { method: 'POST', body: JSON.stringify(body) })
     .then(function (r) {
       if (!r || !r.ok || !r.html) { showDocErr((r && r.error) || 'No se pudo generar el documento.'); return; }
       printDocHTML(r.html);
