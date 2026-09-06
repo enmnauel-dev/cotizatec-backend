@@ -514,7 +514,8 @@ app.post('/api/client/documents', async (req, res) => {
         balance: t.balance,
         bien: bien,
         fechaPago: req.body.fechaPago || null,
-        testigos: Array.isArray(req.body.testigos) ? req.body.testigos.slice(0, 5).map((w) => ({ name: String((w && w.name) || '').trim(), doc: String((w && w.doc) || '').trim() })).filter((w) => w.name) : []
+        testigos: Array.isArray(req.body.testigos) ? req.body.testigos.slice(0, 5).map((w) => ({ name: String((w && w.name) || '').trim(), doc: String((w && w.doc) || '').trim() })).filter((w) => w.name) : [],
+        ciudad: String(req.body.ciudad || '').trim() || null
       }
     };
     store.addDocument(doc);

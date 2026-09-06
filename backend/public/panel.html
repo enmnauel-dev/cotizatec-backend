@@ -511,7 +511,8 @@ const FECHA_TYPES = { 'pagare-notarial': true, 'debo-pagare': true, 'debo-pagare
 const PENDING_TYPES = { 'testigos': false, 'carta-saldo': false, 'debo-pagare': true, 'pagare-notarial': true, 'pagare-garantia': true, 'debo-pagare-garantia': true, 'entrega-voluntaria': true, 'intimacion': true };
 
 function docFieldsHTML(type) {
-  let h = '';
+  let h = '<label class="doc-lbl" for="doc-ciudad">Lugar donde se firma y sella</label>' +
+    '<input type="text" id="doc-ciudad" placeholder="Ej. Santiago de los Caballeros" style="width:100%;margin-bottom:8px">';
   if (BIEN_TYPES[type]) {
     h += '<label class="doc-lbl" for="doc-bien">Bien en garantía</label>' +
       '<textarea id="doc-bien" rows="2" placeholder="Ej.: Vehículo Toyota Corolla 2018, chasis No. ________" style="width:100%;margin-bottom:8px"></textarea>';
@@ -625,7 +626,9 @@ function docPickJob(id) {
 
 function doGenDoc() {
   if (!docType || !docSelJob) { showDocErr('Selecciona un trabajo.'); return; }
-  const body = { type: docType, jobId: docSelJob.id };
+const body = { type: docType, jobId: docSelJob.id };
+  const ciudad = (document.getElementById('doc-ciudad').value || '').trim();
+  if (ciudad) body.ciudad = ciudad;
   if (BIEN_TYPES[docType]) {
     const bien = (document.getElementById('doc-bien').value || '').trim();
     if (!bien) { showDocErr('Indica el bien que respalda la garantía.'); return; }
