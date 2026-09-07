@@ -503,7 +503,6 @@ async function api(path, opts) {
   const r = await fetch(API + path, o);
   let j = null;
   try { j = await r.json(); } catch (e) {}
-  if (!r.ok) { const msg = (j && j.error) || 'Error del servidor'; } 
   return j;
 }
 
@@ -519,20 +518,27 @@ function showDash() {
 async function doLogin() {
   const user = document.getElementById('login-user').value.trim();
   const pass = document.getElementById('login-pass').value;
-  document.getElementById('login-msg').textContent = '';
-  if (!user || !pass) { document.getElementById('login-msg').textContent = 'Escribe usuario y contraseña.'; return; }
+  const msg = document.getElementById('login-msg');
+  msg.textContent = '';
+  if (!user || !pass) { msg.textContent = 'Escribe usuario y contraseña.'; return; }
   setLoginLoading(true);
-  const j = await api('/api/client/login', { method: 'POST', body: JSON.stringify({ username: user, password: pass }) });
-  setLoginLoading(false);
-  if (!j || !j.ok) {
-    document.getElementById('login-msg').textContent = (j && j.error) || 'No se pudo iniciar sesión.';
-    return;
+  try {
+    const j = await api('/api/client/login', { method: 'POST', body: JSON.stringify({ username: user, password: pass }) });
+    setLoginLoading(false);
+    if (!j || !j.ok) {
+      msg.textContent = (j && j.error) || 'No se pudo iniciar sesión.';
+      return;
+    }
+    token = j.token;
+    localStorage.setItem('ct_token', token);
+    document.getElementById('dash-name').textContent = j.name || user;
+    initUsers(j.role);
+    showDash();
+    await loadReport();
+  } catch (e) {
+    setLoginLoading(false);
+    msg.textContent = 'Error de conexión. Verifica tu internet.';
   }
-  token = j.token;
-  localStorage.setItem('ct_token', token);
-  document.getElementById('dash-name').textContent = j.name || user;
-  initUsers(j.role);
-  await loadReport();
 }
 
 function openChangePass() {  const card = document.getElementById('change-pass-card');
@@ -1033,6 +1039,11 @@ function doLogout() {
 
 // Iniciar automáticamente si ya hay sesión, o en modo VISTA administrativa (#view=)
 window.addEventListener('DOMContentLoaded', function () {
+  var loginUser = document.getElementById('login-user');
+  var loginPass = document.getElementById('login-pass');
+  if (loginUser) loginUser.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } });
+  if (loginPass) loginPass.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } });
+
   const vp = new URLSearchParams(location.hash.replace(/^#/, '')).get('view');
   if (vp) {
     // Vista como cliente (administrador): solo lectura, no persiste sesión
