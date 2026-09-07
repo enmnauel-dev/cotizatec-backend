@@ -404,6 +404,30 @@
           </div>
         </div>
       </div>
+
+      <div class="mod-panel" id="mod-finanzas">
+        <div class="card">
+          <div style="font-weight:700;margin-bottom:4px">💰 Finanzas</div>
+          <div class="muted" style="font-size:12px;margin-bottom:10px">Vista financiera de tu negocio con detalle por operación.</div>
+          <div class="grid2">
+            <div class="stat c-green"><div class="l">Ventas</div><div class="v" id="f-ventas">0</div></div>
+            <div class="stat c-blue"><div class="l">Cotizaciones</div><div class="v" id="f-cotizaciones">0</div></div>
+            <div class="stat c-green"><div class="l">Cobrado</div><div class="v" id="f-cobrado">RD$ 0</div></div>
+            <div class="stat c-amber"><div class="l">Por cobrar</div><div class="v" id="f-porcobrar">RD$ 0</div></div>
+            <div class="stat c-purple"><div class="l">Ganancia neta</div><div class="v" id="f-ganancia">RD$ 0</div></div>
+            <div class="stat c-red"><div class="l">Gastado (costo)</div><div class="v" id="f-gastado">RD$ 0</div></div>
+          </div>
+          <div style="margin-top:10px">
+            <div class="t-row"><span>Facturado total</span><b id="f-facturado">RD$ 0</b></div>
+            <div class="t-row"><span>Trabajos totales</span><b id="f-trabajos">0</b></div>
+            <div class="t-row"><span>Con saldo pendiente</span><b id="f-pendientes">0</b></div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="font-weight:700;margin-bottom:8px">Últimas operaciones</div>
+          <div id="f-rec"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -668,7 +692,8 @@ let activeMod = null;
 const MOD_DEFS = [
   { key: 'docs', icon: '📄', label: 'Documentos', render: renderDocsContent },
   { key: 'gps', icon: '📡', label: 'GPS', render: renderGpsContent },
-  { key: 'contab', icon: '📒', label: 'Contabilidad', render: renderContabContent }
+  { key: 'contab', icon: '📒', label: 'Contabilidad', render: renderContabContent },
+  { key: 'finanzas', icon: '💰', label: 'Finanzas', render: renderFinanzasContent }
 ];
 
 function renderModTabs(modules, report) {
@@ -680,6 +705,7 @@ function renderModTabs(modules, report) {
     if (m.key === 'docs') return mods.indexOf('documentos') !== -1;
     if (m.key === 'gps') return mods.indexOf('gps') !== -1;
     if (m.key === 'contab') return mods.indexOf('contabilidad') !== -1;
+    if (m.key === 'finanzas') return mods.indexOf('finanzas') !== -1;
     return false;
   });
   if (!available.length) { section.style.display = 'none'; return; }
@@ -743,6 +769,32 @@ function renderContabContent(report) {
   if (el('c-margen')) {
     const pct = t.facturado > 0 ? Math.round((t.ganancia / t.facturado) * 100) : 0;
     el('c-margen').textContent = pct + '%';
+  }
+}
+
+function renderFinanzasContent(report) {
+  if (!report) return;
+  const t = report.totals || {};
+  const el = function (id) { return document.getElementById(id); };
+  if (el('f-facturado')) el('f-facturado').textContent = money(t.facturado || 0);
+  if (el('f-cobrado')) el('f-cobrado').textContent = money(t.cobrado || 0);
+  if (el('f-porcobrar')) el('f-porcobrar').textContent = money(t.porCobrar || 0);
+  if (el('f-ganancia')) el('f-ganancia').textContent = money(t.ganancia || 0);
+  if (el('f-gastado')) el('f-gastado').textContent = money(t.gastado || 0);
+  if (el('f-trabajos')) el('f-trabajos').textContent = t.trabajos || 0;
+  if (el('f-pendientes')) el('f-pendientes').textContent = t.pendientes || 0;
+  if (el('f-ventas')) el('f-ventas').textContent = t.ventas || 0;
+  if (el('f-cotizaciones')) el('f-cotizaciones').textContent = t.cotizaciones || 0;
+  if (el('f-rec')) {
+    const rec = report.recent || [];
+    el('f-rec').innerHTML = rec.slice(0, 10).map(function (r) {
+      const st = (r.status || '').toUpperCase();
+      const cls = st === 'CANCELADO' ? 'red' : st === 'COBRADO' ? 'green' : st === 'TRABAJANDO' ? 'amber' : 'gray';
+      return '<div class="recent-item"><div class="head"><span>' + esc(r.client) + '</span><span class="pill ' + cls + '">' + st + '</span></div>'
+        + '<div class="t-row"><span>Total</span><b>' + money(r.total) + '</b></div>'
+        + (r.balance > 0 ? '<div class="t-row"><span style="color:var(--red)">Saldo</span><b style="color:var(--red)">' + money(r.balance) + '</b></div>' : '')
+        + '</div>';
+    }).join('') || '<div class="empty">Sin operaciones recientes.</div>';
   }
 }
 
