@@ -152,6 +152,43 @@
     .grid2 { grid-template-columns: 1fr; }
     #docs-list { grid-template-columns: 1fr; }
   }
+  /* Login mejorado */
+  .login-wrap { max-width: 420px; margin: 48px auto 0; }
+  .login-card { padding: 32px; }
+  .login-header { text-align: center; margin-bottom: 28px; }
+  .login-brand {
+    font-size: 2rem; font-weight: 900; letter-spacing: 1px;
+    background: linear-gradient(90deg, #00f0ff, #8b5cf6);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent; -webkit-text-fill-color: transparent;
+  }
+  .login-sub { color: #8ea0bb; font-size: .9rem; margin-top: 4px; }
+  .input-group { position: relative; margin-bottom: 16px; }
+  .input-group label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #8ea0bb; margin-bottom: 6px; display: block; }
+  .input-icon-wrap { position: relative; }
+  .input-icon-wrap input { padding-left: 42px; width: 100%; padding: 13px 12px 13px 42px; border: 1px solid rgba(157,176,201,.25); border-radius: 12px; font-size: 15px; background: rgba(8,12,24,.72); color: var(--ink); outline: none; transition: border-color .2s, box-shadow .2s; }
+  .input-icon-wrap input:focus { border-color: rgba(0,240,255,.8); box-shadow: 0 0 0 3px rgba(0,240,255,.12); }
+  .input-icon-wrap input::placeholder { color: #5a6d85; }
+  .input-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: #5a6d85; pointer-events: none; transition: color .2s; }
+  .input-icon-wrap input:focus ~ .input-icon { color: #00f0ff; }
+  .pwd-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #5a6d85; cursor: pointer; padding: 4px; display: flex; transition: color .2s; }
+  .pwd-toggle:hover { color: #00f0ff; }
+  .pwd-toggle svg { width: 18px; height: 18px; }
+  .login-btn {
+    width: 100%; padding: 14px; border: none; border-radius: 14px; font-size: 1rem; font-weight: 700; cursor: pointer;
+    background: linear-gradient(135deg, #00f0ff, #8b5cf6); color: #fff;
+    box-shadow: 0 0 20px rgba(0,240,255,.3); transition: all .25s ease; margin-top: 6px;
+  }
+  .login-btn:hover { box-shadow: 0 0 30px rgba(0,240,255,.55); transform: translateY(-2px); }
+  .login-btn:active { transform: translateY(0) scale(.98); }
+  .login-btn:disabled { opacity: .6; cursor: wait; transform: none; }
+  .login-footer {
+    text-align: center; margin-top: 20px; padding: 10px 16px; border-radius: 10px;
+    background: rgba(59,130,246,.08); border: 1px solid rgba(59,130,246,.2);
+    font-size: 12px; color: #7da2c7; line-height: 1.5;
+  }
+  .login-footer b { color: #93c5fd; }
+
   @media print {
     body { background: #fff !important; color: #000 !important; }
     .tech-bg { display: none !important; }
@@ -180,18 +217,38 @@
 
   <!-- LOGIN -->
   <div id="auth-view">
-    <div class="auth-title">CotizaTec</div>
-    <div class="auth-sub">Accede a tus ventas y reportes</div>
-    <div class="card">
-      <div id="tab-login-pane">
-        <label>Usuario</label>
-        <input type="text" id="login-user" autocomplete="username" placeholder="Tu usuario">
-        <label>Contraseña</label>
-        <input type="password" id="login-pass" autocomplete="current-password" placeholder="Tu contraseña">
-        <div style="height:14px"></div>
-        <button class="btn primary" onclick="doLogin()">Entrar</button>
-        <div class="msg err" id="login-msg"></div>
-        <div class="hint">Tu cuenta fue creada por el administrador. Si aún no tienes usuario y contraseña, pídelos al administrador.</div>
+    <div class="login-wrap">
+      <div class="login-header">
+        <div class="login-brand">CotizaTec</div>
+        <div class="login-sub">Accede a tus ventas y reportes</div>
+      </div>
+      <div class="card login-card">
+        <div id="tab-login-pane">
+          <div class="input-group">
+            <label>Usuario</label>
+            <div class="input-icon-wrap">
+              <input type="text" id="login-user" autocomplete="username" placeholder="Ingresa tu usuario">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+          </div>
+          <div class="input-group">
+            <label>Contraseña</label>
+            <div class="input-icon-wrap">
+              <input type="password" id="login-pass" autocomplete="current-password" placeholder="Escribe tu contraseña">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <button type="button" class="pwd-toggle" onclick="toggleLoginPwd()" aria-label="Mostrar contraseña">
+                <svg id="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg id="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+          </div>
+          <button class="login-btn" id="login-btn" onclick="doLogin()">Entrar</button>
+          <div class="msg err" id="login-msg"></div>
+        </div>
+      </div>
+      <div class="login-footer">
+        <b>Tu cuenta fue creada por el administrador.</b><br>
+        Si aún no tienes usuario y contraseña, contacta a tu administrador.
       </div>
     </div>
   </div>
@@ -395,6 +452,19 @@ function doPrint() {
   pd.textContent = new Date().toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' });
   window.print();
 }
+function toggleLoginPwd() {
+  const inp = document.getElementById('login-pass');
+  const eo = document.getElementById('eye-open');
+  const ec = document.getElementById('eye-closed');
+  if (inp.type === 'password') { inp.type = 'text'; eo.style.display = 'none'; ec.style.display = 'block'; }
+  else { inp.type = 'password'; eo.style.display = 'block'; ec.style.display = 'none'; }
+}
+function setLoginLoading(on) {
+  const btn = document.getElementById('login-btn');
+  if (!btn) return;
+  btn.disabled = on;
+  btn.textContent = on ? 'Entrando…' : 'Entrar';
+}
 function drawChart(series) {
   const cv = document.getElementById('chart');
   if (!cv || !series || !series.length) return;
@@ -451,7 +521,9 @@ async function doLogin() {
   const pass = document.getElementById('login-pass').value;
   document.getElementById('login-msg').textContent = '';
   if (!user || !pass) { document.getElementById('login-msg').textContent = 'Escribe usuario y contraseña.'; return; }
+  setLoginLoading(true);
   const j = await api('/api/client/login', { method: 'POST', body: JSON.stringify({ username: user, password: pass }) });
+  setLoginLoading(false);
   if (!j || !j.ok) {
     document.getElementById('login-msg').textContent = (j && j.error) || 'No se pudo iniciar sesión.';
     return;
