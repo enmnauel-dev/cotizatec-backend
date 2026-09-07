@@ -428,6 +428,21 @@
           <div id="f-rec"></div>
         </div>
       </div>
+
+      <div class="mod-panel" id="mod-garantias">
+        <div class="card">
+          <div style="font-weight:700;margin-bottom:4px">🛡️ Garantías</div>
+          <div class="muted" style="font-size:12px;margin-bottom:10px">Operaciones con saldo pendiente que cuentan con garantía respaldatoria.</div>
+          <div class="grid2">
+            <div class="stat c-amber"><div class="l">Con saldo</div><div class="v" id="g-count">0</div></div>
+            <div class="stat c-red"><div class="l">Total pendiente</div><div class="v" id="g-monto">RD$ 0</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="font-weight:700;margin-bottom:8px">Operaciones con garantía</div>
+          <div id="g-list"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -693,7 +708,8 @@ const MOD_DEFS = [
   { key: 'docs', icon: '📄', label: 'Documentos', render: renderDocsContent },
   { key: 'gps', icon: '📡', label: 'GPS', render: renderGpsContent },
   { key: 'contab', icon: '📒', label: 'Contabilidad', render: renderContabContent },
-  { key: 'finanzas', icon: '💰', label: 'Finanzas', render: renderFinanzasContent }
+  { key: 'finanzas', icon: '💰', label: 'Finanzas', render: renderFinanzasContent },
+  { key: 'garantias', icon: '🛡️', label: 'Garantías', render: renderGarantiasContent }
 ];
 
 function renderModTabs(modules, report) {
@@ -706,6 +722,7 @@ function renderModTabs(modules, report) {
     if (m.key === 'gps') return mods.indexOf('gps') !== -1;
     if (m.key === 'contab') return mods.indexOf('contabilidad') !== -1;
     if (m.key === 'finanzas') return mods.indexOf('finanzas') !== -1;
+    if (m.key === 'garantias') return mods.indexOf('garantias') !== -1;
     return false;
   });
   if (!available.length) { section.style.display = 'none'; return; }
@@ -795,6 +812,38 @@ function renderFinanzasContent(report) {
         + (r.balance > 0 ? '<div class="t-row"><span style="color:var(--red)">Saldo</span><b style="color:var(--red)">' + money(r.balance) + '</b></div>' : '')
         + '</div>';
     }).join('') || '<div class="empty">Sin operaciones recientes.</div>';
+  }
+}
+
+function renderGarantiasContent(report) {
+  if (!report) return;
+  const el = function (id) { return document.getElementById(id); };
+  const rec = report.recent || [];
+  const garantias = rec.filter(function (r) { return r.balance > 0; });
+  if (el('g-count')) el('g-count').textContent = garantias.length;
+  if (el('g-monto')) {
+    const total = garantias.reduce(function (s, r) { return s + (r.balance || 0); }, 0);
+    el('g-monto').textContent = money(total);
+  }
+  if (el('g-list')) {
+    if (!garantias.length) {
+      el('g-list').innerHTML = '<div class="empty">No hay operaciones con saldo pendiente.</div>';
+      return;
+    }
+    el('g-list').innerHTML = garantias.map(function (r) {
+      const st = (r.status || '').toUpperCase();
+      const cls = st === 'CANCELADO' ? 'red' : st === 'COBRADO' ? 'green' : st === 'TRABAJANDO' ? 'amber' : 'gray';
+      return '<div class="doc-item">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-weight:600;font-size:14px">' + esc(r.client) + ' <span class="pill ' + cls + '">' + st + '</span></div>' +
+          '<div class="muted" style="font-size:12px">Total: ' + money(r.total) + '</div>' +
+        '</div>' +
+        '<div style="text-align:right">' +
+          '<div style="font-weight:700;color:#fca5a5">' + money(r.balance) + '</div>' +
+          '<div class="muted" style="font-size:11px">pendiente</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
   }
 }
 
