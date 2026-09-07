@@ -199,11 +199,15 @@ async function loadFromPg() {
     const clients = await pgGet('clients');
     const blocked = await pgGet('blocked');
     const gps = await pgGet('gps');
+    const webAccounts = await pgGet('webAccounts');
+    const documents = await pgGet('documents');
     if (devices) cache.devices = devices;
     if (licenses) cache.licenses = licenses;
     if (clients) cache.clients = clients;
     if (blocked) cache.blocked = blocked;
     if (gps) cache.gps = gps;
+    if (webAccounts) cache.webAccounts = webAccounts;
+    if (documents) cache.documents = documents;
     if (!cache.blocked) cache.blocked = {};
   } catch (e) {
     console.error('[pg] load:', e.message);
