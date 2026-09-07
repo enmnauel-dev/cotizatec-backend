@@ -539,8 +539,7 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
               '<span class="chip ' + (active ? 'active' : 'inactive') + '">' + (active ? '● Activo' : '○ Inactivo') + '</span>' +
               '<div class="ua-actions">' +
                 '<button class="btn small ' + (active ? 'red' : 'green') + '" onclick="uaToggle(\'' + u.userId + '\')">' + (active ? 'Desactivar' : 'Activar') + '</button>' +
-                '<button class="btn small blue" onclick="uaEditModal(' + JSON.stringify(u.userId) + ',' + JSON.stringify(u.name) + ',' + JSON.stringify(u.username) + ')">Editar</button>' +
-                '<button class="btn small yellow" onclick="uaReset(' + JSON.stringify(u.userId) + ')">Resetear clave</button>' +
+                '<button class="btn small yellow" onclick="uaReset(\'' + u.userId + '\')">Resetear clave</button>' +
               '</div></div>';
           }).join('');
         }
