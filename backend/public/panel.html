@@ -313,21 +313,6 @@
         <div class="cmp-txt" id="cmp-msg"></div>
       </div>
 
-      <!-- Modal: selector de cliente/trabajo para generar documento -->
-      <div class="modal" id="doc-modal" style="display:none">
-        <div class="modal-box">
-          <div style="font-weight:700; margin-bottom:6px" id="doc-modal-title">Generar documento</div>
-          <div id="doc-fields"></div>
-          <input type="text" id="doc-search" placeholder="Buscar cliente o operación…" style="width:100%;margin-bottom:8px">
-          <div id="doc-jobs" style="max-height:220px;overflow:auto;margin-bottom:10px"></div>
-          <div class="msg err" id="doc-err" style="display:none;margin-bottom:8px"></div>
-          <div style="display:flex;gap:8px">
-            <button class="btn" id="doc-gen" onclick="doGenDoc()" style="flex:1">Generar documento</button>
-            <button class="btn-out" onclick="closeDocModal()">Cancelar</button>
-          </div>
-        </div>
-      </div>
-
       <div class="grid2">
         <div class="stat c-green"><div class="l">Ventas</div><div class="v" id="s-ventas">0</div></div>
         <div class="stat c-blue"><div class="l">Cotizaciones</div><div class="v" id="s-cotizaciones">0</div></div>
@@ -418,6 +403,21 @@
             <div class="t-row"><span>Margen bruto</span><b id="c-margen">0%</b></div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal documento (fuera de dash-content para que siempre funcione) -->
+  <div class="modal" id="doc-modal" style="display:none">
+    <div class="modal-box">
+      <div style="font-weight:700; margin-bottom:6px" id="doc-modal-title">Generar documento</div>
+      <div id="doc-fields"></div>
+      <input type="text" id="doc-search" placeholder="Buscar cliente o operación…" style="width:100%;margin-bottom:8px">
+      <div id="doc-jobs" style="max-height:220px;overflow:auto;margin-bottom:10px"></div>
+      <div class="msg err" id="doc-err" style="display:none;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" id="doc-gen" onclick="doGenDoc()" style="flex:1">Generar documento</button>
+        <button class="btn-out" onclick="closeDocModal()">Cancelar</button>
       </div>
     </div>
   </div>
