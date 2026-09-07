@@ -146,6 +146,22 @@
   #view-banner { background: linear-gradient(135deg, #1e1b4b, #312e81) !important; border: 1px solid rgba(109,95,245,.65) !important; color: #c7d2fe !important; border-radius: 12px !important; }
   .print-header { display: none; }
 
+  /* Módulos — tabs */
+  #mods-section { display: none; }
+  .mod-tabs { display: flex; gap: 4px; background: rgba(148,163,184,.08); border-radius: 14px; padding: 4px; margin-bottom: 0; overflow-x: auto; }
+  .mod-tab {
+    flex: 1; min-width: 0; border: none; background: transparent; padding: 10px 14px; border-radius: 11px;
+    font-weight: 600; font-size: 13px; color: #8ea0bb; cursor: pointer; white-space: nowrap;
+    transition: all .2s ease; display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .mod-tab:hover { color: #c4d0e0; background: rgba(255,255,255,.04); }
+  .mod-tab.on { background: rgba(0,240,255,.1); color: #7df5ff; box-shadow: 0 0 12px rgba(0,240,255,.15); }
+  .mod-tab .tab-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .5; }
+  .mod-tab.on .tab-dot { opacity: 1; background: #00f0ff; }
+  .mod-panel { display: none; }
+  .mod-panel.active { display: block; }
+  .mod-panel .card { margin-top: 10px; }
+
 @media (max-width: 560px) {
     .top { padding: 16px; }
     .top h1 { font-size: 1.15rem; }
@@ -205,6 +221,7 @@
     .trend { color: #000 !important; }
     .doc-chev { display: none !important; }
     .btn-out, .btn, .top { display: none !important; }
+    .mod-tabs { display: none !important; }
     .print-header { display: block !important; text-align: center; margin-bottom: 14px; }
     .print-header h1 { margin: 0; font-size: 18px; color: #000; }
     .print-header .sub { font-size: 12px; color: #555; }
@@ -296,37 +313,45 @@
         <div class="cmp-txt" id="cmp-msg"></div>
       </div>
 
-<!-- Documentos (catálogo del portal web) -->
-      <div class="card" id="docs-card" style="display:none">
-        <div style="font-weight:700; margin-bottom:4px">📄 Documentos</div>
-        <div class="muted" style="font-size:12px; margin-bottom:10px">Centro de gestión de documentos del negocio. Se generarán con los datos de tus clientes y trabajos.</div>
-        <div id="docs-list"></div>
-      </div>
+<!-- Módulos: Documentos / GPS / Contabilidad -->
+      <div id="mods-section">
+        <div class="mod-tabs" id="mod-tabs"></div>
 
-      <!-- GPS / Flota -->
-      <div class="card" id="gps-card" style="display:none">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px">
-          <div style="font-weight:700">📡 GPS — Flota</div>
-          <button class="doc-soon go" onclick="refreshGps()">Actualizar</button>
+        <div class="mod-panel" id="mod-docs">
+          <div class="card">
+            <div style="font-weight:700;margin-bottom:4px">📄 Documentos</div>
+            <div class="muted" style="font-size:12px;margin-bottom:10px">Gestión de documentos del negocio. Se generan con los datos de tus clientes y trabajos.</div>
+            <div id="docs-list"></div>
+          </div>
         </div>
-        <div class="muted" style="font-size:12px;margin-bottom:10px">Ubicación en tiempo real de los operadores que usan la app en los vehículos de la flota. Se actualiza cada 30 segundos.</div>
-        <div id="gps-list"></div>
-      </div>
 
-      <!-- Contabilidad -->
-      <div class="card" id="contab-card" style="display:none">
-        <div style="font-weight:700;margin-bottom:4px">📒 Contabilidad</div>
-        <div class="muted" style="font-size:12px;margin-bottom:10px">Resumen financiero de tu negocio. Ingresos, gastos y ganancias.</div>
-        <div class="grid2">
-          <div class="stat c-green"><div class="l">Ingresos totales</div><div class="v" id="c-ingresos">RD$ 0</div></div>
-          <div class="stat c-red"><div class="l">Gastos (costo)</div><div class="v" id="c-gastos">RD$ 0</div></div>
-          <div class="stat c-purple"><div class="l">Ganancia neta</div><div class="v" id="c-ganancia">RD$ 0</div></div>
-          <div class="stat c-blue"><div class="l">Por cobrar</div><div class="v" id="c-porcobrar">RD$ 0</div></div>
+        <div class="mod-panel" id="mod-gps">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px">
+              <div style="font-weight:700">📡 GPS — Flota</div>
+              <button class="doc-soon go" onclick="refreshGps()">Actualizar</button>
+            </div>
+            <div class="muted" style="font-size:12px;margin-bottom:10px">Ubicación en tiempo real de los operadores. Se actualiza cada 30 segundos.</div>
+            <div id="gps-list"></div>
+          </div>
         </div>
-        <div style="margin-top:10px">
-          <div class="t-row"><span>Cobrado</span><b id="c-cobrado">RD$ 0</b></div>
-          <div class="t-row"><span>Facturado (total)</span><b id="c-facturado">RD$ 0</b></div>
-          <div class="t-row"><span>Margen bruto</span><b id="c-margen">0%</b></div>
+
+        <div class="mod-panel" id="mod-contab">
+          <div class="card">
+            <div style="font-weight:700;margin-bottom:4px">📒 Contabilidad</div>
+            <div class="muted" style="font-size:12px;margin-bottom:10px">Resumen financiero de tu negocio.</div>
+            <div class="grid2">
+              <div class="stat c-green"><div class="l">Ingresos totales</div><div class="v" id="c-ingresos">RD$ 0</div></div>
+              <div class="stat c-red"><div class="l">Gastos (costo)</div><div class="v" id="c-gastos">RD$ 0</div></div>
+              <div class="stat c-purple"><div class="l">Ganancia neta</div><div class="v" id="c-ganancia">RD$ 0</div></div>
+              <div class="stat c-blue"><div class="l">Por cobrar</div><div class="v" id="c-porcobrar">RD$ 0</div></div>
+            </div>
+            <div style="margin-top:10px">
+              <div class="t-row"><span>Cobrado</span><b id="c-cobrado">RD$ 0</b></div>
+              <div class="t-row"><span>Facturado (total)</span><b id="c-facturado">RD$ 0</b></div>
+              <div class="t-row"><span>Margen bruto</span><b id="c-margen">0%</b></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -638,11 +663,49 @@ function docFieldsHTML(type) {
   return h;
 }
 
-function renderDocs(modules) {
-  const has = (modules || []).indexOf('documentos') !== -1;
-  document.getElementById('docs-card').style.display = has ? 'block' : 'none';
-  if (!has) return;
-const items = DOC_TYPES.map(function (d) {
+// ===== Módulos — tabs =====
+let activeMod = null;
+const MOD_DEFS = [
+  { key: 'docs', icon: '📄', label: 'Documentos', render: renderDocsContent },
+  { key: 'gps', icon: '📡', label: 'GPS', render: renderGpsContent },
+  { key: 'contab', icon: '📒', label: 'Contabilidad', render: renderContabContent }
+];
+
+function renderModTabs(modules, report) {
+  const section = document.getElementById('mods-section');
+  const tabsEl = document.getElementById('mod-tabs');
+  if (!section || !tabsEl) return;
+  const mods = modules || [];
+  const available = MOD_DEFS.filter(function (m) {
+    if (m.key === 'docs') return mods.indexOf('documentos') !== -1;
+    if (m.key === 'gps') return mods.indexOf('gps') !== -1;
+    if (m.key === 'contab') return mods.indexOf('contabilidad') !== -1;
+    return false;
+  });
+  if (!available.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  tabsEl.innerHTML = available.map(function (m, i) {
+    return '<button class="mod-tab' + (i === 0 ? ' on' : '') + '" data-mod="' + m.key + '" onclick="switchMod(\'' + m.key + '\')">' +
+      '<span class="tab-dot"></span>' + m.icon + ' ' + m.label + '</button>';
+  }).join('');
+  document.querySelectorAll('.mod-panel').forEach(function (p) { p.classList.remove('active'); });
+  activeMod = available[0].key;
+  document.getElementById('mod-' + activeMod).classList.add('active');
+  available.forEach(function (m) { m.render(report); });
+}
+
+function switchMod(key) {
+  if (activeMod === key) return;
+  activeMod = key;
+  document.querySelectorAll('.mod-tab').forEach(function (t) { t.classList.toggle('on', t.getAttribute('data-mod') === key); });
+  document.querySelectorAll('.mod-panel').forEach(function (p) { p.classList.remove('active'); });
+  document.getElementById('mod-' + key).classList.add('active');
+}
+
+function renderDocsContent(report) {
+  const el = document.getElementById('docs-list');
+  if (!el) return;
+  const items = DOC_TYPES.map(function (d) {
     const badge = d.enabled
       ? '<button class="doc-soon go" onclick="openDocModal(\'' + d.key + '\')">Generar ›</button>'
       : '<div class="doc-soon">🔒 Próximamente</div>';
@@ -659,33 +722,16 @@ const items = DOC_TYPES.map(function (d) {
       badge +
     '</div>';
   }).join('');
-  document.getElementById('docs-list').innerHTML = items;
+  el.innerHTML = items;
 }
 
-// ===== GPS / Flota =====
-let gpsTimer = null;
-
-function renderGps(modules) {
-  const card = document.getElementById('gps-card');
-  if (!card) return;
-  const has = (modules || []).indexOf('gps') !== -1;
-  card.style.display = has ? 'block' : 'none';
-  if (has) {
-    refreshGps();
-    if (!gpsTimer) gpsTimer = setInterval(refreshGps, 30000);
-  } else if (gpsTimer) {
-    clearInterval(gpsTimer);
-    gpsTimer = null;
-  }
+function renderGpsContent(report) {
+  refreshGps();
+  if (!gpsTimer) gpsTimer = setInterval(refreshGps, 30000);
 }
 
-// ===== Contabilidad =====
-function renderContabilidad(modules, report) {
-  const card = document.getElementById('contab-card');
-  if (!card) return;
-  const has = (modules || []).indexOf('contabilidad') !== -1;
-  card.style.display = has ? 'block' : 'none';
-  if (!has || !report) return;
+function renderContabContent(report) {
+  if (!report) return;
   const t = report.totals || {};
   const el = function (id) { return document.getElementById(id); };
   if (el('c-ingresos')) el('c-ingresos').textContent = money(t.cobrado || 0);
@@ -862,8 +908,7 @@ async function loadReport() {
     return;
   }
   if (!j.hasData || !j.report) {
-    renderDocs(j.modules);
-    renderContabilidad(j.modules, null);
+    renderModTabs(j.modules, null);
     document.getElementById('dash-empty').style.display = 'block';
     document.getElementById('dash-content').style.display = 'none';
     document.getElementById('dash-empty').textContent = j.message || 'Todavía no hay datos de ventas.';
@@ -871,9 +916,7 @@ async function loadReport() {
   }
 const t = j.report.totals;
   const meta = j.report.meta || {};
-  renderDocs(j.modules);
-  if (!isView) renderGps(j.modules);
-  renderContabilidad(j.modules, j.report);
+  renderModTabs(j.modules, j.report);
   // Saludo: usa el nombre del negocio desde la app cuando existe
   if (meta.businessName) {
     document.getElementById('dash-name').textContent = meta.businessName;
@@ -1074,6 +1117,8 @@ function doLogout() {
   token = '';
   localStorage.removeItem('ct_token');
   if (gpsTimer) { clearInterval(gpsTimer); gpsTimer = null; }
+  activeMod = null;
+  document.getElementById('mods-section').style.display = 'none';
   showAuth();
 }
 
