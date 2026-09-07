@@ -144,6 +144,20 @@ function setWebAccountPasswordByUserId(userId, newHash) {
   return hit;
 }
 
+function updateWebAccount(userId, updates) {
+  const accounts = listWebAccounts();
+  let hit = null;
+  Object.keys(accounts).forEach((k) => {
+    if (accounts[k].userId && String(accounts[k].userId) === String(userId)) {
+      Object.keys(updates).forEach((field) => { accounts[k][field] = updates[field]; });
+      accounts[k].updatedAt = Date.now();
+      hit = accounts[k];
+    }
+  });
+  if (hit) saveWebAccounts(accounts);
+  return hit;
+}
+
 function registerDevice(deviceId, meta) {
   const db = load();
   if (!db.devices[deviceId]) {
@@ -625,6 +639,7 @@ module.exports = {
   listWebAccountsByClient,
   countWebAccountsByClient,
   setWebAccountPasswordByUserId,
+  updateWebAccount,
   getClient,
   createClient,
   updateClient,

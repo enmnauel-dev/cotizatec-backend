@@ -210,6 +210,20 @@
     </div>
   </div>
 
+  <div class="modal" id="editUserModal">
+    <div class="modal-box">
+      <h3>Editar usuario</h3>
+      <div class="ua-field"><label>Nombre</label><input id="eu-name" type="text"></div>
+      <div class="ua-field"><label>Usuario</label><input id="eu-username" type="text"></div>
+      <div class="ua-field"><label>Nueva contraseña (dejar vacío para no cambiar)</label><input id="eu-pass" type="text" placeholder="Mínimo 6 caracteres"></div>
+      <div class="ua-msg" id="eu-msg"></div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closeEditModal()">Cancelar</button>
+        <button class="btn" onclick="uaSaveEdit()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="clfModal">
     <div class="modal-box" style="max-width:620px">
       <h3 id="clfTitle">Ficha del cliente</h3>
@@ -525,6 +539,7 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
               '<span class="chip ' + (active ? 'active' : 'inactive') + '">' + (active ? '● Activo' : '○ Inactivo') + '</span>' +
               '<div class="ua-actions">' +
                 '<button class="btn small ' + (active ? 'red' : 'green') + '" onclick="uaToggle(\'' + u.userId + '\')">' + (active ? 'Desactivar' : 'Activar') + '</button>' +
+                '<button class="btn small blue" onclick="uaEditModal(' + JSON.stringify(u.userId) + ',' + JSON.stringify(u.name) + ',' + JSON.stringify(u.username) + ')">Editar</button>' +
                 '<button class="btn small yellow" onclick="uaReset(' + JSON.stringify(u.userId) + ')">Resetear clave</button>' +
               '</div></div>';
           }).join('');
@@ -597,6 +612,38 @@ var exp = d.status === 'active' ? 'vence ' + fmtDate(d.expiresAt) + (dl !== null
   function uaWhatsApp() {
     var txt = encodeURIComponent('Tu acceso al panel de CotizaTec\nUsuario: ' + uaRes.username + '\nContraseña: ' + uaRes.password + '\nEntra en: /panel');
     window.open('https://wa.me/?text=' + txt, '_blank');
+  }
+
+  var euUserId = null;
+  function uaEditModal(userId, name, username) {
+    euUserId = userId;
+    document.getElementById('eu-name').value = name || '';
+    document.getElementById('eu-username').value = username || '';
+    document.getElementById('eu-pass').value = '';
+    document.getElementById('eu-msg').textContent = '';
+    document.getElementById('eu-msg').className = 'ua-msg';
+    document.getElementById('editUserModal').classList.add('open');
+  }
+  function closeEditModal() { document.getElementById('editUserModal').classList.remove('open'); euUserId = null; }
+  function uaSaveEdit() {
+    if (!euUserId) return;
+    var name = document.getElementById('eu-name').value.trim();
+    var username = document.getElementById('eu-username').value.trim();
+    var pass = document.getElementById('eu-pass').value.trim();
+    var msg = document.getElementById('eu-msg');
+    msg.className = 'ua-msg err';
+    if (!name || !username) { msg.textContent = 'Nombre y usuario son obligatorios.'; return; }
+    var body = { name: name, username: username };
+    if (pass) body.password = pass;
+    api('/api/admin/clients/' + encodeURIComponent(uaClientId) + '/webaccounts/' + encodeURIComponent(euUserId), { method: 'PUT', body: JSON.stringify(body) })
+      .then(function (r) {
+        if (!r || !r.ok) { msg.textContent = (r && r.error) || 'No se pudo guardar.'; return; }
+        msg.textContent = '¡Guardado!';
+        msg.className = 'ua-msg ok';
+        loadUsers();
+        setTimeout(function () { closeEditModal(); }, 1200);
+      })
+      .catch(function (e) { msg.textContent = 'Error: ' + e.message; });
   }
 
   function saveDevice() {

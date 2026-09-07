@@ -974,6 +974,30 @@ app.post('/api/admin/clients/:id/webaccounts/:userId/reset-password', async (req
   res.json({ ok: true, resetPassword: temp, userId: acc.userId });
 });
 
+app.put('/api/admin/clients/:id/webaccounts/:userId', async (req, res) => {
+  const info = requireAdmin(req, res);
+  if (!info) return;
+  const acc = store.getWebAccountById(req.params.userId);
+  if (!acc || String(acc.clientId) !== String(req.params.id)) {
+    return res.status(404).json({ error: 'Usuario no encontrado en este cliente.' });
+  }
+  const { name, username, password } = req.body || {};
+  if (username && String(username).trim()) {
+    const existing = store.getWebAccountByUsername(String(username).trim());
+    if (existing && String(existing.userId) !== String(acc.userId)) {
+      return res.status(409).json({ error: 'Ese nombre de usuario ya existe.' });
+    }
+  }
+  const updates = {};
+  if (name) updates.name = String(name).trim();
+  if (username) updates.username = String(username).trim().toLowerCase();
+  if (password && String(password).length >= 6) {
+    updates.passHash = await webclients.hashPassword(String(password));
+  }
+  store.updateWebAccount(acc.userId, updates);
+  res.json({ ok: true, userId: acc.userId });
+});
+
 app.delete('/api/admin/clients/:id', (req, res) => {
   const info = requireAdmin(req, res);
   if (!info) return;
