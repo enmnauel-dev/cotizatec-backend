@@ -837,20 +837,24 @@ var DB = (function () {
   // simple sin CryptoObject, compatible con la biometría débil del Redmi A5) y
   // luego lee la clave maestra desde el keystore. Devuelve true si OK.
   function unlockFingerprint() {
+    console.log('[CotizaTec] unlockFingerprint: _envelope=' + !!_envelope);
     if (!_envelope) return Promise.resolve(false);
-    return bioVerify().then(function (verified) {
-      if (!verified) return false;
-      return mkFromKeystore().then(function (mkRaw) {
-        if (!mkRaw) return false;
+    return mkFromKeystore().then(function (mkRaw) {
+      console.log('[CotizaTec] unlockFingerprint: mkRaw=' + !!mkRaw);
+      if (!mkRaw) return false;
+      return bioVerify().then(function (verified) {
+        console.log('[CotizaTec] unlockFingerprint: verified=' + verified);
+        if (!verified) return false;
         return importMk(mkRaw).then(function (key) {
           return decryptAndLoad(key).then(function (ok) {
+            console.log('[CotizaTec] unlockFingerprint: decrypt=' + ok);
             if (!ok) return false;
             _mkRaw = mkRaw;
             return true;
           });
         });
       });
-    }).catch(function () { return false; });
+    }).catch(function (e) { console.error('[CotizaTec] unlockFingerprint error:', e); return false; });
   }
 
   // Desbloquea con la contraseña (respaldo o esquema legado v1). Devuelve true si OK.
@@ -970,7 +974,7 @@ var DB = (function () {
     buildBackup, parseBackup, applyBackup, backupError,
     encryptBackupJson, decryptBackupJson,
     startedFromLocal, restoreFromIdb, restoreFromFs, fsFlush, itemType,
-    needsUnlock, isEncrypted, isProtected, hasBackupPassword, hasFingerprint, canUnlockByPassword, bioAvailable,
+    needsUnlock, isEncrypted, isProtected, hasBackupPassword, hasFingerprint, canUnlockByPassword, bioAvailable, mkKeystoreExists,
     unlock, unlockFingerprint, setEncryption, removePassword, disableEncryption, relock, boot,
     onSave
   });

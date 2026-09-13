@@ -1824,7 +1824,9 @@ case 'trabajos': inner = jobsView(); break;
 
     firstBioUnlock: function () {
       biometricPromptActive = true;
+      console.log('[CotizaTec] firstBioUnlock: calling unlockFingerprint');
       DB.unlockFingerprint().then(function (ok) {
+        console.log('[CotizaTec] firstBioUnlock: result=' + ok);
         if (!ok) {
           if (DB.canUnlockByPassword()) {
             toast('Huella no reconocida. Usa tu contraseña.', false);
@@ -2251,9 +2253,28 @@ case 'trabajos': inner = jobsView(); break;
     d.innerHTML = html;
     document.body.appendChild(d);
     if (hasBio) {
-      document.getElementById('lock-first-bio').focus();
+      DB.mkKeystoreExists().then(function (mkExists) {
+        console.log('[CotizaTec] showLockFirst: hasBio=' + hasBio + ' mkExists=' + mkExists + ' hasPwd=' + hasPwd);
+        if (!mkExists) {
+          console.warn('[CotizaTec] MK no está en keystore — huella no funcionará');
+          var bioBtn = document.getElementById('lock-first-bio');
+          if (bioBtn) bioBtn.style.display = 'none';
+          var toggle = document.getElementById('lock-first-toggle');
+          if (toggle) toggle.style.display = 'none';
+          var pwdWrap = document.getElementById('lock-first-pwd-wrap');
+          if (pwdWrap) pwdWrap.style.display = 'block';
+          if (!hasPwd && pwdWrap) {
+            pwdWrap.innerHTML = '<p class="muted">La clave de desbloqueo no está disponible en este dispositivo. Los datos cifrados no se pueden descifrar sin la clave original.</p>' +
+              '<button class="btn block" data-action="forceUnlock">' + CHECK_ICON + ' Entrar de todos modos (solo lectura)</button>';
+          }
+          var inp = document.getElementById('lock-first-pwd');
+          if (inp) inp.focus();
+        } else {
+          document.getElementById('lock-first-bio').focus();
+        }
+      });
     } else {
-      const inp = document.getElementById('lock-first-pwd');
+      var inp = document.getElementById('lock-first-pwd');
       if (inp) inp.focus();
     }
   }
@@ -2300,6 +2321,7 @@ document.addEventListener('DOMContentLoaded', function () {
     License.requestNotificationPermission();
 
     function afterBoot(mode, deviceId) {
+      console.log('[CotizaTec] afterBoot: mode=' + mode + ' isProtected=' + DB.isProtected() + ' needsUnlock=' + DB.needsUnlock() + ' hasFingerprint=' + DB.hasFingerprint() + ' canUnlockByPassword=' + DB.canUnlockByPassword());
       if (mode === 'locked') { UI.showLockFirst(); return; }
       if (mode === 'blank') {
         var skipCloud = (function () {
