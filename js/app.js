@@ -1772,6 +1772,7 @@ case 'trabajos': inner = jobsView(); break;
           const o = document.getElementById('lock-screen');
           if (o) o.remove();
           unlockApp();
+          init();
           toast('¡Bienvenido!', true);
         }).finally(function () {
           setTimeout(function () { biometricPromptActive = false; }, 1500);
@@ -1814,6 +1815,7 @@ case 'trabajos': inner = jobsView(); break;
       }
       if (hashVal(v) !== DB.state.settings.resetPassword) { toast('Contraseña incorrecta', false); return; }
       unlockApp();
+      init();
       toast('¡Bienvenido!', true);
     },
 
