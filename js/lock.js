@@ -107,7 +107,12 @@ var Lock = (function () {
       return;
     }
     const protectedApp = DB.isProtected();
-    const hasPwd = protectedApp ? DB.canUnlockByPassword() : !!DB.state.settings.resetPassword;
+    if (!protectedApp) {
+      const o = document.getElementById('lock-screen');
+      if (o) o.remove();
+      return;
+    }
+    const hasPwd = DB.canUnlockByPassword();
     const fingerprintActive = DB.hasFingerprint();
     buildOverlay(protectedApp, hasPwd, fingerprintActive);
   }

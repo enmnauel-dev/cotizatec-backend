@@ -1324,7 +1324,10 @@ case 'trabajos': inner = jobsView(); break;
         if (st.status === 'active' || st.status === 'grace') {
           licenseStatus = st;
           return DB.boot().then(function (mode) {
-            if (mode === 'locked') { UI.showLockFirst(); return; }
+    if (mode === 'locked') {
+      if (!DB.needsUnlock()) { UI.init(); return; }
+      UI.showLockFirst(); return;
+    }
             UI.init();
             try { Reminders.scheduleToday(); } catch (e) {}
           });
@@ -1822,7 +1825,22 @@ case 'trabajos': inner = jobsView(); break;
     firstBioUnlock: function () {
       biometricPromptActive = true;
       DB.unlockFingerprint().then(function (ok) {
-        if (!ok) { toast('No se pudo desbloquear con huella', false); return; }
+        if (!ok) {
+          if (DB.canUnlockByPassword()) {
+            toast('Huella no reconocida. Usa tu contraseña.', false);
+            const b = document.getElementById('lock-first-bio');
+            if (b) b.style.display = 'none';
+            const t = document.getElementById('lock-first-toggle');
+            if (t) t.style.display = 'none';
+            const w = document.getElementById('lock-first-pwd-wrap');
+            if (w) w.style.display = 'block';
+            const inp = document.getElementById('lock-first-pwd');
+            if (inp) inp.focus();
+          } else {
+            toast('No se pudo desbloquear con huella. Configura una contraseña de respaldo.', false);
+          }
+          return;
+        }
         const o = document.getElementById('lock-screen');
         if (o) o.remove();
         unlockApp();
