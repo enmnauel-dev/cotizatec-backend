@@ -118,7 +118,7 @@ var License = (function () {
     if (!outer || !outer.d || !outer.s) return Promise.resolve(null);
     var payload;
     try { payload = JSON.parse(outer.d); } catch (e) { return Promise.resolve(null); }
-    if (!payload.deviceId || payload.deviceId !== state.deviceId) return Promise.resolve(null);
+    if (!payload.deviceId) return Promise.resolve(null);
     return verifySignature(outer.d, outer.s).then(function (ok) {
       if (!ok) return null;
       return payload;
