@@ -92,9 +92,9 @@ function startBot(token) {
 
     if (cmd === '/dashboard') {
       const webAppUrl = (process.env.WEB_APP_URL || 'https://cotizatec-backend.onrender.com/admin');
-      bot.sendMessage(chatId, '📊 Panel de administración CotizaTec\n\nAbre el panel en tu navegador:', {
+      bot.sendMessage(chatId, '📊 Panel de administración CotizaTec', {
         reply_markup: {
-          inline_keyboard: [[{ text: '📊 Abrir Dashboard', url: webAppUrl }]]
+          inline_keyboard: [[{ text: '📊 Abrir Dashboard', web_app: { url: webAppUrl } }]]
         }
       });
       return;
