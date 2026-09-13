@@ -63,11 +63,22 @@ app.get('/api/license/:deviceId', (req, res) => {
     l = store.setLicense(deviceId, { deviceId, issuedAt: now, expiresAt, graceUntil: expiresAt, trial: true, token: license.signLicense(payload) });
     return res.json({ ok: true, status: 'trial', trial: true, supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, token: l.token });
   }
+  let token = l.token;
+  try {
+    const parsed = JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString());
+    const inner = JSON.parse(parsed.d);
+    if (inner.deviceId !== deviceId) {
+      const fixedPayload = { v: 1, deviceId, issuedAt: l.issuedAt || now, expiresAt: l.expiresAt, graceUntil: l.graceUntil, trial: !!l.trial };
+      token = license.signLicense(fixedPayload);
+      l.token = token;
+      store.setLicense(deviceId, l);
+    }
+  } catch (e) {}
   if (now < l.expiresAt) {
-    return res.json({ ok: true, status: 'active', supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, token: l.token });
+    return res.json({ ok: true, status: 'active', supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, token });
   }
   if (now < l.graceUntil) {
-    return res.json({ ok: true, status: 'grace', supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, token: l.token });
+    return res.json({ ok: true, status: 'grace', supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, token });
   }
   const message = l.trial
     ? 'Tu perÃ­odo de prueba terminÃ³. ActÃ­vala contactando al administrador por WhatsApp.'

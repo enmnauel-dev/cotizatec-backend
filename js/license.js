@@ -51,26 +51,43 @@ var License = (function () {
 
   function ensureDeviceId() {
     if (state.deviceId) return Promise.resolve(state.deviceId);
-    var cap = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Device;
-    var useCap = cap && cap.getId && cap.getId();
     var set = function (id) {
       state.deviceId = id;
       persist();
       return state.deviceId;
     };
-    if (useCap) {
-      return useCap.then(function (info) {
-        var id = (info && info.identifier) || '';
-        var clean = String(id).replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 20);
-        if (!clean) {
-          clean = randomId(16);
+    function tryNative(retries) {
+      if (window.__nativeDeviceId && window.__nativeDeviceId.length >= 10) {
+        return Promise.resolve(set(window.__nativeDeviceId));
+      }
+      if (window.NativeBridge && typeof window.NativeBridge.getMyDeviceId === 'function') {
+        var nativeId = window.NativeBridge.getMyDeviceId();
+        if (nativeId && nativeId.length >= 10) {
+          return Promise.resolve(set(nativeId));
         }
-        return set('cotizatec-' + clean);
-      }).catch(function () {
-        return set('cotizatec-' + randomId(16));
-      });
+      }
+      if (retries > 0) {
+        return new Promise(function (resolve) {
+          setTimeout(function () { resolve(tryNative(retries - 1)); }, 150);
+        });
+      }
+      var cap = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Device;
+      var useCap = cap && cap.getId && cap.getId();
+      if (useCap) {
+        return useCap.then(function (info) {
+          var id = (info && info.identifier) || '';
+          var clean = String(id).replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 20);
+          if (!clean) {
+            clean = randomId(16);
+          }
+          return set('cotizatec-' + clean);
+        }).catch(function () {
+          return set('cotizatec-' + randomId(16));
+        });
+      }
+      return Promise.resolve(set('cotizatec-' + randomId(16)));
     }
-    return Promise.resolve(set('cotizatec-' + randomId(16)));
+    return tryNative(5);
   }
 
   function parseToken(token) {
