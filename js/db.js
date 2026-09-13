@@ -936,6 +936,11 @@ var DB = (function () {
     _mkRaw = null;
     _mkStored = false;
     _encPendingJson = null;
+    if (state && state.settings) {
+      state.settings.lockOnStart = false;
+      state.settings.relockOnResume = false;
+      state.settings.resetPassword = '';
+    }
     const delP = mkKeystoreDel();
     const jsonStr = JSON.stringify(state);
     return _encChain.catch(function () {}).then(function () {

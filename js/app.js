@@ -1839,7 +1839,15 @@ case 'trabajos': inner = jobsView(); break;
             const inp = document.getElementById('lock-first-pwd');
             if (inp) inp.focus();
           } else {
-            toast('No se pudo desbloquear con huella. Configura una contraseña de respaldo.', false);
+            toast('No se pudo descifrar con huella. La clave de cifrado no está disponible.', false);
+            var bioBtn = document.getElementById('lock-first-bio');
+            if (bioBtn) bioBtn.style.display = 'none';
+            var pwdWrap = document.getElementById('lock-first-pwd-wrap');
+            if (pwdWrap) {
+              pwdWrap.style.display = 'block';
+              pwdWrap.innerHTML = '<p class="muted">Los datos cifrados no se pueden descifrar en este dispositivo. Puedes entrar pero los datos cifrados anteriores no estarán disponibles.</p>' +
+                '<button class="btn primary block" data-action="forceUnlockRecover">' + CHECK_ICON + ' Entrar y recuperar datos</button>';
+            }
           }
           return;
         }
@@ -1878,7 +1886,28 @@ case 'trabajos': inner = jobsView(); break;
     },
 
     forceUnlock: function () {
-      unlockApp();
+      UI.forceUnlockRecover();
+    },
+
+    forceUnlockRecover: function () {
+      DB.disableEncryption().then(function () {
+        const o = document.getElementById('lock-screen');
+        if (o) o.remove();
+        unlockApp();
+        init();
+        toast('Protección desactivada. Intentando restaurar datos...', true);
+        License.getDeviceId().then(function (deviceId) {
+          if (!deviceId) return;
+          Backups.pullFromCloud(deviceId).then(function (restored) {
+            if (restored) {
+              init();
+              toast('Datos restaurados desde la nube', true);
+            } else {
+              toast('No se encontraron respaldos. Los datos se reiniciaron.', false);
+            }
+          }).catch(function () {});
+        }).catch(function () {});
+      });
     },
 
     seedCatalog: function () {
@@ -2246,10 +2275,13 @@ case 'trabajos': inner = jobsView(); break;
     if (hasPwd) {
       html += '<input id="lock-first-pwd" class="sheet-input" type="password" placeholder="Contraseña" autocomplete="off">' +
         '<button class="btn primary block" data-action="firstUnlock">' + CHECK_ICON + ' Desbloquear</button>';
-    } else if (!hasBio) {
-      html += '<p class="muted">No hay huella ni contraseña configuradas para este equipo. Tus datos están protegidos en este dispositivo; contacta al propietario.</p>';
     }
-    html += '</div></div>';
+    html += '</div>';
+    if (!hasPwd) {
+      html += '<hr style="margin:12px 0; opacity:0.3">';
+      html += '<button class="btn ghost block" data-action="forceUnlockRecover" style="font-size:13px">' + CHECK_ICON + ' Entrar sin cifrado</button>';
+    }
+    html += '</div>';
     d.innerHTML = html;
     document.body.appendChild(d);
     if (hasBio) {
@@ -2265,7 +2297,7 @@ case 'trabajos': inner = jobsView(); break;
           if (pwdWrap) pwdWrap.style.display = 'block';
           if (!hasPwd && pwdWrap) {
             pwdWrap.innerHTML = '<p class="muted">La clave de desbloqueo no está disponible en este dispositivo. Los datos cifrados no se pueden descifrar sin la clave original.</p>' +
-              '<button class="btn block" data-action="forceUnlock">' + CHECK_ICON + ' Entrar de todos modos (solo lectura)</button>';
+              '<button class="btn primary block" data-action="forceUnlockRecover">' + CHECK_ICON + ' Entrar sin cifrado</button>';
           }
           var inp = document.getElementById('lock-first-pwd');
           if (inp) inp.focus();
