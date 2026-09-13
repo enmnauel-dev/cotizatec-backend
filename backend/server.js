@@ -1254,14 +1254,22 @@ function next_(req, res) {
   });
 }
 
+function gracefulShutdown(sig) {
+  console.log('[server] Recibido ' + sig + ', cerrando...');
+  bot.stopBot();
+  process.exit(0);
+}
+process.on('SIGTERM', function () { gracefulShutdown('SIGTERM'); });
+process.on('SIGINT', function () { gracefulShutdown('SIGINT'); });
+
 store.init().then(() => {
   app.listen(PORT, () => {
     console.log('[server] CotizaTec backend en puerto ' + PORT);
     if (!process.env.LICENSE_PRIVATE_KEY && !process.env.LICENSE_PUBLIC_KEY) {
-      console.warn('[server] âš ï¸  Faltan claves de licencia. Ejecuta: npm run genkeys y copia a .env');
+      console.warn('[server] ⚠️  Faltan claves de licencia. Ejecuta: npm run genkeys y copia a .env');
     }
     if (!process.env.TELEGRAM_TOKEN) {
-      console.warn('[server] âš ï¸  Falta TELEGRAM_TOKEN en .env. El bot no se iniciarÃ¡.');
+      console.warn('[server] ⚠️  Falta TELEGRAM_TOKEN en .env. El bot no se iniciará.');
     } else {
       bot.startBot(process.env.TELEGRAM_TOKEN);
       console.log('[bot] Bot de Telegram iniciado.');

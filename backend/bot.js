@@ -32,6 +32,7 @@ function formatDate(ts) {
 }
 
 let botRef = null;
+let _starting = false;
 
 function notifyAdmin(text) {
   if (!botRef || !ADMIN_CHAT_ID) return;
@@ -40,9 +41,20 @@ function notifyAdmin(text) {
   });
 }
 
+function stopBot() {
+  if (botRef) {
+    try { botRef.stopPolling({ cancel: true }); } catch (e) {}
+    botRef = null;
+  }
+  _starting = false;
+}
+
 function startBot(token) {
+  if (_starting) { console.log('[bot] startBot ya en curso, ignorando'); return botRef; }
+  _starting = true;
   const clean = String(token || '').replace(/["'\s,;\r\n]+/g, '');
-  const bot = new TelegramBot(clean, { polling: true });
+  stopBot();
+  const bot = new TelegramBot(clean, { polling: { interval: 300, retryTimeout: 5000 } });
   botRef = bot;
   bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
@@ -199,10 +211,22 @@ if (!arg) { bot.sendMessage(chatId, 'Usa: /bloquear <deviceId>'); return; }
   });
 
   bot.on('polling_error', (err) => {
-    console.error('[bot] polling error:', err.message);
+    const msg = err.message || '';
+    console.error('[bot] polling error:', msg);
+    if (msg.includes('409') || msg.includes('Conflict')) {
+      console.warn('[bot] Conflicto de polling — otra instancia está activa. Deteniendo esta.');
+      stopBot();
+    }
   });
 
+  bot.on('polling_stopped', () => {
+    console.log('[bot] polling detenido');
+    _starting = false;
+  });
+
+  console.log('[bot] Polling iniciado');
+  _starting = false;
   return bot;
 }
 
-module.exports = { startBot, isAdmin, buildLicense, formatDate, notifyAdmin };
+module.exports = { startBot, stopBot, isAdmin, buildLicense, formatDate, notifyAdmin };
