@@ -148,12 +148,12 @@ b { font-weight: 700; }
 }
 .sheet-input:focus { outline: 2px solid var(--amber); border-color: transparent; }
 
-#lock-screen {
-  position: fixed; inset: 0; z-index: 9999;
-  display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(160deg, #1e293b, #0f172a);
-  padding: 24px;
-}
+  #lock-screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(160deg, #1e293b, #0f172a);
+    padding: 24px;
+  }
 .lock-card {
   width: 100%; max-width: 340px; text-align: center;
   background: var(--card); border-radius: var(--radius); box-shadow: 0 24px 60px rgba(0,0,0,.45);
@@ -491,12 +491,12 @@ b { font-weight: 700; }
 .sheet-item small.pack-hint{display:inline;color:#f59e0b}
 
 /* Pantalla de licencia */
-#license-screen {
-  position: fixed; inset: 0; z-index: 9998;
-  display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(160deg, #1e293b, #0f172a);
-  padding: 24px;
-}
+  #license-screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9998;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(160deg, #1e293b, #0f172a);
+    padding: 24px;
+  }
 .license-code {
   margin: 10px 0 16px; padding: 10px; border-radius: 10px;
   background: #f8fafc; border: 1px dashed #cbd5e1; font-size: 12px;
