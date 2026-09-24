@@ -971,17 +971,17 @@ var DB = (function () {
   }
 
   const api = {};
-  Object.defineProperty(api, 'state', { get: function () { return state; }, enumerable: true });
-  Object.assign(api, {
-    load, save, incr, esc, money, date, push, find, update, remove, uid,
-    jobTotals, newJob, saveJob, captureClient,
-    statusLabel, statusColor, STATUS, KEY, BAK_KEY, TS_KEY, FS_KEY, ENC_META,
-    buildBackup, parseBackup, applyBackup, backupError,
-    encryptBackupJson, decryptBackupJson,
-    startedFromLocal, restoreFromIdb, restoreFromFs, fsFlush, itemType,
-    needsUnlock, isEncrypted, isProtected, hasBackupPassword, hasFingerprint, canUnlockByPassword, bioAvailable, mkKeystoreExists,
-    unlock, unlockFingerprint, setEncryption, removePassword, disableEncryption, relock, boot,
-    onSave
+   Object.defineProperty(api, 'state', { get: function () { return state; }, set: function (v) { state = v; }, enumerable: true, configurable: true });
+   Object.assign(api, {
+     load, save, incr, esc, money, date, push, find, update, remove, uid,
+     jobTotals, newJob, saveJob, captureClient,
+     statusLabel, statusColor, STATUS, KEY, BAK_KEY, TS_KEY, FS_KEY, ENC_META,
+     buildBackup, parseBackup, applyBackup, backupError,
+     encryptBackupJson, decryptBackupJson,
+     startedFromLocal, restoreFromIdb, restoreFromFs, fsFlush, itemType,
+     needsUnlock, isEncrypted, isProtected, hasBackupPassword, hasFingerprint, canUnlockByPassword, bioAvailable, mkKeystoreExists,
+     unlock, unlockFingerprint, setEncryption, removePassword, disableEncryption, relock, boot, blankState,
+     onSave
   });
   return api;
 })();

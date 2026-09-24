@@ -2287,6 +2287,7 @@ case 'trabajos': inner = jobsView(); break;
   }
 
   function init() {
+    if (!DB.state || typeof DB.state !== 'object') { DB.state = DB.blankState(); }
     render();
     recompressExisting();
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
