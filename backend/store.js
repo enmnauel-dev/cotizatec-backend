@@ -5,37 +5,40 @@ const zlib = require('zlib');
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 const DATABASE_URL = process.env.DATABASE_URL || '';
 
-let pg = null;
-let pool = null;
+const { Pool } = require('pg');
+const pool = new Pool({
+  connectionString: DATABASE_URL + (DATABASE_URL && !DATABASE_URL.includes('?sslmode') ? '?sslmode=require' : ''),
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+pool.on('error', (err) => {
+  console.error('[pg] Error en cliente inactivo:', err.message);
+});
+pool.on('connect', () => console.log('[pg] Conectado al pool'));
+
+let retryDelay = 1000;
+const MAX_RETRY_DELAY = 30000;
 
 async function pgQuery(text, params) {
-  if (!pool) {
-    const { Pool } = require('pg');
-    pool = new Pool({
-      connectionString: DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-      keepAlive: true,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
-    });
-    pool.on('error', (err, client) => {
-      console.error('[pg] Error inesperado en cliente inactivo:', err.message);
-      pool = null;
-    });
-    pool.on('connect', () => console.log('[pg] Conectado al pool'));
-    await pool.query('CREATE TABLE IF NOT EXISTS cotizatec_data (k text PRIMARY KEY, v jsonb NOT NULL)');
-    await pool.query('CREATE TABLE IF NOT EXISTS cotizatec_backups (device_id text PRIMARY KEY, data text NOT NULL, saved_at bigint NOT NULL, size integer NOT NULL)');
-  }
-  try {
-    return await pool.query(text, params);
-  } catch (e) {
-    if (e.message && /terminated|disconnect|ETIMEDOUT|ECONNRESET/i.test(e.message)) {
-      console.error('[pg] Pool muerto, recreando...');
-      pool = null;
-      return pgQuery(text, params);
+  let lastErr;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      return await pool.query(text, params);
+    } catch (e) {
+      lastErr = e;
+      if (/terminated|disconnect|ETIMEDOUT|ECONNRESET/i.test(e.message)) {
+        console.error('[pg] Query fallida (intento ' + attempt + '):', e.message);
+        const delay = Math.min(retryDelay, MAX_RETRY_DELAY);
+        await new Promise(r => setTimeout(r, delay));
+        retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
+      } else {
+        throw e;
+      }
     }
-    throw e;
   }
+  throw lastErr;
 }
 
 async function pgGet(key) {
