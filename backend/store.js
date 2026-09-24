@@ -11,11 +11,31 @@ let pool = null;
 async function pgQuery(text, params) {
   if (!pool) {
     const { Pool } = require('pg');
-    pool = new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    pool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      keepAlive: true,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+    });
+    pool.on('error', (err, client) => {
+      console.error('[pg] Error inesperado en cliente inactivo:', err.message);
+      pool = null;
+    });
+    pool.on('connect', () => console.log('[pg] Conectado al pool'));
     await pool.query('CREATE TABLE IF NOT EXISTS cotizatec_data (k text PRIMARY KEY, v jsonb NOT NULL)');
     await pool.query('CREATE TABLE IF NOT EXISTS cotizatec_backups (device_id text PRIMARY KEY, data text NOT NULL, saved_at bigint NOT NULL, size integer NOT NULL)');
   }
-  return pool.query(text, params);
+  try {
+    return await pool.query(text, params);
+  } catch (e) {
+    if (e.message && /terminated|disconnect|ETIMEDOUT|ECONNRESET/i.test(e.message)) {
+      console.error('[pg] Pool muerto, recreando...');
+      pool = null;
+      return pgQuery(text, params);
+    }
+    throw e;
+  }
 }
 
 async function pgGet(key) {
