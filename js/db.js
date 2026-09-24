@@ -838,56 +838,63 @@ var DB = (function () {
     });
   }
 
-  // Desbloquea con la huella. Primero verifica la identidad biométrica (prompt
-  // simple sin CryptoObject, compatible con la biometría débil del Redmi A5) y
-  // luego lee la clave maestra desde el keystore. Devuelve true si OK.
-   function unlockFingerprint() {
-     console.log('[CotizaTec] unlockFingerprint: _envelope=' + !!_envelope);
-     if (!_envelope) { console.log('[CotizaTec] unlockFingerprint: no _envelope'); return Promise.resolve(false); }
-     return mkFromKeystore().then(function (mkRaw) {
-       console.log('[CotizaTec] unlockFingerprint: mkRaw=' + !!mkRaw);
-       return bioVerify().then(function (verified) {
-         console.log('[CotizaTec] unlockFingerprint: verified=' + verified);
-         if (!verified) return false;
-         if (!mkRaw) return false;
-         return importMk(mkRaw).then(function (key) {
-           return decryptAndLoad(key).then(function (ok) {
-             console.log('[CotizaTec] unlockFingerprint: decrypt=' + ok);
-             if (!ok) return false;
-             _mkRaw = mkRaw;
-             return true;
-           });
-         });
-       });
-     }).catch(function (e) { console.error('[CotizaTec] unlockFingerprint error:', e); return false; });
-   }
+    // Desbloquea con la huella. Primero verifica la identidad biométrica
+    // (prompt simple sin CryptoObject, compatible con la biometría débil del
+    // Redmi A5) y luego lee la clave maestra desde el keystore.
+    // Retorna: { ok: true } si todo bien, { ok: false, reason: 'bio' } si
+    // la biometría falló, { ok: false, reason: 'decrypt' } si la huella fue
+    // verificada pero el descifrado falló (clave no coincide).
+    function unlockFingerprint() {
+      console.log('[CotizaTec] unlockFingerprint: _envelope=' + !!_envelope);
+      if (!_envelope) { console.log('[CotizaTec] unlockFingerprint: no _envelope'); return Promise.resolve({ ok: false, reason: 'none' }); }
+      return mkFromKeystore().then(function (mkRaw) {
+        console.log('[CotizaTec] unlockFingerprint: mkRaw=' + !!mkRaw);
+        return bioVerify().then(function (verified) {
+          console.log('[CotizaTec] unlockFingerprint: verified=' + verified);
+          if (!verified) { console.log('[CotizaTec] unlockFingerprint: bio failed'); return { ok: false, reason: 'bio' }; }
+          if (!mkRaw) { console.log('[CotizaTec] unlockFingerprint: mkRaw null'); return { ok: false, reason: 'bio' }; }
+          return importMk(mkRaw).then(function (key) {
+            return decryptAndLoad(key).then(function (ok) {
+              console.log('[CotizaTec] unlockFingerprint: decrypt=' + ok);
+              if (!ok) { console.log('[CotizaTec] unlockFingerprint: decrypt failed'); return { ok: false, reason: 'decrypt' }; }
+              _mkRaw = mkRaw;
+              return { ok: true };
+            });
+          });
+        });
+      }).catch(function (e) { console.error('[CotizaTec] unlockFingerprint error:', e); return { ok: false, reason: 'error' }; });
+    }
 
   // Desbloquea con la contraseña (respaldo o esquema legado v1). Devuelve true si OK.
   // En el esquema v1 (cifrado directo con la contraseña) descifra y carga sin
   // migrar todavía: la clave v1 se mantiene para re-guardar. La migración al
   // esquema de clave maestra ocurre al activar la protección (huella/contraseña),
   // momento en que el usuario puede autenticarse con biometría.
-  function unlock(password) {
-    if (!_envelope) return Promise.resolve(false);
-    const meta = readEncMeta();
-    if (!meta) return Promise.resolve(false);
-    if (meta.wrap) {
-      return unwrapMk(password, meta.wrap).then(function (mkRaw) {
-        if (!mkRaw) return false;
-        return importMk(mkRaw).then(function (key) {
-          return decryptAndLoad(key).then(function (ok) {
-            if (!ok) return false;
-            _mkRaw = mkRaw;
-            return true;
-          });
-        });
-      }).catch(function () { return false; });
-    }
-    // Esquema legado v1: cifrado directo con la contraseña.
-    if (!meta.salt) return Promise.resolve(false);
-    return deriveKey(password, meta.salt).then(function (key) {
-      return decryptAndLoad(key, true).then(function (ok) {
-        if (!ok) return false;
+   function unlock(password) {
+     console.log('[CotizaTec] unlock: _envelope=' + !!_envelope + ' password.length=' + password.length);
+     if (!_envelope) { console.log('[CotizaTec] unlock: no _envelope'); return Promise.resolve(false); }
+     const meta = readEncMeta();
+     if (!meta) { console.log('[CotizaTec] unlock: no meta'); return Promise.resolve(false); }
+     console.log('[CotizaTec] unlock: meta.wrap=' + !!meta.wrap);
+     if (meta.wrap) {
+       return unwrapMk(password, meta.wrap).then(function (mkRaw) {
+         console.log('[CotizaTec] unlock: mkRaw=' + !!mkRaw);
+         if (!mkRaw) return false;
+         return importMk(mkRaw).then(function (key) {
+           return decryptAndLoad(key).then(function (ok) {
+             console.log('[CotizaTec] unlock: decrypt=' + ok);
+             if (!ok) return false;
+             _mkRaw = mkRaw;
+             return true;
+           });
+         });
+       }).catch(function (e) { console.error('[CotizaTec] unlock: unwrap error', e); return false; });
+     }
+     // Esquema legado v1: cifrado directo con la contraseña.
+     if (!meta.salt) return Promise.resolve(false);
+     return deriveKey(password, meta.salt).then(function (key) {
+       return decryptAndLoad(key, true).then(function (ok) {
+         if (!ok) return false;
         _mkRaw = null; // aún no hay clave maestra; sigue en esquema v1
         _mkStored = false;
         return true;

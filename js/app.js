@@ -1827,9 +1827,16 @@ case 'trabajos': inner = jobsView(); break;
     firstBioUnlock: function () {
       biometricPromptActive = true;
       console.log('[CotizaTec] firstBioUnlock: calling unlockFingerprint');
-      DB.unlockFingerprint().then(function (ok) {
-        console.log('[CotizaTec] firstBioUnlock: result=' + ok);
+      DB.unlockFingerprint().then(function (result) {
+        console.log('[CotizaTec] firstBioUnlock: result=' + JSON.stringify(result));
+        var ok = result && result.ok;
+        var reason = result ? result.reason : null;
         if (!ok) {
+          if (reason === 'decrypt') {
+            console.log('[CotizaTec] firstBioUnlock: decrypt failed -> forceUnlockRecover');
+            UI.forceUnlockRecover();
+            return;
+          }
           if (DB.canUnlockByPassword()) {
             toast('Huella no reconocida. Usa tu contraseña.', false);
             const b = document.getElementById('lock-first-bio');
@@ -1875,7 +1882,9 @@ case 'trabajos': inner = jobsView(); break;
     firstUnlock: function () {
       const inp = document.getElementById('lock-first-pwd');
       const v = (inp ? inp.value : '') || '';
+      console.log('[CotizaTec] firstUnlock: v.length=' + v.length);
       DB.unlock(v).then(function (ok) {
+        console.log('[CotizaTec] firstUnlock: unlock=' + ok);
         if (!ok) { toast('Contraseña incorrecta', false); return; }
         const o = document.getElementById('lock-screen');
         if (o) o.remove();
