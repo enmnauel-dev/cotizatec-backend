@@ -1830,20 +1830,25 @@ case 'trabajos': inner = jobsView(); break;
       DB.unlockFingerprint().then(function (ok) {
         console.log('[CotizaTec] firstBioUnlock: result=' + ok);
         if (!ok) {
-          DB.disableEncryption().then(function () {
-            const o = document.getElementById('lock-screen');
-            if (o) o.remove();
-            unlockApp();
-            init();
-            toast('Huella no pudo descifrar los datos. Entrando sin cifrado...', false);
-            License.getDeviceId().then(function (deviceId) {
-              if (!deviceId) return;
-              Backups.pullFromCloud(deviceId).then(function (restored) {
-                if (restored) { init(); toast('Datos restaurados desde la nube', true); }
-                else { toast('Sin respaldo. Datos reiniciados.', false); }
-              }).catch(function () {});
-            }).catch(function () {});
-          }).catch(function () {});
+          if (DB.canUnlockByPassword()) {
+            toast('Huella no reconocida. Usa tu contraseña.', false);
+            const b = document.getElementById('lock-first-bio');
+            if (b) b.style.display = 'none';
+            const t = document.getElementById('lock-first-toggle');
+            if (t) t.style.display = 'none';
+            const w = document.getElementById('lock-first-pwd-wrap');
+            if (w) w.style.display = 'block';
+            const inp = document.getElementById('lock-first-pwd');
+            if (inp) inp.focus();
+          } else {
+            toast('No se pudo desbloquear con huella. Pulsa "Entrar sin cifrado".', false);
+            var bioBtn = document.getElementById('lock-first-bio');
+            if (bioBtn) bioBtn.style.display = 'none';
+            var pwdWrap = document.getElementById('lock-first-pwd-wrap');
+            if (pwdWrap) pwdWrap.style.display = 'block';
+            pwdWrap.innerHTML = '<p class="muted">La huella no funcionó. Puedes entrar sin cifrado o configurar una contraseña en Ajustes.</p>' +
+              '<button class="btn primary block" data-action="forceUnlockRecover">' + CHECK_ICON + ' Entrar sin cifrado</button>';
+          }
           return;
         }
         const o = document.getElementById('lock-screen');
