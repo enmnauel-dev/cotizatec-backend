@@ -1834,8 +1834,14 @@ case 'trabajos': inner = jobsView(); break;
         var reason = result ? result.reason : null;
         if (!ok) {
           if (reason === 'decrypt') {
-            console.log('[CotizaTec] firstBioUnlock: decrypt failed -> forceUnlockRecover');
-            UI.forceUnlockRecover();
+            console.log('[CotizaTec] firstBioUnlock: decrypt failed -> showing password fallback');
+            toast('Huella verificada pero clave no disponible. Usa tu contraseña.', false);
+            const b = document.getElementById('lock-first-bio');
+            if (b) b.style.display = 'none';
+            const t = document.getElementById('lock-first-toggle');
+            if (t) t.style.display = 'none';
+            const w = document.getElementById('lock-first-pwd-wrap');
+            if (w) { w.style.display = 'block'; const inp = document.getElementById('lock-first-pwd'); if (inp) inp.focus(); }
             return;
           }
           if (DB.canUnlockByPassword()) {
@@ -1883,9 +1889,9 @@ case 'trabajos': inner = jobsView(); break;
     firstUnlock: function () {
       const inp = document.getElementById('lock-first-pwd');
       const v = (inp ? inp.value : '') || '';
-      console.log('[CotizaTec] firstUnlock: v.length=' + v.length);
+      console.log('[PASSWORD] botón presionado, v.length=' + v.length);
       DB.unlock(v).then(function (ok) {
-        console.log('[CotizaTec] firstUnlock: unlock=' + ok);
+        console.log('[PASSWORD] DB.unlock=' + ok);
         if (!ok) { toast('Contraseña incorrecta', false); return; }
         const o = document.getElementById('lock-screen');
         if (o) o.remove();
