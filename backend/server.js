@@ -1263,8 +1263,8 @@ process.on('SIGTERM', function () { gracefulShutdown('SIGTERM'); });
 process.on('SIGINT', function () { gracefulShutdown('SIGINT'); });
 
 store.init().then(() => {
-  app.listen(PORT, () => {
-    console.log('[server] CotizaTec backend en puerto ' + PORT);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log('[server] CotizaTec backend ejecutándose en el puerto ' + PORT);
     if (!process.env.LICENSE_PRIVATE_KEY && !process.env.LICENSE_PUBLIC_KEY) {
       console.warn('[server] ⚠️  Faltan claves de licencia. Ejecuta: npm run genkeys y copia a .env');
     }

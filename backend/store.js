@@ -302,16 +302,34 @@ async function migrateLegacyBackups() {
   }
 }
 
-async function init() {
+function init() {
   if (!DATABASE_URL) return;
   load();
-  await loadFromPg();
-  await migrateLegacyBackups();
-  // Recarga periódica desde Postgres para que cambios externos (o de otra
-  // instancia) se reflejen en la caché en memoria.
-  setInterval(() => {
-    loadFromPg().catch((e) => console.error('[pg] refresh:', e.message));
-  }, 5000);
+  loadFromPg().catch((e) => console.error('[pg] load:', e.message));
+  migrateLegacyBackups().catch((e) => console.error('[pg] migrate:', e.message));
+  schedulePgRefresh();
+}
+
+let pgRefreshBusy = false;
+let pgRefreshInterval = 5000;
+
+function schedulePgRefresh() {
+  setTimeout(async () => {
+    if (pgRefreshBusy) {
+      schedulePgRefresh();
+      return;
+    }
+    pgRefreshBusy = true;
+    try {
+      await loadFromPg();
+      pgRefreshInterval = 5000;
+    } catch (e) {
+      console.error('[pg] refresh:', e.message);
+      pgRefreshInterval = Math.min(pgRefreshInterval * 2, 60000);
+    }
+    pgRefreshBusy = false;
+    schedulePgRefresh();
+  }, pgRefreshInterval);
 }
 
 function deviceCount() {
