@@ -1262,9 +1262,10 @@ function gracefulShutdown(sig) {
 process.on('SIGTERM', function () { gracefulShutdown('SIGTERM'); });
 process.on('SIGINT', function () { gracefulShutdown('SIGINT'); });
 
-store.init().then(() => {
 app.listen(PORT, '0.0.0.0', () => {
-    console.log('[server] CotizaTec backend ejecutándose en el puerto ' + PORT);
+    console.log('[server] CotizaTec backend en puerto ' + PORT);
+});
+store.init().then(() => {
     if (!process.env.LICENSE_PRIVATE_KEY && !process.env.LICENSE_PUBLIC_KEY) {
       console.warn('[server] ⚠️  Faltan claves de licencia. Ejecuta: npm run genkeys y copia a .env');
     }
@@ -1274,5 +1275,4 @@ app.listen(PORT, '0.0.0.0', () => {
       bot.startBot(process.env.TELEGRAM_TOKEN);
       console.log('[bot] Bot de Telegram iniciado.');
     }
-  });
-});
+}).catch((e) => console.error('[server] store.init error:', e.message));
