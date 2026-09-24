@@ -23,7 +23,7 @@ const CLOUD_SECRET = 'cotizatec-cloud-backup-v1';
 const ENC_ITER = 120000;
 const SALT_B64 = 'Y290aXphdGVjLWNsb3VkLXNhbHQ=';
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL + '?sslmode=require', ssl: { rejectUnauthorized: false }, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, keepAlive: true, keepAliveInitialDelayMillis: 10000, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 });
 
 function unb64(s) {
   return new Uint8Array(Buffer.from(s, 'base64').toString('binary').split('').map(function (c) { return c.charCodeAt(0); }));
