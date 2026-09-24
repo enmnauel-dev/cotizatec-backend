@@ -1772,7 +1772,8 @@ case 'trabajos': inner = jobsView(); break;
       if (!bio) { toast('Huella no disponible en este equipo', false); showPasswordField(); return; }
       biometricPromptActive = true;
       if (DB.isProtected()) {
-        DB.unlockFingerprint().then(function (ok) {
+        DB.unlockFingerprint().then(function (result) {
+          var ok = result && result.ok;
           if (!ok) { toast('No se pudo desbloquear con huella', false); showPasswordField(); return; }
           const o = document.getElementById('lock-screen');
           if (o) o.remove();
