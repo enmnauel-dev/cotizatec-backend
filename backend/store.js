@@ -302,11 +302,11 @@ async function migrateLegacyBackups() {
   }
 }
 
-function init() {
+async function init() {
   if (!DATABASE_URL) return;
   load();
-  loadFromPg().catch((e) => console.error('[pg] load:', e.message));
-  migrateLegacyBackups().catch((e) => console.error('[pg] migrate:', e.message));
+  await loadFromPg().catch((e) => console.error('[pg] load:', e.message));
+  await migrateLegacyBackups().catch((e) => console.error('[pg] migrate:', e.message));
   schedulePgRefresh();
 }
 
