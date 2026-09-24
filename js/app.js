@@ -1885,24 +1885,23 @@ case 'trabajos': inner = jobsView(); break;
     },
 
     forceUnlockRecover: function () {
+      console.log('[CotizaTec] forceUnlockRecover: starting');
       DB.disableEncryption().then(function () {
+        console.log('[CotizaTec] forceUnlockRecover: encryption disabled');
         const o = document.getElementById('lock-screen');
         if (o) o.remove();
         unlockApp();
         init();
-        toast('Protección desactivada. Intentando restaurar datos...', true);
+        console.log('[CotizaTec] forceUnlockRecover: init() done, app.innerHTML.length=' + (document.getElementById('app') ? document.getElementById('app').innerHTML.length : 'no app'));
+        toast('Protección desactivada. Intentando restaurar datos desde la nube...', true);
         License.getDeviceId().then(function (deviceId) {
           if (!deviceId) return;
           Backups.pullFromCloud(deviceId).then(function (restored) {
-            if (restored) {
-              init();
-              toast('Datos restaurados desde la nube', true);
-            } else {
-              toast('No se encontraron respaldos. Los datos se reiniciaron.', false);
-            }
+            if (restored) { init(); toast('Datos restaurados desde la nube', true); }
+            else { toast('Sin respaldo. Datos reiniciados.', false); }
           }).catch(function () {});
         }).catch(function () {});
-      });
+      }).catch(function (e) { console.error('[CotizaTec] forceUnlockRecover error:', e); });
     },
 
     seedCatalog: function () {
