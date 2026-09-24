@@ -152,26 +152,29 @@ var DB = (function () {
     }).catch(function () { return false; });
   }
 
-  function mkKeystoreGet() {
-    const bio = bioPlugin();
-    if (!bio) return Promise.resolve(null);
-    return bio.getData({ key: MK_KEY })
-      .then(function (res) { return (res && res.value) || null; })
-      .catch(function () { return null; });
-  }
+   function mkKeystoreGet() {
+     const bio = bioPlugin();
+     console.log('[CotizaTec] mkKeystoreGet: bio=' + !!bio);
+     if (!bio) return Promise.resolve(null);
+     return bio.getData({ key: MK_KEY })
+       .then(function (res) { 
+         console.log('[CotizaTec] mkKeystoreGet: res=' + JSON.stringify(res));
+         return (res && res.value) || null; 
+       })
+       .catch(function (e) { console.error('[CotizaTec] mkKeystoreGet error:', e); return null; });
+   }
 
-  // Muestra el prompt biométrico simple (sin CryptoObject) para verificar la
-  // identidad. Devuelve true si el usuario se autentica con su huella.
-  function bioVerify() {
-    const bio = bioPlugin();
-    if (!bio) return Promise.resolve(false);
-    return bio.verifyIdentity({
-      reason: 'Para desbloquear CotizaTec',
-      title: 'Desbloquear CotizaTec',
-      subtitle: 'Usa tu huella para continuar',
-      negativeButtonText: 'Cancelar'
-    }).then(function () { return true; }).catch(function () { return false; });
-  }
+   function bioVerify() {
+     const bio = bioPlugin();
+     console.log('[CotizaTec] bioVerify: bio=' + !!bio);
+     if (!bio) return Promise.resolve(false);
+     return bio.verifyIdentity({
+       reason: 'Para desbloquear CotizaTec',
+       title: 'Desbloquear CotizaTec',
+       subtitle: 'Usa tu huella para continuar',
+       negativeButtonText: 'Cancelar'
+     }).then(function () { return true; }).catch(function (e) { console.error('[CotizaTec] bioVerify error:', e); return false; });
+   }
 
   function mkKeystoreDel() {
     const bio = bioPlugin();
@@ -795,10 +798,12 @@ var DB = (function () {
   }
 
   // ¿La clave maestra está en el keystore (esquema v2, desbloqueo por huella)?
-  function hasFingerprint() {
-    const meta = readEncMeta();
-    return !!(meta && meta.v === 2);
-  }
+   function hasFingerprint() {
+     const meta = readEncMeta();
+     if (!(meta && meta.v === 2)) return false;
+     const bio = bioPlugin();
+     return !!bio;
+   }
 
   // ¿Se puede desbloquear con una contraseña? (wrap actual o esquema legado v1)
   function canUnlockByPassword() {
@@ -836,26 +841,26 @@ var DB = (function () {
   // Desbloquea con la huella. Primero verifica la identidad biométrica (prompt
   // simple sin CryptoObject, compatible con la biometría débil del Redmi A5) y
   // luego lee la clave maestra desde el keystore. Devuelve true si OK.
-  function unlockFingerprint() {
-    console.log('[CotizaTec] unlockFingerprint: _envelope=' + !!_envelope);
-    if (!_envelope) return Promise.resolve(false);
-    return mkFromKeystore().then(function (mkRaw) {
-      console.log('[CotizaTec] unlockFingerprint: mkRaw=' + !!mkRaw);
-      if (!mkRaw) return false;
-      return bioVerify().then(function (verified) {
-        console.log('[CotizaTec] unlockFingerprint: verified=' + verified);
-        if (!verified) return false;
-        return importMk(mkRaw).then(function (key) {
-          return decryptAndLoad(key).then(function (ok) {
-            console.log('[CotizaTec] unlockFingerprint: decrypt=' + ok);
-            if (!ok) return false;
-            _mkRaw = mkRaw;
-            return true;
-          });
-        });
-      });
-    }).catch(function (e) { console.error('[CotizaTec] unlockFingerprint error:', e); return false; });
-  }
+   function unlockFingerprint() {
+     console.log('[CotizaTec] unlockFingerprint: _envelope=' + !!_envelope);
+     if (!_envelope) { console.log('[CotizaTec] unlockFingerprint: no _envelope'); return Promise.resolve(false); }
+     return mkFromKeystore().then(function (mkRaw) {
+       console.log('[CotizaTec] unlockFingerprint: mkRaw=' + !!mkRaw);
+       return bioVerify().then(function (verified) {
+         console.log('[CotizaTec] unlockFingerprint: verified=' + verified);
+         if (!verified) return false;
+         if (!mkRaw) return false;
+         return importMk(mkRaw).then(function (key) {
+           return decryptAndLoad(key).then(function (ok) {
+             console.log('[CotizaTec] unlockFingerprint: decrypt=' + ok);
+             if (!ok) return false;
+             _mkRaw = mkRaw;
+             return true;
+           });
+         });
+       });
+     }).catch(function (e) { console.error('[CotizaTec] unlockFingerprint error:', e); return false; });
+   }
 
   // Desbloquea con la contraseña (respaldo o esquema legado v1). Devuelve true si OK.
   // En el esquema v1 (cifrado directo con la contraseña) descifra y carga sin
