@@ -847,11 +847,11 @@ var DB = (function () {
     function unlockFingerprint() {
       console.log('[CotizaTec] unlockFingerprint: _envelope=' + !!_envelope);
       if (!_envelope) { console.log('[CotizaTec] unlockFingerprint: no _envelope'); return Promise.resolve({ ok: false, reason: 'none' }); }
-      return mkFromKeystore().then(function (mkRaw) {
-        console.log('[CotizaTec] unlockFingerprint: mkRaw=' + !!mkRaw);
-        return bioVerify().then(function (verified) {
-          console.log('[CotizaTec] unlockFingerprint: verified=' + verified);
-          if (!verified) { console.log('[CotizaTec] unlockFingerprint: bio failed'); return { ok: false, reason: 'bio' }; }
+      return bioVerify().then(function (verified) {
+        console.log('[CotizaTec] unlockFingerprint: verified=' + verified);
+        if (!verified) { console.log('[CotizaTec] unlockFingerprint: bio failed'); return { ok: false, reason: 'bio' }; }
+        return mkFromKeystore().then(function (mkRaw) {
+          console.log('[CotizaTec] unlockFingerprint: mkRaw=' + !!mkRaw);
           if (!mkRaw) { console.log('[CotizaTec] unlockFingerprint: mkRaw null, limpiando flag huella'); try { localStorage.removeItem(ENC_META); } catch (e) {} return { ok: false, reason: 'decrypt' }; }
           return importMk(mkRaw).then(function (key) {
             return decryptAndLoad(key).then(function (ok) {
