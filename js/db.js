@@ -852,7 +852,7 @@ var DB = (function () {
         return bioVerify().then(function (verified) {
           console.log('[CotizaTec] unlockFingerprint: verified=' + verified);
           if (!verified) { console.log('[CotizaTec] unlockFingerprint: bio failed'); return { ok: false, reason: 'bio' }; }
-          if (!mkRaw) { console.log('[CotizaTec] unlockFingerprint: mkRaw null'); return { ok: false, reason: 'decrypt' }; }
+          if (!mkRaw) { console.log('[CotizaTec] unlockFingerprint: mkRaw null, limpiando flag huella'); try { localStorage.removeItem(ENC_META); } catch (e) {} return { ok: false, reason: 'decrypt' }; }
           return importMk(mkRaw).then(function (key) {
             return decryptAndLoad(key).then(function (ok) {
               console.log('[CotizaTec] unlockFingerprint: decrypt=' + ok);
