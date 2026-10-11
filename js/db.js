@@ -167,13 +167,32 @@ var DB = (function () {
    function bioVerify() {
      const bio = bioPlugin();
      console.log('[CotizaTec] bioVerify: bio=' + !!bio);
-     if (!bio) return Promise.resolve(false);
+     if (!bio) return Promise.resolve({ verified: false, code: 99 });
      return bio.verifyIdentity({
        reason: 'Para desbloquear CotizaTec',
        title: 'Desbloquear CotizaTec',
        subtitle: 'Usa tu huella para continuar',
        negativeButtonText: 'Cancelar'
-     }).then(function () { return true; }).catch(function (e) { console.error('[CotizaTec] bioVerify error:', e); return false; });
+     }).then(function () { return { verified: true, code: 0 }; }).catch(function (e) {
+       console.error('[CotizaTec] bioVerify error:', e);
+       return { verified: false, code: (e && e.code) || 0 };
+     });
+   }
+
+   // Códigos que NO deben reintentarse: user cancel (16/-11), negocio cancel,
+   // lockout (4/2), hw no disponible (1). El resto (timeout/error genérico)
+   // permite un reintento porque suelen ser fallos transitorios del prompt.
+   function bioVerifyWithRetry(attempt) {
+     attempt = attempt || 0;
+     return bioVerify().then(function (r) {
+       if (r.verified) return r;
+       var nonRetry = r.code === 1 || r.code === 2 || r.code === 4 || r.code === 16;
+       if (attempt < 1 && !nonRetry) {
+         console.log('[CotizaTec] bioVerify: reintentando tras fallo transitorio code=' + r.code);
+         return new Promise(function (res) { setTimeout(function () { res(bioVerifyWithRetry(attempt + 1)); }, 600); });
+       }
+       return r;
+     });
    }
 
   function mkKeystoreDel() {
@@ -847,9 +866,9 @@ var DB = (function () {
     function unlockFingerprint() {
       console.log('[CotizaTec] unlockFingerprint: _envelope=' + !!_envelope);
       if (!_envelope) { console.log('[CotizaTec] unlockFingerprint: no _envelope'); return Promise.resolve({ ok: false, reason: 'none' }); }
-      return bioVerify().then(function (verified) {
-        console.log('[CotizaTec] unlockFingerprint: verified=' + verified);
-        if (!verified) { console.log('[CotizaTec] unlockFingerprint: bio failed'); return { ok: false, reason: 'bio' }; }
+      return bioVerifyWithRetry().then(function (vr) {
+        console.log('[CotizaTec] unlockFingerprint: verified=' + vr.verified + ' code=' + vr.code);
+        if (!vr.verified) { console.log('[CotizaTec] unlockFingerprint: bio failed'); return { ok: false, reason: 'bio' }; }
         return mkFromKeystore().then(function (mkRaw) {
           console.log('[CotizaTec] unlockFingerprint: mkRaw=' + !!mkRaw);
           if (!mkRaw) { console.log('[CotizaTec] unlockFingerprint: mkRaw null, limpiando flag huella'); try { localStorage.removeItem(ENC_META); } catch (e) {} return { ok: false, reason: 'decrypt' }; }

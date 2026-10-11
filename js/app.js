@@ -1775,23 +1775,18 @@ bioUnlock: function () {
         DB.unlockFingerprint().then(function (result) {
           var ok = result && result.ok;
           if (!ok) { toast('No se pudo desbloquear con huella', false); showPasswordField(); return; }
-          return License.check().then(function (st) {
-            if (!st || st.status === 'none' || st.status === 'blocked') {
-              console.warn('[CotizaTec] Sesión rechazada por backend. Limpiando almacenamiento...');
-              localStorage.clear();
-              document.body.innerHTML = '<div style="text-align:center;padding:40px"><h2>Sesión expirada</h2><p>La base de datos se actualizó. Por favor inicia sesión de nuevo.</p><button class="btn primary" onclick="location.reload()">Iniciar Sesión</button></div>';
-              return;
+          const o = document.getElementById('lock-screen');
+          if (o) o.remove();
+          unlockApp();
+          init();
+          toast('¡Bienvenido!', true);
+          License.check().then(function (st) {
+            UI.setLicenseStatus(st);
+            if (st && (st.status === 'blocked' || st.status === 'none')) {
+              const scr = document.getElementById('license-screen');
+              if (!scr) UI.showLicenseScreen(st);
             }
-            const o = document.getElementById('lock-screen');
-            if (o) o.remove();
-            unlockApp();
-            init();
-            toast('¡Bienvenido!', true);
-          }).catch(function () {
-            console.warn('[CotizaTec] Error verificando sesión backend. Limpiando almacenamiento...');
-            localStorage.clear();
-            showPasswordField();
-          });
+          }).catch(function () {});
         }).finally(function () {
           setTimeout(function () { biometricPromptActive = false; }, 1500);
         });
@@ -1867,34 +1862,30 @@ bioUnlock: function () {
             const inp = document.getElementById('lock-first-pwd');
             if (inp) inp.focus();
           } else {
-            toast('No se pudo desbloquear con huella. Pulsa "Entrar sin cifrado".', false);
+            toast('La huella no se reconoció. Vuelve a intentarlo.', false);
             var bioBtn = document.getElementById('lock-first-bio');
-            if (bioBtn) bioBtn.style.display = 'none';
             var pwdWrap = document.getElementById('lock-first-pwd-wrap');
-            if (pwdWrap) pwdWrap.style.display = 'block';
-            pwdWrap.innerHTML = '<p class="muted">La huella no funcionó. Puedes entrar sin cifrado o configurar una contraseña en Ajustes.</p>' +
-              '<button class="btn primary block" data-action="forceUnlockRecover">' + CHECK_ICON + ' Entrar sin cifrado</button>';
+            if (pwdWrap) {
+              pwdWrap.style.display = 'block';
+              pwdWrap.innerHTML = '<p class="muted">Si la huella sigue fallando, puedes entrar sin cifrado o configurar una contraseña en Ajustes.</p>' +
+                '<button class="btn primary block" data-action="forceUnlockRecover">' + CHECK_ICON + ' Entrar sin cifrado</button>';
+            }
+            if (bioBtn) bioBtn.style.display = 'block';
           }
           return;
         }
-return License.check().then(function (st) {
-             if (!st || st.status === 'none' || st.status === 'blocked') {
-               console.warn('[CotizaTec] Sesión rechazada por backend. Limpiando almacenamiento...');
-               localStorage.clear();
-               document.body.innerHTML = '<div style="text-align:center;padding:40px"><h2>Sesión expirada</h2><p>La base de datos se actualizó. Por favor inicia sesión de nuevo.</p><button class="btn primary" onclick="location.reload()">Iniciar Sesión</button></div>';
-               return;
-             }
-             const o = document.getElementById('lock-screen');
-             if (o) o.remove();
-             unlockApp();
-             init();
-             toast('¡Bienvenido!', true);
-           }).catch(function () {
-             console.warn('[CotizaTec] Error verificando sesión backend. Limpiando almacenamiento...');
-             localStorage.clear();
-             const w = document.getElementById('lock-first-pwd-wrap');
-             if (w) w.style.display = 'block';
-           });
+        const o = document.getElementById('lock-screen');
+        if (o) o.remove();
+        unlockApp();
+        init();
+        toast('¡Bienvenido!', true);
+        License.check().then(function (st) {
+          UI.setLicenseStatus(st);
+          if (st && (st.status === 'blocked' || st.status === 'none')) {
+            const scr = document.getElementById('license-screen');
+            if (!scr) UI.showLicenseScreen(st);
+          }
+        }).catch(function () {});
        }).finally(function () {
          setTimeout(function () { biometricPromptActive = false; }, 1500);
       });
@@ -2428,19 +2419,13 @@ document.addEventListener('DOMContentLoaded', function () {
     setInterval(function () {
       License.refresh().then(function (st) {
         if (!st) return;
-        if (st.status === 'blocked') {
-          UI.setLicenseStatus(st);
-          const scr = document.getElementById('license-screen');
-          if (!scr) UI.showLicenseScreen(st);
-          return;
-        }
-        if (st.status === 'none') {
+        if (st.status === 'blocked' || st.status === 'none') {
           UI.setLicenseStatus(st);
           const scr = document.getElementById('license-screen');
           if (!scr) UI.showLicenseScreen(st);
           return;
         }
         UI.setLicenseStatus(st);
-      }).catch(function () { console.warn('[CotizaTec] License refresh rechazado por backend. Limpiando sesión...'); localStorage.clear(); });
+      }).catch(function () { console.warn('[CotizaTec] License refresh error'); });
     }, 30000);
   }
