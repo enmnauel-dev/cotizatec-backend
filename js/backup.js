@@ -326,5 +326,10 @@ var Backups = (function () {
   }
   if (typeof DB !== 'undefined' && DB.onSave) DB.onSave(_autoPush);
 
+  // Subir el respaldo al iniciar la app y cada 60s: cubre los casos en que la
+  // última subida falló (backend dormido) y la app se cerró antes del reintento.
+  if (typeof setTimeout === 'function') { setTimeout(function () { _doPush(); }, 4000); }
+  if (typeof setInterval === 'function') { setInterval(_doPush, 60000); }
+
   return api;
 })();

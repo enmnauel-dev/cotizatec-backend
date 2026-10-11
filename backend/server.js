@@ -229,26 +229,12 @@ app.get('/api/client/report', async (req, res) => {
   if (!auth) return;
   const { account } = auth;
   try {
-    const devices = account.deviceIds || [];
-    let state = null;
-    for (const deviceId of devices) {
-      const b = await store.getBackup(deviceId);
-      if (b && b.data) {
-        const plain = await webclients.decryptBackup(deviceId, b.data);
-        if (plain) {
-          try {
-            const parsed = JSON.parse(plain);
-            if (parsed && parsed.data) state = parsed.data;
-            break;
-          } catch (e) { /* siguiente dispositivo */ }
-        }
-      }
-    }
-    if (!state) {
+    const data = await readClientData(account.clientId);
+    if (!data.ok || !data.state) {
       const client0 = store.getClient(account.clientId);
-      return res.json({ ok: true, hasData: false, report: null, modules: client0 && client0.modules || [], plan: client0 && client0.plan || null, message: 'TodavÃ­a no hay datos de ventas para este cliente.' });
+      return res.json({ ok: true, hasData: false, report: null, modules: client0 && client0.modules || [], plan: client0 && client0.plan || null, message: 'Todavía no hay datos de ventas para este cliente.' });
     }
-    const report = webclients.computeReport(state);
+    const report = webclients.computeReport(data.state);
     const client = store.getClient(account.clientId);
     res.json({ ok: true, hasData: true, report, modules: client && client.modules || [], plan: client && client.plan || null });
   } catch (e) {
@@ -1132,17 +1118,21 @@ async function readClientData(clientId) {
   const client = store.getClient(clientId);
   if (!client) return { ok: false };
   let state = null;
+  let bestTs = -1;
   for (const d of (client.devices || [])) {
     const b = await store.getBackup(d.deviceId);
-    if (b && b.data) {
-      const plain = await webclients.decryptBackup(d.deviceId, b.data);
-      if (plain) {
-        try {
-          const parsed = JSON.parse(plain);
-          if (parsed && parsed.data) { state = parsed.data; break; }
-        } catch (e) { /* siguiente dispositivo */ }
-      }
-    }
+    if (!(b && b.data)) continue;
+    const plain = await webclients.decryptBackup(d.deviceId, b.data);
+    if (!plain) continue;
+    try {
+      const parsed = JSON.parse(plain);
+      if (!(parsed && parsed.data)) continue;
+      // El respaldo más RECIENTE gana: la app marca cada exportación
+      // con exportedAt en la cabecera del JSON cifrado.
+      const ts = parsed.exportedAt ? new Date(parsed.exportedAt).getTime() : 0;
+      if (isNaN(ts)) continue;
+      if (ts > bestTs) { bestTs = ts; state = parsed.data; }
+    } catch (e) { /* siguiente dispositivo */ }
   }
   return { ok: true, state };
 }
