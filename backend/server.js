@@ -26,7 +26,7 @@ app.use((req, res, next) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, ts: Date.now() });
+  res.json({ ok: true, ts: Date.now(), rev: 'adopt-1' });
 });
 
 app.post('/api/register', (req, res) => {
