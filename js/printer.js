@@ -113,7 +113,7 @@ var Printer = (function () {
   Builder.prototype.line = function (ch) {
     var s = '';
     for (var i = 0; i < this.cols; i++) s += (ch || '-');
-    return this.text(s);
+    return this.text(s).lf();
   };
   Builder.prototype.feed = function (n) { return this.raw(0x1B, 0x64, n || 1); };
   Builder.prototype.cut = function () { return this.raw(0x1D, 0x56, 0x42, 0x00); };
@@ -125,7 +125,12 @@ var Printer = (function () {
     var B = new Builder(cols);
 
     B.init();
-    B.align(1).bold(true).size(3).text(st.businessName || 'Mi Negocio').lf().size(0).bold(false);
+    B.align(1).bold(true);
+    var bn = normalize(st.businessName || 'Mi Negocio');
+    var bnSize = bn.length <= Math.floor(cols / 2) ? 3 : (bn.length <= cols ? 1 : 0);
+    if (bnSize) B.size(bnSize);
+    B.text(bn).lf();
+    B.size(0).bold(false);
     if (st.phone) B.text('Tel: ' + st.phone).lf();
     if (st.address) B.text(st.address).lf();
     B.line('-');
@@ -158,7 +163,7 @@ var Printer = (function () {
     B.text(row('Subtotal', money(t.subtotal), cols)).lf();
     if (t.discount > 0) B.text(row('Descuento', '-' + money(t.discount), cols)).lf();
     if (t.tax > 0) B.text(row('ITBIS (' + t.itbis + '%)', money(t.tax), cols)).lf();
-    B.bold(true).size(1).text(row('TOTAL', money(t.total), cols)).lf().size(0).bold(false);
+    B.text(row('TOTAL', money(t.total), cols)).lf();
     if (t.collected > 0) {
       B.text(row('Abonado', money(t.collected), cols)).lf();
       B.text(row('Saldo', money(t.balance), cols)).lf();
