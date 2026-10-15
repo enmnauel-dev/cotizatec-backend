@@ -18,6 +18,9 @@ var DB = (function () {
     lockOnStart: false,
     relockOnResume: false,
     docTitle: 'COTIZACIÓN',
+    printerAddress: '',
+    printerName: '',
+    printerCols: 32,
     itemTypes: [
       { id: 'SERVICIO', label: 'Servicio', icon: 'tools' },
       { id: 'PRODUCTO', label: 'Producto', icon: 'box' }

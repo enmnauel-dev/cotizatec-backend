@@ -5,7 +5,7 @@ var UI = (function () {
   const { money, toast, isNativeEnv, capacitorPlugin, confirmar, escapeAttr,
     CLIENT_ICON, ITEM_ICON, TOOLS_ICON, WALLET_ICON, FLAG_ICON, PAPER_ICON,
     SAVE_ICON, PDF_ICON, WA_ICON, PLUS_ICON, BACK_ICON, TRASH_ICON,
-    PENCIL_ICON, CHECK_ICON, X_ICON, LOCK_ICON, INFO_ICON, APP_VERSION } = Util;
+    PENCIL_ICON, CHECK_ICON, X_ICON, LOCK_ICON, INFO_ICON, APP_VERSION, PRINT_ICON } = Util;
   const { compressImage, recompressExisting } = Media;
   const { exportBackup, importBackupFile, hashVal, doReset } = Backups;
   const { unlockApp, resetLock, showPasswordField, applyLockScreen, appPlugin, bioApi } = Lock;
@@ -515,6 +515,19 @@ let html = '<form class="card form" data-form="cliente">';
     document.body.appendChild(s);
   }
 
+  function printerPickerSheet(devices) {
+    const saved = Printer.getSaved();
+    let html = '<div class="sheet"><div class="sheet-head"><b>' + PRINT_ICON + ' Elegir impresora</b><button class="icon-btn" data-action="closeSheet">' + X_ICON + '</button></div>';
+    html += '<div class="sheet-body">';
+    html += '<p class="muted">Elige tu impresora térmica (debe estar emparejada en los ajustes de Bluetooth del teléfono).</p>';
+    devices.forEach(function (d) {
+      const on = saved.address === d.address ? ' on' : '';
+      html += '<button class="sheet-item' + on + '" data-action="pickPrinterDevice" data-address="' + escapeAttr(d.address) + '" data-name="' + escapeAttr(d.name) + '"><span>' + PRINT_ICON + ' ' + escapeAttr(d.name) + '</span><small>' + escapeAttr(d.address) + '</small></button>';
+    });
+    html += '</div></div>';
+    return html;
+  }
+
   function resetPassSheet() {
     let html = '<div class="sheet"><div class="sheet-head"><b>' + LOCK_ICON + ' Reiniciar la app</b><button class="icon-btn" data-action="closeSheet">' + X_ICON + '</button></div><div class="sheet-body">';
     html += '<p class="muted">Para borrar todos los datos escribe tu contraseña de seguridad.</p>';
@@ -722,6 +735,9 @@ let html = '<form class="card form" data-form="cliente">';
     html += '<div class="do">';
     html += '<button class="btn w" data-action="pdfShare" data-id="' + j.id + '">' + PDF_ICON + ' PDF</button>';
     html += '<button class="btn p" data-action="whatsapp" data-id="' + j.id + '">' + WA_ICON + ' WhatsApp</button>';
+    html += '</div>';
+    html += '<div class="do">';
+    html += '<button class="btn" data-action="printTicket" data-id="' + j.id + '">' + PRINT_ICON + ' Imprimir ticket</button>';
     html += '</div>';
 
     html += '<section class="card"><h3>' + ITEM_ICON + ' Conceptos</h3>';
@@ -951,6 +967,19 @@ function settingsView() {
     html += '<label>Prefijo de cotización</label><input type="text" name="quotePrefix" value="' + escapeAttr(s.quotePrefix || 'COT') + '">';
     html += '<label>Título del documento</label><input type="text" name="docTitle" value="' + escapeAttr(s.docTitle || 'COTIZACIÓN') + '" placeholder="COTIZACIÓN / PEDIDO / FACTURA">';
     html += '<button class="btn small primary" type="submit">' + SAVE_ICON + ' Guardar</button>';
+    html += '</section>';
+
+    const savedP = Printer.getSaved();
+    html += '<section class="card form">';
+    html += '<h3>' + PRINT_ICON + ' Impresora de tickets</h3>';
+    html += '<p class="muted">Imprime tickets en una impresora térmica Bluetooth (ESC/POS). Empareja la impresora en los ajustes de Bluetooth del teléfono y luego selecciónala aquí.</p>';
+    html += '<p class="muted">Seleccionada: <b>' + (savedP.address ? escapeAttr(savedP.name || savedP.address) : 'Ninguna') + '</b></p>';
+    html += '<div class="btns-row">';
+    html += '<button class="btn small primary" type="button" data-action="pickPrinter">' + PRINT_ICON + ' Elegir impresora</button>';
+    if (savedP.address) html += '<button class="btn small" type="button" data-action="testPrint">Imprimir prueba</button>';
+    html += '</div>';
+    html += '<label>Ancho del papel</label>';
+    html += '<select name="printerCols"><option value="32"' + (savedP.cols === 32 ? ' selected' : '') + '>58 mm (32 columnas)</option><option value="48"' + (savedP.cols === 48 ? ' selected' : '') + '>80 mm (48 columnas)</option></select>';
     html += '</section>';
 
     html += '<section class="card form">';
@@ -1622,6 +1651,53 @@ case 'trabajos': inner = jobsView(); break;
       window.open(url, '_blank');
     },
 
+    printTicket: function (el) {
+      const j = DB.find('jobs', el.dataset.id);
+      if (!j) return;
+      if (!Printer.available()) { toast('La impresión solo funciona en la app instalada', false); return; }
+      if (!Printer.getSaved().address) { toast('Selecciona tu impresora en Ajustes', false); return; }
+      toast('Imprimiendo…', true);
+      Printer.printTicket(j).then(function () {
+        toast('Ticket enviado a la impresora', true);
+      }).catch(function (e) {
+        toast((e && e.message) ? e.message : 'No se pudo imprimir', false);
+      });
+    },
+
+    pickPrinter: function () {
+      if (!Printer.available()) { toast('La impresión solo funciona en la app instalada', false); return; }
+      toast('Buscando impresoras…', true);
+      Printer.listDevices().then(function (devs) {
+        if (!devs.length) {
+          toast('No hay dispositivos emparejados. Empareja la impresora en los ajustes de Bluetooth del teléfono.', false);
+          return;
+        }
+        openSheet(printerPickerSheet(devs));
+      }).catch(function (e) {
+        toast((e && e.message) ? e.message : 'Error de Bluetooth', false);
+      });
+    },
+
+    pickPrinterDevice: function (el) {
+      const dev = { address: el.dataset.address, name: el.dataset.name };
+      Printer.setSaved(dev);
+      const sh = document.getElementById('sheet-holder');
+      if (sh) sh.remove();
+      toast('Impresora: ' + dev.name, true);
+      render();
+    },
+
+    testPrint: function () {
+      if (!Printer.available()) { toast('La impresión solo funciona en la app instalada', false); return; }
+      if (!Printer.getSaved().address) { toast('Selecciona tu impresora primero', false); return; }
+      toast('Imprimiendo prueba…', true);
+      Printer.testPrint().then(function () {
+        toast('Prueba enviada', true);
+      }).catch(function (e) {
+        toast((e && e.message) ? e.message : 'No se pudo imprimir', false);
+      });
+    },
+
     removeExpense: function (el) {
       const j = DB.find('jobs', el.dataset.id);
       if (!j) return;
@@ -2067,6 +2143,7 @@ bioUnlock: function () {
       s.validityDays = form.elements.validityDays.value.trim() === '' ? 0 : Math.max(1, Number(form.elements.validityDays.value) || 1);
       s.quotePrefix = form.elements.quotePrefix.value.trim() || 'COT';
       if (form.elements.docTitle) s.docTitle = form.elements.docTitle.value.trim() || 'COTIZACIÓN';
+      if (form.elements.printerCols) s.printerCols = parseInt(form.elements.printerCols.value, 10) === 48 ? 48 : 32;
       s.lockOnStart = form.elements.lockOnStart.checked;
       s.relockOnResume = form.elements.relockOnResume.checked;
       DB.save();

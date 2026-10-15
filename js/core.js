@@ -53,6 +53,7 @@ var Util = (function () {
   const LOCK_ICON = '&#128274;';
   const INFO_ICON = '&#8505;';
   const WARNING_ICON = '&#9888;';
+  const PRINT_ICON = '&#128424;';
   const APP_VERSION = '1.3.0';
 
   const api = {};
@@ -60,7 +61,8 @@ var Util = (function () {
     money, toast, isNativeEnv, capacitorPlugin, confirmar, escapeAttr,
     CLIENT_ICON, ITEM_ICON, TOOLS_ICON, WALLET_ICON, FLAG_ICON, PAPER_ICON,
     SAVE_ICON, PDF_ICON, WA_ICON, PLUS_ICON, BACK_ICON, TRASH_ICON,
-    PENCIL_ICON, CHECK_ICON, X_ICON, LOCK_ICON, INFO_ICON, APP_VERSION
+    PENCIL_ICON, CHECK_ICON, X_ICON, LOCK_ICON, INFO_ICON, APP_VERSION,
+    PRINT_ICON
   });
   return api;
 })();
