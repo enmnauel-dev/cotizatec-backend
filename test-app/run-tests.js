@@ -97,6 +97,26 @@ async function main() {
     ok(Array.isArray(d.catalog) && Array.isArray(d.clients) && Array.isArray(d.jobs), 'estructura del backup válida');
   }
 
+  // ============ 5. Licencia: no degradar una licencia de pago a prueba ============
+  section('5) License.isBetterLicense(): conserva la licencia de pago local');
+  {
+    const L = s.License;
+    const day = 86400000;
+    const now = Date.now();
+    const paidLocal = { trial: false, expiresAt: now + 20 * day, graceUntil: now + 35 * day };
+    const trialServer = { trial: true, expiresAt: now + 15 * day, graceUntil: now + 15 * day };
+    ok(L.isBetterLicense(paidLocal, trialServer), 'pago local gana ante prueba del servidor');
+    ok(!L.isBetterLicense(trialServer, paidLocal), 'prueba local no gana ante pago del servidor');
+
+    const olderPaid = { trial: false, expiresAt: now + 5 * day, graceUntil: now + 20 * day };
+    const newerPaid = { trial: false, expiresAt: now + 25 * day, graceUntil: now + 40 * day };
+    ok(L.isBetterLicense(newerPaid, olderPaid), 'la licencia que vence mas tarde gana');
+    ok(!L.isBetterLicense(olderPaid, newerPaid), 'la licencia que vence antes no gana');
+
+    const expiredLocal = { trial: false, expiresAt: now - 10 * day, graceUntil: now - 1 * day };
+    ok(!L.isBetterLicense(expiredLocal, trialServer), 'licencia vencida no gana ante una prueba valida');
+  }
+
   summary();
 }
 

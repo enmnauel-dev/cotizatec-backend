@@ -56,6 +56,30 @@ app.get('/api/license/:deviceId', (req, res) => {
   }
   let l = store.getLicense(deviceId);
   const now = Date.now();
+  // Re-adopcion: si el servidor perdio el registro (reinicio, disco efimero,
+  // base de datos vacia o carrera de refresco), recuperamos la licencia firmada
+  // que aun guarda la app. Aceptamos solo tokens con firma valida y del mismo
+  // dispositivo, y solo si son mejores (pago vs prueba, o vencen mas tarde) que
+  // lo que ya tenemos. Evita que una activacion pagada caiga a prueba.
+  const clientToken = String((req.query && req.query.token) || req.headers['x-license-token'] || '').trim();
+  if (clientToken) {
+    const cp = license.verifyLicense(clientToken);
+    if (cp && cp.deviceId === deviceId && typeof cp.expiresAt === 'number') {
+      const better = !l
+        || (!!l.trial && !cp.trial)
+        || (Number(cp.expiresAt) > Number(l.expiresAt || 0) + 60000);
+      if (better) {
+        l = store.setLicense(deviceId, {
+          deviceId,
+          issuedAt: cp.issuedAt || now,
+          expiresAt: cp.expiresAt,
+          graceUntil: cp.graceUntil || cp.expiresAt,
+          trial: !!cp.trial,
+          token: clientToken
+        });
+      }
+    }
+  }
   if (!l) {
     const trialDays = Number(process.env.TRIAL_DAYS) || 15;
     const expiresAt = now + trialDays * 86400000;

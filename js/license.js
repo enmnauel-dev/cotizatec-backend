@@ -125,12 +125,41 @@ var License = (function () {
     });
   }
 
+  // Una licencia es "usable" si aun no agoto su periodo de gracia.
+  function isUsable(p) {
+    return !!p && Date.now() < (p.graceUntil || p.expiresAt || 0);
+  }
+
+  // True si la licencia local conviene mas que la del servidor: evita que una
+  // licencia de pago se degrade a prueba por un servidor que perdio el registro.
+  function isBetterLicense(local, server) {
+    if (!isUsable(local)) return false;
+    var lt = !!local.trial;
+    var st = !!server.trial;
+    if (!lt && st) return true;
+    if (lt && !st) return false;
+    return Number(local.expiresAt || 0) > Number(server.expiresAt || 0) + 60000;
+  }
+
+  function withTimeout(ms) {
+    if (typeof AbortController === 'undefined') {
+      return { signal: undefined, done: function () {} };
+    }
+    var ctrl = new AbortController();
+    var t = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, ms);
+    return { signal: ctrl.signal, done: function () { clearTimeout(t); } };
+  }
+
   function checkOnline() {
     if (typeof fetch === 'undefined') return Promise.resolve(null);
     var url = SERVER_BASE + '/api/license/' + encodeURIComponent(state.deviceId);
-    var timer = setTimeout(function () {}, 8000);
-    return fetch(url).then(function (r) { return r.json(); }).then(function (body) {
-      clearTimeout(timer);
+    // Enviamos la licencia local para que el servidor pueda re-adoptarla si
+    // perdio sus datos: asi una activacion pagada nunca cae a prueba.
+    if (state.token) url += '?token=' + encodeURIComponent(state.token);
+    var to = withTimeout(12000);
+    var opts = to.signal ? { signal: to.signal } : undefined;
+    return fetch(url, opts).then(function (r) { return r.json(); }).then(function (body) {
+      to.done();
       if (body && typeof body.supportPhone === 'string') {
         state.supportPhone = body.supportPhone;
         persist();
@@ -141,20 +170,29 @@ var License = (function () {
         return { blocked: true };
       }
       if (body && body.ok && body.token) {
-        state.token = body.token;
-        persist();
-        return verifyToken(body.token);
+        // Verificamos ANTES de guardar: si el token del servidor no verifica,
+        // conservamos el token local en vez de destruirlo. Si la licencia local
+        // es mejor (p. ej. de pago frente a una prueba del servidor), la
+        // mantenemos para no perder la activacion pagada.
+        return verifyToken(body.token).then(function (serverPayload) {
+          var local = state.token ? verifyToken(state.token) : Promise.resolve(null);
+          return local.then(function (localPayload) {
+            if (!serverPayload) return localPayload || null;
+            if (isBetterLicense(localPayload, serverPayload)) return localPayload;
+            state.token = body.token;
+            persist();
+            return serverPayload;
+          });
+        });
       }
-      if (body && body.status === 'none') {
-        state.token = '';
-        persist();
-      }
+      // Ante un estado transitorio/desconocido no borramos el token local.
       return null;
     }).then(function (result) {
+      to.done();
       registerDevice();
       return result;
     }).catch(function () {
-      clearTimeout(timer);
+      to.done();
       return null;
     });
   }
@@ -299,5 +337,5 @@ var License = (function () {
     });
   }
 
-  return { check: check, refresh: refresh, getDeviceId: getDeviceId, getSupportPhone: function () { return state.supportPhone; }, isLoaded: isLoaded, verifyToken: verifyToken, parseToken: parseToken, requestNotificationPermission: requestNotificationPermission };
+  return { check: check, refresh: refresh, getDeviceId: getDeviceId, getSupportPhone: function () { return state.supportPhone; }, isLoaded: isLoaded, verifyToken: verifyToken, parseToken: parseToken, isBetterLicense: isBetterLicense, requestNotificationPermission: requestNotificationPermission };
 })();

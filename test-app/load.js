@@ -55,5 +55,6 @@ sandbox.window = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.join(JS_DIR, 'db.js'), 'utf8'), sandbox, { filename: 'db.js' });
 vm.runInContext(fs.readFileSync(path.join(JS_DIR, 'backup.js'), 'utf8'), sandbox, { filename: 'backup.js' });
+vm.runInContext(fs.readFileSync(path.join(JS_DIR, 'license.js'), 'utf8'), sandbox, { filename: 'license.js' });
 
 module.exports = sandbox;

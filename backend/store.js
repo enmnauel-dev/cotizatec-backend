@@ -48,14 +48,38 @@ async function pgGet(key) {
   return r.rows.length ? r.rows[0].v : null;
 }
 
+// Contador monotono por clave: detecta si hubo una escritura local mientras
+// loadFromPg() leia PostgreSQL, para no pisar datos frescos con una copia vieja.
+const dirtySeq = {};
+
 async function pgSet(key, val) {
+  dirtySeq[key] = (dirtySeq[key] || 0) + 1;
   await pgQuery('INSERT INTO cotizatec_data (k, v) VALUES ($1, $2) ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v', [key, JSON.stringify(val)]);
 }
 
 let cache = null;
 let cacheMtime = 0;
 
+function ensureShape(c) {
+  if (!c.devices) c.devices = {};
+  if (!c.licenses) c.licenses = {};
+  if (!c.blocked) c.blocked = {};
+  if (!c.clients) c.clients = [];
+  if (!c.backups) c.backups = {};
+  if (!c.claims) c.claims = {};
+  if (!c.documents) c.documents = [];
+  if (!c.gps) c.gps = {};
+  return c;
+}
+
 function load() {
+  // Con PostgreSQL configurado, la BD es la fuente de verdad y la mantenemos en
+  // memoria (loadFromPg la refresca). El archivo en disco es efimero en el
+  // hosting gratuito, asi que no lo usamos para no resucitar datos viejos.
+  if (DATABASE_URL) {
+    if (!cache) cache = {};
+    return ensureShape(cache);
+  }
   let mtime = 0;
   try { mtime = fs.statSync(DATA_FILE).mtimeMs; } catch (e) { /* no file yet */ }
   if (cache && cacheMtime === mtime) return cache;
@@ -65,18 +89,11 @@ function load() {
   } catch (e) {
     cache = { devices: {}, licenses: {}, blocked: {}, clients: [] };
   }
-  if (!cache.devices) cache.devices = {};
-  if (!cache.licenses) cache.licenses = {};
-  if (!cache.blocked) cache.blocked = {};
-  if (!cache.clients) cache.clients = [];
-  if (!cache.backups) cache.backups = {};
-  if (!cache.claims) cache.claims = {};
-  if (!cache.documents) cache.documents = [];
-  if (!cache.gps) cache.gps = {};
-  return cache;
+  return ensureShape(cache);
 }
 
 function save() {
+  if (DATABASE_URL) return; // PostgreSQL es la fuente de verdad.
   const dir = path.dirname(DATA_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const tmp = DATA_FILE + '.tmp';
@@ -232,7 +249,9 @@ function allLicenses() {
 
 async function loadFromPg() {
   if (!DATABASE_URL) return;
+  if (!cache) load();
   try {
+    const snap = Object.assign({}, dirtySeq);
     const devices = await pgGet('devices');
     const licenses = await pgGet('licenses');
     const clients = await pgGet('clients');
@@ -240,13 +259,20 @@ async function loadFromPg() {
     const gps = await pgGet('gps');
     const webAccounts = await pgGet('webAccounts');
     const documents = await pgGet('documents');
-    if (devices) cache.devices = devices;
-    if (licenses) cache.licenses = licenses;
-    if (clients) cache.clients = clients;
-    if (blocked) cache.blocked = blocked;
-    if (gps) cache.gps = gps;
-    if (webAccounts) cache.webAccounts = webAccounts;
-    if (documents) cache.documents = documents;
+    // Solo aplicamos una clave si no hubo escrituras locales durante la lectura:
+    // asi una licencia recien activada no se pierde por una copia desactualizada.
+    const apply = (key, val) => {
+      if (val == null) return;
+      if ((dirtySeq[key] || 0) !== (snap[key] || 0)) return;
+      cache[key] = val;
+    };
+    apply('devices', devices);
+    apply('licenses', licenses);
+    apply('clients', clients);
+    apply('blocked', blocked);
+    apply('gps', gps);
+    apply('webAccounts', webAccounts);
+    apply('documents', documents);
     if (!cache.blocked) cache.blocked = {};
   } catch (e) {
     console.error('[pg] load:', e.message);
