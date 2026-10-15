@@ -1,20 +1,41 @@
 // Impresion de tickets en impresoras termicas por Bluetooth (ESC/POS).
-// Requiere el plugin nativo "BluetoothPrinter" (android/app/src/main/java/.../BluetoothPrinterPlugin.java).
+// Usa window.NativeBridge (MainActivity) expuesto a la app instalada de Android.
 var Printer = (function () {
-  function plugin() {
+  function bridge() {
     try {
-      if (!window.Capacitor) return null;
-      if (window.Capacitor.Plugins && window.Capacitor.Plugins.BluetoothPrinter) return window.Capacitor.Plugins.BluetoothPrinter;
-      if (window.Capacitor.registerPlugin) return window.Capacitor.registerPlugin('BluetoothPrinter');
+      if (window.NativeBridge && typeof window.NativeBridge.btPrint === 'function') return window.NativeBridge;
     } catch (e) {}
     return null;
   }
 
-  function isNative() {
-    try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch (e) { return false; }
+  function isNative() { return !!bridge(); }
+
+  function available() { return !!bridge(); }
+
+  function status() {
+    var b = bridge();
+    if (!b) return { supported: false, enabled: false, granted: false };
+    try { return JSON.parse(b.btStatus() || '{}'); } catch (e) { return { supported: false, enabled: false, granted: false }; }
   }
 
-  function available() { return isNative() && !!plugin(); }
+  function ensureReady() {
+    var b = bridge();
+    if (!b) return Promise.reject(new Error('La impresion solo funciona en la app instalada'));
+    var st = status();
+    if (!st.supported) return Promise.reject(new Error('Este telefono no tiene Bluetooth'));
+    if (!st.enabled) return Promise.reject(new Error('Activa el Bluetooth en tu telefono'));
+    if (st.granted) return Promise.resolve();
+    try { b.btRequestPermission(); } catch (e) {}
+    return new Promise(function (resolve, reject) {
+      var tries = 0;
+      var iv = setInterval(function () {
+        tries++;
+        var s2 = status();
+        if (s2.granted) { clearInterval(iv); resolve(); }
+        else if (tries >= 15) { clearInterval(iv); reject(new Error('Concede el permiso de Bluetooth a CotizaTec y vuelve a intentar')); }
+      }, 400);
+    });
+  }
 
   // La mayoria de impresoras termicas no manejan acentos bien sin configurar code page.
   function normalize(s) {
@@ -160,26 +181,12 @@ var Printer = (function () {
     return btoa(s);
   }
 
-  function checkReady() {
-    return plugin().checkPermissions().then(function (st) {
-      if (!st) throw new Error('Bluetooth no disponible');
-      if (!st.supported) throw new Error('Este dispositivo no tiene Bluetooth');
-      if (!st.enabled) throw new Error('Activa el Bluetooth en tu telefono');
-      if (!st.granted) {
-        return plugin().requestPermissions().then(function (st2) {
-          if (!st2 || !st2.granted) throw new Error('Concede el permiso de Bluetooth a CotizaTec');
-          return st2;
-        });
-      }
-      return st;
-    });
-  }
-
   function listDevices() {
-    return checkReady().then(function () {
-      return plugin().listDevices();
-    }).then(function (r) {
-      return (r && r.devices) || [];
+    return ensureReady().then(function () {
+      var b = bridge();
+      var raw = b.btList() || '[]';
+      if (raw.indexOf('ERR:') === 0) throw new Error(raw.slice(4));
+      return JSON.parse(raw);
     });
   }
 
@@ -202,17 +209,14 @@ var Printer = (function () {
   }
 
   function printBytes(bytes) {
-    return checkReady().then(function () {
+    return ensureReady().then(function () {
       var sv = getSaved();
       if (!sv.address) throw new Error('Primero selecciona tu impresora en Ajustes');
-      return plugin().connect({ address: sv.address });
-    }).then(function () {
-      return plugin().print({ data: toBase64(bytes) });
-    }).then(function () {
-      return plugin().disconnect().catch(function () {});
-    }).catch(function (e) {
-      try { plugin().disconnect(); } catch (x) {}
-      throw new Error((e && e.message) ? e.message : 'No se pudo imprimir');
+      var res = bridge().btPrint(sv.address, toBase64(bytes));
+      if (res !== 'OK') {
+        var msg = (res && res.indexOf('ERR:') === 0) ? res.slice(4) : (res || 'No se pudo imprimir');
+        throw new Error(msg);
+      }
     });
   }
 
@@ -236,10 +240,10 @@ var Printer = (function () {
   return {
     available: available,
     isNative: isNative,
+    status: status,
     getSaved: getSaved,
     setSaved: setSaved,
     listDevices: listDevices,
-    checkReady: checkReady,
     printTicket: printTicket,
     testPrint: testPrint,
     buildTicket: buildTicket
