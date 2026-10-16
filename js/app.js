@@ -537,8 +537,28 @@ let html = '<form class="card form" data-form="cliente">';
     return html;
   }
 
+  function staffSetPinSheet(activate) {
+    let html = '<div class="sheet"><div class="sheet-head"><b>' + LOCK_ICON + ' PIN del dueño</b><button class="icon-btn" data-action="closeSheet">' + X_ICON + '</button></div><div class="sheet-body">';
+    html += '<p class="muted">Este PIN protege el catálogo y los precios. No lo compartas con tus vendedores.</p>';
+    html += '<input id="staff-pin-1" class="sheet-input" type="tel" inputmode="numeric" maxlength="8" placeholder="PIN (4 a 8 dígitos)">';
+    html += '<input id="staff-pin-2" class="sheet-input" type="tel" inputmode="numeric" maxlength="8" placeholder="Repite el PIN">';
+    html += '<button class="btn primary block" data-action="staffSavePin" data-activate="' + (activate ? '1' : '0') + '">' + CHECK_ICON + ' Guardar PIN' + (activate ? ' y activar' : '') + '</button>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function staffExitSheet() {
+    let html = '<div class="sheet"><div class="sheet-head"><b>' + LOCK_ICON + ' Salir del modo vendedor</b><button class="icon-btn" data-action="closeSheet">' + X_ICON + '</button></div><div class="sheet-body">';
+    html += '<p class="muted">Escribe el PIN del dueño para desbloquear el catálogo y los precios.</p>';
+    html += '<input id="staff-pin-exit" class="sheet-input" type="tel" inputmode="numeric" maxlength="8" placeholder="PIN del dueño">';
+    html += '<button class="btn primary block" data-action="staffConfirmExit">' + CHECK_ICON + ' Desbloquear</button>';
+    html += '</div></div>';
+    return html;
+  }
+
   function catalog() {
     const s = DB.state;
+    const staff = DB.isStaffMode();
     const filter = params.filter || 'ALL';
     const types = Array.isArray(s.settings.itemTypes) ? s.settings.itemTypes : [];
     let html = '<div class="chips">';
@@ -550,8 +570,11 @@ let html = '<form class="card form" data-form="cliente">';
 
     const items = s.catalog.filter(function (i) { return filter === 'ALL' || i.type === filter; }).sort(function (a, b) { return a.name.localeCompare(b.name); });
 
+    if (staff) {
+      html += '<p class="muted">' + LOCK_ICON + ' Modo vendedor: el catálogo y los precios están protegidos. Solo el dueño puede editarlos.</p>';
+    }
     if (!items.length) {
-      html += emptyBox(ITEM_ICON, 'Tu catálogo estará aquí. Añade tus servicios y productos', { action: 'newCatalogItem', label: 'Nuevo ítem' });
+      html += emptyBox(ITEM_ICON, 'Tu catálogo estará aquí. Añade tus servicios y productos', staff ? null : { action: 'newCatalogItem', label: 'Nuevo ítem' });
     } else {
       html += '<div class="h-search">&#128269;&nbsp;<input data-search="catalog" placeholder="Buscar ítem…"></div>';
       items.forEach(function (i) {
@@ -564,14 +587,21 @@ let html = '<form class="card form" data-form="cliente">';
           html += '<small class="pack-hint">Caja × ' + i.packQty + (i.unit ? ' ' + escapeAttr(i.unit) : '') + ' · ' + money(pk) + '</small>';
         }
         html += '</div>';
-        html += '<div class="person-actions"><button class="icon-btn" data-action="editCatalog" data-id="' + i.id + '">' + PENCIL_ICON + '</button><button class="icon-btn danger" data-action="removeCatalog" data-id="' + i.id + '">' + TRASH_ICON + '</button></div></div>';
+        if (!staff) html += '<div class="person-actions"><button class="icon-btn" data-action="editCatalog" data-id="' + i.id + '">' + PENCIL_ICON + '</button><button class="icon-btn danger" data-action="removeCatalog" data-id="' + i.id + '">' + TRASH_ICON + '</button></div>';
+        html += '</div>';
       });
     }
-    html += '<button class="btn block" data-action="newCatalogItem">' + PLUS_ICON + ' Nuevo ítem</button>';
+    if (!staff) html += '<button class="btn block" data-action="newCatalogItem">' + PLUS_ICON + ' Nuevo ítem</button>';
     return html;
   }
 
   function catalogFormView() {
+    if (DB.isStaffMode()) {
+      let lock = '<section class="card"><h3>' + LOCK_ICON + ' Catálogo protegido</h3>';
+      lock += '<p class="muted">Estás en <b>modo vendedor</b>. Solo el dueño puede crear o editar ítems y precios del catálogo.</p>';
+      lock += '<button class="btn block" type="button" data-action="back">' + BACK_ICON + ' Volver</button></section>';
+      return lock;
+    }
     const id = params.id;
     const i = id ? DB.find('catalog', id) : null;
     let html = '<form class="card form" data-form="catalog"><label>Nombre *</label><input type="text" name="name" value="' + escapeAttr(i ? i.name : '') + '" placeholder="Ej. Cambio de compresor">';
@@ -628,12 +658,13 @@ let html = '<form class="card form" data-form="cliente">';
     html += '<div id="item-list">' + itemsListHtml(j) + '</div>';
     html += '<div class="row btns-row">';
     html += '<button class="btn small" data-action="openCatalogPicker">' + ITEM_ICON + ' Catálogo</button>';
-    html += '<button class="btn small ghost" data-action="addManualLine">' + PLUS_ICON + ' Línea manual</button>';
+    if (!DB.isStaffMode()) html += '<button class="btn small ghost" data-action="addManualLine">' + PLUS_ICON + ' Línea manual</button>';
     html += '</div>';
+    if (DB.isStaffMode()) html += '<p class="muted"><small>' + LOCK_ICON + ' Modo vendedor: los precios vienen del catálogo y no se pueden modificar.</small></p>';
     html += '</section>';
 
     html += '<section class="card form">';
-    html += '<label>Descuento (RD$)</label><input type="number" step="0.01" min="0" id="qc-disc" value="' + (j.discount || 0) + '">';
+    html += '<label>Descuento (RD$)' + (DB.isStaffMode() ? ' <small class="muted">(solo el dueño)</small>' : '') + '</label><input type="number" step="0.01" min="0" id="qc-disc" value="' + (j.discount || 0) + '"' + (DB.isStaffMode() ? ' readonly' : '') + '>';
     html += '<label>ITBIS %</label><input type="number" step="1" min="0" id="qc-itbis" value="' + (j.itbis || 0) + '">';
     html += '<label>Notas</label><textarea id="qc-notes" rows="2" placeholder="Garantía, forma de pago, tiempo de entrega...">' + escapeAttr(j.notes || '') + '</textarea>';
     html += '</section>';
@@ -650,13 +681,14 @@ let html = '<form class="card form" data-form="cliente">';
 
   function itemsListHtml(j) {
     const items = j.items || [];
+    const ro = DB.isStaffMode() ? ' readonly' : '';
     if (!items.length) return '<p class="muted">Sin conceptos todavía. Agrega desde el catálogo o crea una línea manual.</p>';
     let h = '';
     items.forEach(function (it, idx) {
       h += '<div class="q-item"><input class="qi-qty" type="number" min="0" step="1" data-qf="qty" data-qi="' + idx + '" value="' + (it.qty || 1) + '">';
       h += '<input class="qi-desc" type="text" data-qf="desc" data-qi="' + idx + '" placeholder="Descripción" value="' + escapeAttr(it.desc || '') + '">';
-      h += '<input class="qi-price" type="number" min="0" step="0.01" data-qf="price" data-qi="' + idx + '" value="' + (it.price || '') + '">';
-      h += '<input class="qi-cost" type="number" min="0" step="0.01" data-qf="cost" data-qi="' + idx + '" placeholder="costo" value="' + (it.cost != null ? it.cost : '') + '">';
+      h += '<input class="qi-price" type="number" min="0" step="0.01" data-qf="price" data-qi="' + idx + '" value="' + (it.price || '') + '"' + ro + '>';
+      h += '<input class="qi-cost" type="number" min="0" step="0.01" data-qf="cost" data-qi="' + idx + '" placeholder="costo" value="' + (it.cost != null ? it.cost : '') + '"' + ro + '>';
       h += '<span class="qi-sub" id="qi-sub-' + idx + '">' + money((it.qty || 0) * (it.price || 0)) + '</span>';
       h += '<button class="icon-btn danger qi-del" data-action="removeQuoteItem" data-id="' + idx + '">' + X_ICON + '</button>';
       h += '</div>';
@@ -1023,6 +1055,24 @@ function settingsView() {
     html += '<p class="muted">' + (s.resetPassword ? (LOCK_ICON + ' Protegido: datos cifrados con AES-256. Se pedirá la contraseña al abrir la app.') : 'Sin contraseña: los datos se guardan sin cifrar en el dispositivo.') + '</p>';
     html += '</section>';
 
+    const staffOn = DB.isStaffMode();
+    const hasPin = DB.hasStaffPin();
+    html += '<section class="card"><h3>' + LOCK_ICON + ' Modo vendedor</h3>';
+    html += '<p class="muted">Bloquea el catálogo y los precios para que un vendedor no los modifique. Para volver al modo dueño se pide el PIN.</p>';
+    if (staffOn) {
+      html += '<p class="muted" style="color:#f59e0b"><b>Modo vendedor activo.</b> El catálogo y los precios están protegidos en este equipo.</p>';
+      html += '<button class="btn primary block" type="button" data-action="staffExit">' + LOCK_ICON + ' Salir del modo vendedor (PIN)</button>';
+    } else {
+      html += '<p class="muted"><b>Modo dueño activo.</b> Puedes editar el catálogo y los precios.</p>';
+      html += '<button class="btn block" type="button" data-action="staffEnter">' + LOCK_ICON + ' Activar modo vendedor</button>';
+      if (hasPin) {
+        html += '<button class="btn block ghost" type="button" data-action="staffChangePin">Cambiar PIN del dueño</button>';
+      } else {
+        html += '<p class="muted"><small>Al activarlo crearás un PIN de dueño (4 a 8 dígitos). No lo compartas con tus vendedores.</small></p>';
+      }
+    }
+    html += '</section>';
+
     html += '<section class="card"><h3>' + SAVE_ICON + ' Respaldo de datos</h3>';
     html += '<p class="muted">Crea un archivo cifrado con contraseña con todos tus datos (catálogo, clientes, cotizaciones y ajustes) y guárdalo en tu OneDrive o Google Drive. Con Restaurar los recuperas en este u otro dispositivo.</p>';
     html += '<button class="btn primary block" type="button" data-action="createBackup">' + SAVE_ICON + ' Crear respaldo</button>';
@@ -1311,6 +1361,14 @@ case 'trabajos': inner = jobsView(); break;
     return html;
   }
 
+  function blockIfStaff() {
+    if (DB.isStaffMode()) {
+      toast('Estás en modo vendedor. Solo el dueño puede cambiar el catálogo o los precios.', false);
+      return true;
+    }
+    return false;
+  }
+
   const ACTIONS = {
 
     forceUnlockRecover: function () { UI.forceUnlockRecover(); },
@@ -1440,11 +1498,12 @@ case 'trabajos': inner = jobsView(); break;
       render();
     },
 
-    newCatalogItem: function () { go('#/catalogo-item/nuevo'); },
+    newCatalogItem: function () { if (blockIfStaff()) return; go('#/catalogo-item/nuevo'); },
 
-    editCatalog: function (el) { go('#/catalogo-item/editar/' + el.dataset.id); },
+    editCatalog: function (el) { if (blockIfStaff()) return; go('#/catalogo-item/editar/' + el.dataset.id); },
 
     removeCatalog: function (el) {
+      if (blockIfStaff()) return;
       const i = DB.find('catalog', el.dataset.id);
       if (!i) return;
       if (!confirmar('¿Eliminar "' + i.name + '" del catálogo?')) return;
@@ -1516,6 +1575,7 @@ case 'trabajos': inner = jobsView(); break;
     },
 
     addManualLine: function () {
+      if (blockIfStaff()) return;
       ensureDraft();
       if (!draft.items) draft.items = [];
       draft.items.push({ desc: '', qty: 1, price: 0, cost: 0 });
@@ -1704,6 +1764,61 @@ case 'trabajos': inner = jobsView(); break;
       DB.state.settings.printerCols = cols;
       DB.save();
       toast('Ancho de papel guardado: ' + (cols === 48 ? '80 mm (48 columnas)' : '58 mm (32 columnas)'), true);
+    },
+
+    staffEnter: function () {
+      if (DB.isStaffMode()) return;
+      if (!DB.hasStaffPin()) {
+        DB.setStaffPin('12345').then(function () {
+          DB.save();
+          openSheet(staffSetPinSheet(false));
+          toast('PIN por defecto: 12345. Cámbialo ahora por el tuyo.', true);
+        }).catch(function () {
+          openSheet(staffSetPinSheet(true));
+        });
+        return;
+      }
+      DB.setStaffMode(true);
+      DB.save();
+      render();
+      toast('Modo vendedor activado', true);
+    },
+
+    staffChangePin: function () { openSheet(staffSetPinSheet(false)); },
+
+    staffSavePin: function (el) {
+      const activate = el && el.dataset.activate === '1';
+      const pin = String((document.getElementById('staff-pin-1') || {}).value || '').trim();
+      const pin2 = String((document.getElementById('staff-pin-2') || {}).value || '').trim();
+      if (!/^\d{4,8}$/.test(pin)) { toast('El PIN debe tener de 4 a 8 dígitos', false); return; }
+      if (pin !== pin2) { toast('Los PIN no coinciden', false); return; }
+      DB.setStaffPin(pin).then(function () {
+        if (activate) DB.setStaffMode(true);
+        DB.save();
+        const sh = document.getElementById('sheet-holder');
+        if (sh) sh.remove();
+        render();
+        toast(activate ? 'Modo vendedor activado' : 'PIN actualizado', true);
+      }).catch(function () { toast('No se pudo guardar el PIN', false); });
+    },
+
+    staffExit: function () {
+      if (!DB.isStaffMode()) return;
+      openSheet(staffExitSheet());
+    },
+
+    staffConfirmExit: function () {
+      const pin = String((document.getElementById('staff-pin-exit') || {}).value || '').trim();
+      if (!pin) { toast('Escribe tu PIN', false); return; }
+      DB.verifyStaffPin(pin).then(function (ok) {
+        if (!ok) { toast('PIN incorrecto', false); return; }
+        DB.setStaffMode(false);
+        DB.save();
+        const sh = document.getElementById('sheet-holder');
+        if (sh) sh.remove();
+        render();
+        toast('Modo dueño activado', true);
+      }).catch(function () { toast('No se pudo verificar el PIN', false); });
     },
 
     removeExpense: function (el) {
@@ -2122,6 +2237,7 @@ bioUnlock: function () {
     }
 
     if (routeName === 'catalogo-item') {
+      if (DB.isStaffMode()) { toast('Estás en modo vendedor. Solo el dueño puede editar el catálogo.', false); go('#/catalogo'); return; }
       const name = form.elements.name.value.trim();
       const price = Number(form.elements.price.value);
       if (!name || isNaN(price) || price < 0) { toast('Nombre y precio obligatorios', false); return; }

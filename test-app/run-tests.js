@@ -117,6 +117,33 @@ async function main() {
     ok(!L.isBetterLicense(expiredLocal, trialServer), 'licencia vencida no gana ante una prueba valida');
   }
 
+  // ============ 6. Modo vendedor: PIN del dueño ============
+  section('6) Modo vendedor: PIN del dueño (staffMode/staffPin)');
+  {
+    DB.setStaffMode(false);
+    DB.clearStaffPin();
+    ok(DB.isStaffMode() === false, 'arranca en modo dueño');
+    ok(DB.hasStaffPin() === false, 'sin PIN al inicio');
+
+    await DB.setStaffPin('1234');
+    ok(DB.hasStaffPin() === true, 'hasStaffPin true tras setStaffPin');
+    ok(String(DB.state.settings.staffPin).indexOf('1234') === -1, 'el PIN no se guarda en claro');
+    ok(/:/.test(String(DB.state.settings.staffPin)), 'staffPin tiene formato salt:hash');
+
+    ok((await DB.verifyStaffPin('1234')) === true, 'PIN correcto verifica');
+    ok((await DB.verifyStaffPin('9999')) === false, 'PIN incorrecto no verifica');
+
+    DB.setStaffMode(true);
+    ok(DB.isStaffMode() === true, 'setStaffMode(true) activa el modo vendedor');
+
+    DB.setStaffMode(false);
+    ok(DB.isStaffMode() === false, 'setStaffMode(false) vuelve al modo dueño');
+
+    DB.clearStaffPin();
+    ok(DB.hasStaffPin() === false, 'clearStaffPin elimina el PIN');
+    ok((await DB.verifyStaffPin('1234')) === false, 'sin PIN, verify falla (no desbloquea)');
+  }
+
   summary();
 }
 

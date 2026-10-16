@@ -21,6 +21,8 @@ var DB = (function () {
     printerAddress: '',
     printerName: '',
     printerCols: 32,
+    staffMode: false,
+    staffPin: '',
     itemTypes: [
       { id: 'SERVICIO', label: 'Servicio', icon: 'tools' },
       { id: 'PRODUCTO', label: 'Producto', icon: 'box' }
@@ -398,6 +400,8 @@ var DB = (function () {
     if (!s.jobs) s.jobs = [];
     if (!Array.isArray(s.settings.itemTypes)) s.settings.itemTypes = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.itemTypes));
     if (!s.settings.docTitle) s.settings.docTitle = DEFAULT_SETTINGS.docTitle;
+    if (typeof s.settings.staffMode !== 'boolean') s.settings.staffMode = false;
+    if (typeof s.settings.staffPin !== 'string') s.settings.staffPin = '';
     const LEGACY_TYPES = { MO: 'SERVICIO', REP: 'PRODUCTO' };
     (s.catalog || []).forEach(function (i) {
       if (i && LEGACY_TYPES[i.type]) i.type = LEGACY_TYPES[i.type];
@@ -990,6 +994,77 @@ var DB = (function () {
     });
   }
 
+  // ===== Modo vendedor (rol empleado) + PIN del dueño =====
+  // Protege el catálogo y los precios en el equipo. Es una barrera anti-error
+  // local (no un control servidor), pensada para el teléfono compartido del negocio.
+  function _hex(buf) {
+    const b = new Uint8Array(buf);
+    let s = '';
+    for (let i = 0; i < b.length; i++) s += ('0' + b[i].toString(16)).slice(-2);
+    return s;
+  }
+
+  function _randHex(n) {
+    const a = new Uint8Array(n);
+    try {
+      if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(a);
+      else for (let i = 0; i < n; i++) a[i] = Math.floor(Math.random() * 256);
+    } catch (e) {
+      for (let i = 0; i < n; i++) a[i] = Math.floor(Math.random() * 256);
+    }
+    return _hex(a);
+  }
+
+  // Respaldo síncrono (FNV-1a) por si el entorno no tiene WebCrypto (p. ej. tests).
+  function _fnv(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h * 0x01000193) >>> 0; }
+    return ('00000000' + h.toString(16)).slice(-8);
+  }
+
+  function hashPin(pin, salt) {
+    const sub = subtle();
+    if (sub && sub.digest && typeof TextEncoder !== 'undefined') {
+      return sub.digest('SHA-256', new TextEncoder().encode(salt + '::' + String(pin)))
+        .then(function (buf) { return _hex(buf); })
+        .catch(function () { return _fnv(salt + '::' + String(pin)); });
+    }
+    return Promise.resolve(_fnv(salt + '::' + String(pin)));
+  }
+
+  function isStaffMode() {
+    return !!(state && state.settings && state.settings.staffMode);
+  }
+
+  function hasStaffPin() {
+    return !!(state && state.settings && state.settings.staffPin);
+  }
+
+  function setStaffPin(pin) {
+    const salt = _randHex(16);
+    return hashPin(pin, salt).then(function (h) {
+      if (state && state.settings) state.settings.staffPin = salt + ':' + h;
+      return h;
+    });
+  }
+
+  function verifyStaffPin(pin) {
+    const stored = state && state.settings && state.settings.staffPin;
+    if (!stored) return Promise.resolve(false);
+    const idx = String(stored).indexOf(':');
+    const salt = idx >= 0 ? String(stored).slice(0, idx) : '';
+    const h = idx >= 0 ? String(stored).slice(idx + 1) : String(stored);
+    return hashPin(pin, salt).then(function (x) { return x === h; });
+  }
+
+  function setStaffMode(on) {
+    if (state && state.settings) state.settings.staffMode = !!on;
+  }
+
+  function clearStaffPin() {
+    if (state && state.settings) { state.settings.staffPin = ''; state.settings.staffMode = false; }
+  }
+
   function boot() {
     return Promise.resolve().then(function () {
       if (_envelope) return 'locked';
@@ -1015,6 +1090,7 @@ var DB = (function () {
      startedFromLocal, restoreFromIdb, restoreFromFs, fsFlush, itemType,
      needsUnlock, isEncrypted, isProtected, hasBackupPassword, hasFingerprint, canUnlockByPassword, bioAvailable, mkKeystoreExists,
      unlock, unlockFingerprint, setEncryption, removePassword, disableEncryption, relock, boot, blankState,
+     isStaffMode, hasStaffPin, setStaffPin, verifyStaffPin, setStaffMode, clearStaffPin,
      onSave
   });
   return api;
