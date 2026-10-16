@@ -52,6 +52,11 @@ async function pgGet(key) {
 // loadFromPg() leia PostgreSQL, para no pisar datos frescos con una copia vieja.
 const dirtySeq = {};
 
+// Copia en memoria de los respaldos. Sirve de respaldo (valga la redundancia)
+// cuando PostgreSQL falla: asi el panel web sigue mostrando datos mientras la
+// app siga subiendo (cada 60s) y no se pierde silenciosamente lo recibido.
+const backupCache = {};
+
 async function pgSet(key, val) {
   dirtySeq[key] = (dirtySeq[key] || 0) + 1;
   await pgQuery('INSERT INTO cotizatec_data (k, v) VALUES ($1, $2) ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v', [key, JSON.stringify(val)]);
@@ -328,9 +333,35 @@ async function migrateLegacyBackups() {
   }
 }
 
+// Crea las tablas si no existen. Esto evita que las escrituras fallen en
+// silencio (p. ej. si la base de datos se creo sin la tabla de respaldos),
+// que era justo lo que provocaba que el panel web mostrara todo en ceros.
+async function ensureSchema() {
+  if (!DATABASE_URL) return;
+  try {
+    await pgQuery('CREATE TABLE IF NOT EXISTS cotizatec_data (k TEXT PRIMARY KEY, v JSONB)');
+    await pgQuery('CREATE TABLE IF NOT EXISTS cotizatec_backups (device_id TEXT PRIMARY KEY, data TEXT, saved_at BIGINT, size INTEGER)');
+    console.log('[pg] esquema verificado');
+  } catch (e) {
+    console.error('[pg] ensureSchema:', e.message);
+  }
+}
+
+// Diagnostico: informa si PostgreSQL esta configurado y responde.
+async function pgHealth() {
+  if (!DATABASE_URL) return { configured: false, ok: false };
+  try {
+    await pgQuery('SELECT 1');
+    return { configured: true, ok: true };
+  } catch (e) {
+    return { configured: true, ok: false, error: e.message };
+  }
+}
+
 async function init() {
   if (!DATABASE_URL) return;
   load();
+  await ensureSchema().catch((e) => console.error('[pg] ensureSchema:', e.message));
   await loadFromPg().catch((e) => console.error('[pg] load:', e.message));
   await migrateLegacyBackups().catch((e) => console.error('[pg] migrate:', e.message));
   schedulePgRefresh();
@@ -381,6 +412,7 @@ function removeDevice(deviceId) {
     return c;
   });
   if (db.backups) delete db.backups[deviceId];
+  delete backupCache[deviceId];
   if (DATABASE_URL) {
     pgBackupDelete(deviceId).catch(function (e) { console.error('[pg] delete backup:', e.message); });
   }
@@ -552,8 +584,10 @@ async function setBackup(deviceId, data) {
     try {
       await pgBackupSet(deviceId, data);
     } catch (e) {
-      console.error('[pg] save backup:', e.message);
+      console.error('[pg] save backup (se conserva en memoria):', e.message);
     }
+    // Guardamos SIEMPRE una copia en memoria como respaldo.
+    backupCache[deviceId] = rec;
     return rec;
   }
   const db = load();
@@ -567,11 +601,12 @@ async function getBackup(deviceId) {
   if (DATABASE_URL) {
     try {
       const rec = await pgBackupGet(deviceId);
-      return rec;
+      if (rec) return rec;
     } catch (e) {
       console.error('[pg] load backup:', e.message);
-      return null;
     }
+    // Si PostgreSQL no tiene (o fallo), usamos la copia en memoria.
+    return backupCache[deviceId] || null;
   }
   return (load().backups || {})[deviceId] || null;
 }
@@ -680,6 +715,7 @@ async function migrateDevice(fromId, toId) {
 async function resolveMigration(toId) {
   const oldId = await getClaim(toId);
   if (!oldId) return false;
+  delete backupCache[oldId];
   if (DATABASE_URL) {
     await pgBackupDelete(oldId).catch(function (e) { console.error('[pg] delete migrated backup:', e.message); });
   } else {
@@ -725,6 +761,8 @@ module.exports = {
   blockedCount,
   setBackup,
   getBackup,
+  ensureSchema,
+  pgHealth,
   migrateDevice,
   resolveMigration,
   getClaim,
