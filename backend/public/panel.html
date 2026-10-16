@@ -704,6 +704,7 @@ function docFieldsHTML(type) {
 
 // ===== Módulos — tabs =====
 let activeMod = null;
+let gpsTimer = null;
 const MOD_DEFS = [
   { key: 'docs', icon: '📄', label: 'Documentos', render: renderDocsContent },
   { key: 'gps', icon: '📡', label: 'GPS', render: renderGpsContent },
