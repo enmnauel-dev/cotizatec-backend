@@ -53,8 +53,12 @@ app.post('/api/register', (req, res) => {
 app.get('/api/license/:deviceId', (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   const supportPhone = process.env.SUPPORT_PHONE || '';
+  // Borrado remoto (solo programador vía Telegram): se entrega UNA vez al
+  // dispositivo y se limpia en el servidor para no repetirlo en cada consulta.
+  const wipe = store.isWipePending(deviceId);
+  if (wipe) store.clearWipe(deviceId);
   if (store.isBlocked(deviceId)) {
-    return res.json({ ok: false, status: 'blocked', supportPhone, message: 'Dispositivo bloqueado. Contacta al administrador.' });
+    return res.json({ ok: false, status: 'blocked', supportPhone, wipe, message: 'Dispositivo bloqueado. Contacta al administrador.' });
   }
   let l = store.getLicense(deviceId);
   const now = Date.now();
@@ -87,7 +91,7 @@ app.get('/api/license/:deviceId', (req, res) => {
     const expiresAt = now + trialDays * 86400000;
     const payload = { v: 1, deviceId, issuedAt: now, expiresAt, graceUntil: expiresAt, trial: true };
     l = store.setLicense(deviceId, { deviceId, issuedAt: now, expiresAt, graceUntil: expiresAt, trial: true, token: license.signLicense(payload) });
-    return res.json({ ok: true, status: 'trial', trial: true, supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, token: l.token });
+    return res.json({ ok: true, status: 'trial', trial: true, supportPhone, wipe, issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, token: l.token });
   }
   let token = l.token;
   try {
@@ -101,15 +105,15 @@ app.get('/api/license/:deviceId', (req, res) => {
     }
   } catch (e) {}
   if (now < l.expiresAt) {
-    return res.json({ ok: true, status: 'active', supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, token });
+    return res.json({ ok: true, status: 'active', supportPhone, wipe, issuedAt: l.issuedAt, expiresAt: l.expiresAt, token });
   }
   if (now < l.graceUntil) {
-    return res.json({ ok: true, status: 'grace', supportPhone, issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, token });
+    return res.json({ ok: true, status: 'grace', supportPhone, wipe, issuedAt: l.issuedAt, expiresAt: l.expiresAt, graceUntil: l.graceUntil, token });
   }
   const message = l.trial
     ? 'Tu perÃ­odo de prueba terminÃ³. ActÃ­vala contactando al administrador por WhatsApp.'
     : 'Licencia vencida y perÃ­odo de gracia agotado. Contacta al administrador para renovar.';
-  return res.json({ ok: false, status: 'expired', supportPhone, message });
+  return res.json({ ok: false, status: 'expired', supportPhone, wipe, message });
 });
 
 app.get('/api/device/:deviceId', (req, res) => {

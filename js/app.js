@@ -980,6 +980,7 @@ function settingsView() {
     html += '</div>';
     html += '<label>Ancho del papel</label>';
     html += '<select name="printerCols"><option value="32"' + (savedP.cols === 32 ? ' selected' : '') + '>58 mm (32 columnas)</option><option value="48"' + (savedP.cols === 48 ? ' selected' : '') + '>80 mm (48 columnas)</option></select>';
+    html += '<div class="btns-row"><button class="btn small primary" type="button" data-action="savePrinterWidth">' + SAVE_ICON + ' Guardar</button></div>';
     html += '</section>';
 
     html += '<section class="card form">';
@@ -1011,8 +1012,8 @@ function settingsView() {
     html += '</section>';
     html += '</form>';
 
-    html += '<section class="card danger-zone"><h3>' + TRASH_ICON + ' Zona de riesgo</h3>';
-    html += '<p class="muted">Esto borra todos tus datos locales (clientes, catálogo, cotizaciones).</p>';
+    html += '<section class="card danger-zone"><h3>' + LOCK_ICON + ' Seguridad de la app</h3>';
+    html += '<p class="muted">Protege el acceso a la app y cifra tus datos (AES-256). La contraseña se pedirá al abrir CotizaTec en este equipo.</p>';
     html += '<label for="reset-pwd-set">Contraseña de seguridad (opcional)</label>';
     html += '<input type="password" id="reset-pwd-set" class="sheet-input" placeholder="Mínimo 4 caracteres">';
     html += '<div class="btns-row">';
@@ -1020,7 +1021,6 @@ function settingsView() {
     if (s.resetPassword) html += '<button class="btn small danger-ghost" type="button" data-action="removeResetPassword">' + X_ICON + ' Quitar</button>';
     html += '</div>';
     html += '<p class="muted">' + (s.resetPassword ? (LOCK_ICON + ' Protegido: datos cifrados con AES-256. Se pedirá la contraseña al abrir la app.') : 'Sin contraseña: los datos se guardan sin cifrar en el dispositivo.') + '</p>';
-    html += '<button class="btn block danger-ghost" data-action="resetData">Reiniciar la app</button>';
     html += '</section>';
 
     html += '<section class="card"><h3>' + SAVE_ICON + ' Respaldo de datos</h3>';
@@ -1696,6 +1696,14 @@ case 'trabajos': inner = jobsView(); break;
       }).catch(function (e) {
         toast((e && e.message) ? e.message : 'No se pudo imprimir', false);
       });
+    },
+
+    savePrinterWidth: function () {
+      const sel = document.querySelector('select[name="printerCols"]');
+      const cols = sel && parseInt(sel.value, 10) === 48 ? 48 : 32;
+      DB.state.settings.printerCols = cols;
+      DB.save();
+      toast('Ancho de papel guardado: ' + (cols === 48 ? '80 mm (48 columnas)' : '58 mm (32 columnas)'), true);
     },
 
     removeExpense: function (el) {

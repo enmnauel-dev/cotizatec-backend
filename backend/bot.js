@@ -82,6 +82,7 @@ function startBot(token) {
         '/activar <deviceId> [días] — activar licencia (por defecto ' + LICENSE_DAYS + ' días)',
         '/renovar <deviceId> [días] — renovar/ampliar licencia',
         '/bloquear <deviceId> — revocar licencia',
+        '/borrar <deviceId> — borrar los datos locales del equipo (clientes, catálogo, cotizaciones)',
         '/estado <deviceId> — ver estado de un dispositivo',
         '/migrar <viejo> <nuevo> — mover respaldo (y licencia) a otro dispositivo',
         '/avisar <deviceId> — enviar aviso de pago al cliente',
@@ -156,9 +157,28 @@ if (!arg) { bot.sendMessage(chatId, 'Usa: /bloquear <deviceId>'); return; }
       return;
     }
 
+    if (cmd === '/borrar') {
+      if (!arg) { bot.sendMessage(chatId, 'Usa: /borrar <deviceId>'); return; }
+      const deviceId = arg.trim();
+      if (!Object.prototype.hasOwnProperty.call(store.allDevices(), deviceId)) {
+        bot.sendMessage(chatId, '⚠️ Ese deviceId no está registrado. Verifícalo con /dispositivos.');
+        return;
+      }
+      store.markWipe(deviceId);
+      bot.sendMessage(chatId,
+        '🧹 Borrado remoto programado para ' + deviceId.slice(0, 16) + '…\n' +
+        'La app borrará sus datos locales (clientes, catálogo, cotizaciones) la próxima vez que se abra con internet.\n' +
+        '💡 El respaldo en el servidor (para el panel web) no se toca.');
+      return;
+    }
+
     if (cmd === '/estado') {
       if (!arg) { bot.sendMessage(chatId, 'Usa: /estado <deviceId>'); return; }
       const deviceId = arg.trim();
+      if (store.isWipePending(deviceId)) {
+        bot.sendMessage(chatId, '⏳ ' + deviceId.slice(0, 16) + '…: tiene un borrado remoto PENDIENTE (se aplicará al abrir la app).');
+        return;
+      }
       if (store.isBlocked(deviceId)) {
         bot.sendMessage(chatId, 'Estado ' + deviceId.slice(0, 16) + '…: 🔒 bloqueado manualmente.');
         return;

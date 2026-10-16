@@ -124,6 +124,7 @@ function ensureShape(c) {
   if (!c.claims) c.claims = {};
   if (!c.documents) c.documents = [];
   if (!c.gps) c.gps = {};
+  if (!c.wipes) c.wipes = {};
   return c;
 }
 
@@ -314,6 +315,7 @@ async function loadFromPg() {
     const gps = await pgGet('gps');
     const webAccounts = await pgGet('webAccounts');
     const documents = await pgGet('documents');
+    const wipes = await pgGet('wipes');
     // Solo aplicamos una clave si no hubo escrituras locales durante la lectura:
     // asi una licencia recien activada no se pierde por una copia desactualizada.
     const apply = (key, val) => {
@@ -328,7 +330,9 @@ async function loadFromPg() {
     apply('gps', gps);
     apply('webAccounts', webAccounts);
     apply('documents', documents);
+    apply('wipes', wipes);
     if (!cache.blocked) cache.blocked = {};
+    if (!cache.wipes) cache.wipes = {};
   } catch (e) {
     console.error('[pg] load:', e.message);
   }
@@ -472,6 +476,7 @@ function removeDevice(deviceId) {
   delete db.devices[deviceId];
   delete db.licenses[deviceId];
   delete db.blocked[deviceId];
+  if (db.wipes) delete db.wipes[deviceId];
   db.clients = (db.clients || []).map((c) => {
     c.devices = (c.devices || []).filter((d) => d.deviceId !== deviceId);
     return c;
@@ -488,6 +493,7 @@ function removeDevice(deviceId) {
       pgSet('licenses', db.licenses).catch(function (e) { console.error('[pg] save licenses:', e.message); });
       pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients:', e.message); });
       pgSet('blocked', db.blocked).catch(function (e) { console.error('[pg] save blocked:', e.message); });
+      if (db.wipes) pgSet('wipes', db.wipes).catch(function (e) { console.error('[pg] save wipes:', e.message); });
     }
   }
   return had;
@@ -523,6 +529,38 @@ function isBlocked(deviceId) {
 
 function blockedCount() {
   return Object.keys(load().blocked || {}).length;
+}
+
+// ===== Borrado remoto de datos locales (solo programador vía Telegram) =====
+// Marca un deviceId para que la app borre sus datos locales la próxima vez que
+// se abra y consulte su licencia. Es de un solo uso: se entrega y se limpia.
+function markWipe(deviceId) {
+  const db = load();
+  if (!db.wipes) db.wipes = {};
+  db.wipes[deviceId] = Date.now();
+  save();
+  if (DATABASE_URL) {
+    pgSet('wipes', db.wipes).catch(function (e) { console.error('[pg] save wipes:', e.message); });
+  }
+  return db.wipes[deviceId];
+}
+
+function isWipePending(deviceId) {
+  return !!((load().wipes || {})[deviceId]);
+}
+
+function clearWipe(deviceId) {
+  const db = load();
+  if (!db.wipes) db.wipes = {};
+  const had = !!db.wipes[deviceId];
+  delete db.wipes[deviceId];
+  if (had) {
+    save();
+    if (DATABASE_URL) {
+      pgSet('wipes', db.wipes).catch(function (e) { console.error('[pg] save wipes:', e.message); });
+    }
+  }
+  return had;
 }
 
 function clientId() {
@@ -824,6 +862,9 @@ module.exports = {
   unblockDevice,
   isBlocked,
   blockedCount,
+  markWipe,
+  isWipePending,
+  clearWipe,
   setBackup,
   getBackup,
   ensureSchema,
