@@ -3,7 +3,11 @@ const path = require('path');
 const zlib = require('zlib');
 
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
-const DATABASE_URL = process.env.DATABASE_URL || '';
+const rawDatabaseUrl = process.env.DATABASE_URL || '';
+// Interruptor de emergencia: con PG_DISABLED=1 se desactiva PostgreSQL por
+// completo (se usa el archivo/respaldo en memoria) sin borrar DATABASE_URL.
+const PG_DISABLED = /^(1|true|yes|on)$/i.test(String(process.env.PG_DISABLED || ''));
+const DATABASE_URL = PG_DISABLED ? '' : rawDatabaseUrl;
 
 const { Pool } = require('pg');
 const pool = new Pool({
@@ -16,31 +20,77 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 pool.on('error', (err) => {
+  if (isPgFatalErr(err)) { pgDownMark(err); return; }
+  if (isPgConnErr(err)) { pgDownMark(err); return; }
   console.error('[pg] Error en cliente inactivo:', err.message);
 });
-pool.on('connect', () => console.log('[pg] Conectado al pool'));
+pool.on('connect', () => { pgUpMark(); console.log('[pg] Conectado al pool'); });
 
 let retryDelay = 1000;
 const MAX_RETRY_DELAY = 30000;
 
+// Cortacircuitos: si PostgreSQL falla por conexion (p. ej. el host del
+// DATABASE_URL ya no existe), dejamos de intentar en cada operacion y avisamos
+// UNA sola vez, en vez de inundar los logs. Se reintenta en segundo plano.
+let pgDown = false;
+let pgDownLogged = false;
+let pgDownUntil = 0;
+const PG_COOLDOWN = 60000;
+
+function isPgConnErr(e) {
+  return /ENOTFOUND|getaddrinfo|ECONNREFUSED|ENETUNREACH|EHOSTUNREACH|ETIMEDOUT|ECONNRESET|terminated|disconnect|pg_hba|password authentication/i.test(String(e && e.message || ''));
+}
+
+function isPgFatalErr(e) {
+  // Errores "permanentes": reintentar no sirve (host inexistente, rechazo).
+  return /ENOTFOUND|getaddrinfo|ENETUNREACH|EHOSTUNREACH|ECONNREFUSED|pg_hba|password authentication/i.test(String(e && e.message || ''));
+}
+
+function pgDownMark(e) {
+  pgDown = true;
+  pgDownUntil = Date.now() + PG_COOLDOWN;
+  if (!pgDownLogged) {
+    console.error('[pg] PostgreSQL no disponible: ' + (e && e.message) + '. Se usa respaldo en memoria y se reintenta en segundo plano.');
+    pgDownLogged = true;
+  }
+}
+
+function pgUpMark() {
+  if (pgDown) console.log('[pg] PostgreSQL reconectado');
+  pgDown = false;
+  pgDownLogged = false;
+  pgDownUntil = 0;
+}
+
+// Registro de errores de PostgreSQL que respeta el cortacircuitos: si ya
+// avisamos de que la BD esta caida, no repetimos el mensaje en cada operacion.
+function pgErr(tag, e) {
+  if (pgDown) return;
+  console.error('[pg] ' + tag + ':', e && e.message);
+}
+
 async function pgQuery(text, params) {
+  // Cortacircuitos abierto: devolvemos un resultado vacio para que quien llame
+  // use su respaldo (memoria/archivo) sin lanzar ni escribir en los logs.
+  if (pgDown && Date.now() < pgDownUntil) return { rows: [] };
   let lastErr;
   for (let attempt = 1; attempt <= 5; attempt++) {
     try {
-      return await pool.query(text, params);
+      const r = await pool.query(text, params);
+      pgUpMark();
+      return r;
     } catch (e) {
       lastErr = e;
-      if (/terminated|disconnect|ETIMEDOUT|ECONNRESET/i.test(e.message)) {
-        console.error('[pg] Query fallida (intento ' + attempt + '):', e.message);
-        const delay = Math.min(retryDelay, MAX_RETRY_DELAY);
-        await new Promise(r => setTimeout(r, delay));
-        retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
-      } else {
-        throw e;
-      }
+      if (!isPgConnErr(e)) throw e; // error real de SQL: que se vea
+      pgDownMark(e);
+      if (isPgFatalErr(e)) return { rows: [] }; // host inexistente: no reintentar
+      const delay = Math.min(retryDelay, MAX_RETRY_DELAY);
+      await new Promise(r => setTimeout(r, delay));
+      retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
     }
   }
-  throw lastErr;
+  pgDownMark(lastErr);
+  return { rows: [] };
 }
 
 async function pgGet(key) {
@@ -339,21 +389,26 @@ async function migrateLegacyBackups() {
 async function ensureSchema() {
   if (!DATABASE_URL) return;
   try {
-    await pgQuery('CREATE TABLE IF NOT EXISTS cotizatec_data (k TEXT PRIMARY KEY, v JSONB)');
-    await pgQuery('CREATE TABLE IF NOT EXISTS cotizatec_backups (device_id TEXT PRIMARY KEY, data TEXT, saved_at BIGINT, size INTEGER)');
+    await pool.query('CREATE TABLE IF NOT EXISTS cotizatec_data (k TEXT PRIMARY KEY, v JSONB)');
+    await pool.query('CREATE TABLE IF NOT EXISTS cotizatec_backups (device_id TEXT PRIMARY KEY, data TEXT, saved_at BIGINT, size INTEGER)');
+    pgUpMark();
     console.log('[pg] esquema verificado');
   } catch (e) {
-    console.error('[pg] ensureSchema:', e.message);
+    if (isPgConnErr(e)) pgDownMark(e); else console.error('[pg] ensureSchema:', e.message);
   }
 }
 
-// Diagnostico: informa si PostgreSQL esta configurado y responde.
+// Diagnostico: informa si PostgreSQL esta configurado y responde. Usa el pool
+// directamente (omite el cortacircuitos) para poder detectar la reconexion, y
+// no escribe en los logs para no generar ruido.
 async function pgHealth() {
   if (!DATABASE_URL) return { configured: false, ok: false };
   try {
-    await pgQuery('SELECT 1');
+    await pool.query('SELECT 1');
+    pgUpMark();
     return { configured: true, ok: true };
   } catch (e) {
+    if (isPgConnErr(e)) pgDownMark(e);
     return { configured: true, ok: false, error: e.message };
   }
 }
@@ -361,9 +416,9 @@ async function pgHealth() {
 async function init() {
   if (!DATABASE_URL) return;
   load();
-  await ensureSchema().catch((e) => console.error('[pg] ensureSchema:', e.message));
-  await loadFromPg().catch((e) => console.error('[pg] load:', e.message));
-  await migrateLegacyBackups().catch((e) => console.error('[pg] migrate:', e.message));
+  await ensureSchema();
+  await loadFromPg().catch((e) => pgErr('load', e));
+  await migrateLegacyBackups().catch((e) => pgErr('migrate', e));
   schedulePgRefresh();
 }
 
@@ -378,15 +433,25 @@ function schedulePgRefresh() {
     }
     pgRefreshBusy = true;
     try {
-      await loadFromPg();
-      pgRefreshInterval = 5000;
+      if (pgDown) {
+        // La BD esta caida: no cargamos (evita ruido) y solo sondeamos para
+        // detectar cuando vuelva. pgHealth() no escribe en los logs.
+        const h = await pgHealth();
+        if (h.ok) {
+          await ensureSchema();
+          await loadFromPg();
+        }
+      } else {
+        await loadFromPg();
+        pgRefreshInterval = 5000;
+      }
     } catch (e) {
-      console.error('[pg] refresh:', e.message);
+      pgErr('refresh', e);
       pgRefreshInterval = Math.min(pgRefreshInterval * 2, 60000);
     }
     pgRefreshBusy = false;
     schedulePgRefresh();
-  }, pgRefreshInterval);
+  }, pgDown ? 60000 : pgRefreshInterval);
 }
 
 function deviceCount() {

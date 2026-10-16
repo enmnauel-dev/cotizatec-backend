@@ -28,7 +28,7 @@ app.use((req, res, next) => {
 app.get('/api/health', async (req, res) => {
   let db = { configured: false, ok: false };
   try { db = await store.pgHealth(); } catch (e) { db = { configured: true, ok: false, error: e.message }; }
-  res.json({ ok: true, ts: Date.now(), rev: 'sync-1', db });
+  res.json({ ok: true, ts: Date.now(), rev: 'sync-2', db });
 });
 
 app.post('/api/register', (req, res) => {
