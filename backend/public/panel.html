@@ -368,6 +368,23 @@
     <div id="mods-section">
       <div class="mod-tabs" id="mod-tabs"></div>
 
+      <div class="mod-panel" id="mod-clientes">
+        <div class="card">
+          <div style="font-weight:700;margin-bottom:4px">👥 Clientes / Cuentas por cobrar</div>
+          <div class="muted" style="font-size:12px;margin-bottom:10px">Saldos pendientes y antigüedad por cliente. Recuérdale el pago por WhatsApp.</div>
+          <div class="grid2">
+            <div class="stat c-blue"><div class="l">Clientes</div><div class="v" id="cl-count">0</div></div>
+            <div class="stat c-red"><div class="l">Con saldo</div><div class="v" id="cl-deudores">0</div></div>
+            <div class="stat c-amber"><div class="l">Por cobrar</div><div class="v" id="cl-porcobrar">RD$ 0</div></div>
+            <div class="stat c-green"><div class="l">Facturado</div><div class="v" id="cl-facturado">RD$ 0</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <input type="text" id="clientes-search" placeholder="Buscar por nombre o teléfono…" oninput="renderClientesList(clData)" style="width:100%;margin-bottom:10px">
+          <div id="clientes-list"></div>
+        </div>
+      </div>
+
       <div class="mod-panel" id="mod-docs">
         <div class="card">
           <div style="font-weight:700;margin-bottom:4px">📄 Documentos</div>
@@ -706,6 +723,7 @@ function docFieldsHTML(type) {
 let activeMod = null;
 let gpsTimer = null;
 const MOD_DEFS = [
+  { key: 'clientes', icon: '👥', label: 'Clientes', render: renderClientesContent },
   { key: 'docs', icon: '📄', label: 'Documentos', render: renderDocsContent },
   { key: 'gps', icon: '📡', label: 'GPS', render: renderGpsContent },
   { key: 'contab', icon: '📒', label: 'Contabilidad', render: renderContabContent },
@@ -719,6 +737,7 @@ function renderModTabs(modules, report) {
   if (!section || !tabsEl) return;
   const mods = modules || [];
   const available = MOD_DEFS.filter(function (m) {
+    if (m.key === 'clientes') return mods.indexOf('clientes') !== -1;
     if (m.key === 'docs') return mods.indexOf('documentos') !== -1;
     if (m.key === 'gps') return mods.indexOf('gps') !== -1;
     if (m.key === 'contab') return mods.indexOf('contabilidad') !== -1;
@@ -767,6 +786,80 @@ function renderDocsContent(report) {
     '</div>';
   }).join('');
   el.innerHTML = items;
+}
+
+let clData = [];
+let clView = [];
+
+function renderClientesContent(report) {
+  const el = document.getElementById('clientes-list');
+  if (!el) return;
+  el.innerHTML = '<div class="empty">Cargando…</div>';
+  api('/api/client/clients').then(function (j) {
+    if (!j || !j.ok) {
+      el.innerHTML = '<div class="empty">' + esc((j && j.error) || 'No se pudo cargar la cartera.') + '</div>';
+      return;
+    }
+    const t = j.totals || {};
+    const set = function (id, v) { const e = document.getElementById(id); if (e) e.textContent = v; };
+    set('cl-count', t.clientes || 0);
+    set('cl-deudores', t.deudores || 0);
+    set('cl-porcobrar', money(t.porCobrar || 0));
+    set('cl-facturado', money(t.facturado || 0));
+    clData = j.clients || [];
+    renderClientesList(clData);
+  }).catch(function () {
+    el.innerHTML = '<div class="empty">Error de conexión.</div>';
+  });
+}
+
+function renderClientesList(list) {
+  const el = document.getElementById('clientes-list');
+  if (!el) return;
+  const inp = document.getElementById('clientes-search');
+  const q = ((inp && inp.value) || '').trim().toLowerCase();
+  const rows = (list || []).filter(function (c) {
+    if (!q) return true;
+    return (c.name || '').toLowerCase().indexOf(q) !== -1 || String(c.phone || '').indexOf(q) !== -1;
+  });
+  clView = rows;
+  if (!rows.length) { el.innerHTML = '<div class="empty">Sin clientes que coincidan.</div>'; return; }
+  el.innerHTML = rows.map(function (c, i) {
+    const owes = c.balance > 0.5;
+    const badge = owes ? '<span class="pill red">Debe</span>' : '<span class="pill green">Al día</span>';
+    const age = owes && c.daysOverdue > 0
+      ? '<span class="pill ' + (c.daysOverdue >= 90 ? 'red' : c.daysOverdue >= 30 ? 'amber' : 'gray') + '">' + c.daysOverdue + ' d</span>'
+      : '';
+    const wa = owes && c.phone
+      ? '<button class="doc-soon go" onclick="waRemindAt(' + i + ')">💬 Recordar</button>'
+      : '';
+    const sub = (c.phone ? esc(c.phone) + ' · ' : '') + c.jobs + ' operación(es)' +
+      (c.lastDate ? ' · últ. ' + fmtDate(new Date(c.lastDate).toISOString()) : '');
+    return '<div class="doc-item">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-weight:600;font-size:14px">' + esc(c.name) + ' ' + badge + ' ' + age + '</div>' +
+        '<div class="muted" style="font-size:12px">' + sub + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;display:flex;align-items:center;gap:10px">' +
+        '<div>' +
+          (owes
+            ? '<div style="font-weight:700;color:#fca5a5">' + money(c.balance) + '</div><div class="muted" style="font-size:11px">pendiente</div>'
+            : '<div style="font-weight:700;color:#6ee7b7">' + money(c.total) + '</div><div class="muted" style="font-size:11px">facturado</div>') +
+        '</div>' +
+        wa +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function waRemindAt(i) {
+  const c = clView[i];
+  if (!c || !c.phone) return;
+  let d = String(c.phone).replace(/\D/g, '');
+  if (!d) return;
+  if (d.length === 10) d = '1' + d;
+  const msg = 'Hola' + (c.name ? ' ' + c.name : '') + ', le recordamos su saldo pendiente de ' + money(c.balance) + '. ¡Gracias!';
+  window.open('https://wa.me/' + d + '?text=' + encodeURIComponent(msg), '_blank');
 }
 
 function renderGpsContent(report) {

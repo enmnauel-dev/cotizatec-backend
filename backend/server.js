@@ -490,6 +490,58 @@ app.get('/api/client/data', async (req, res) => {
   }
 });
 
+// Cartera de clientes: facturado, cobrado, saldo pendiente, antigüedad y
+// teléfono para recordar por WhatsApp (módulo 'clientes').
+app.get('/api/client/clients', async (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const { account } = auth;
+  const client = store.getClient(account.clientId);
+  const modules = (client && client.modules) || [];
+  if (modules.indexOf('clientes') === -1) return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de Clientes.' });
+  try {
+    const data = await readClientData(account.clientId);
+    if (!data.ok || !data.state) return res.json({ ok: true, clients: [], totals: { clientes: 0, deudores: 0, facturado: 0, cobrado: 0, porCobrar: 0 } });
+    const st = data.state;
+    const byClient = {};
+    const getC = function (id, name, phone) {
+      const key = id || '__sin_cliente__';
+      if (!byClient[key]) byClient[key] = { id: key, name: name || 'Sin cliente', phone: phone || '', total: 0, collected: 0, balance: 0, jobs: 0, lastDate: 0, oldestUnpaid: 0 };
+      return byClient[key];
+    };
+    (st.clients || []).forEach(function (c) { getC(c.id, c.name, c.phone); });
+    (st.jobs || []).forEach(function (j) {
+      if (String(j.status || '').toUpperCase() === 'CANCELADO') return;
+      const t = jobTotalsWeb(j);
+      const c = getC(j.clientId, j.clientName, '');
+      c.total += t.total; c.collected += t.collected; c.balance += t.balance; c.jobs += 1;
+      const ts = new Date(j.date).getTime() || 0;
+      if (ts > c.lastDate) c.lastDate = ts;
+      if (t.balance > 0.5 && (!c.oldestUnpaid || ts < c.oldestUnpaid)) c.oldestUnpaid = ts;
+    });
+    const now = Date.now();
+    const list = Object.keys(byClient).map(function (k) {
+      const c = byClient[k];
+      c.daysOverdue = c.oldestUnpaid ? Math.floor((now - c.oldestUnpaid) / 86400000) : 0;
+      c.balance = Math.round(c.balance * 100) / 100;
+      c.total = Math.round(c.total * 100) / 100;
+      c.collected = Math.round(c.collected * 100) / 100;
+      return c;
+    }).sort(function (a, b) { return b.balance - a.balance || (b.lastDate - a.lastDate); });
+    const totals = {
+      clientes: list.length,
+      deudores: list.filter(function (c) { return c.balance > 0.5; }).length,
+      facturado: list.reduce(function (a, c) { return a + c.total; }, 0),
+      cobrado: list.reduce(function (a, c) { return a + c.collected; }, 0),
+      porCobrar: list.reduce(function (a, c) { return a + c.balance; }, 0)
+    };
+    res.json({ ok: true, clients: list, totals });
+  } catch (e) {
+    console.error('[client] clients error:', e.message);
+    res.status(500).json({ error: 'Error al leer los datos.' });
+  }
+});
+
 // Generar un documento (gate módulo documentos; válido para tipos habilitados)
 app.post('/api/client/documents', async (req, res) => {
   const auth = requireClient(req, res);
