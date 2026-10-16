@@ -8,3 +8,5 @@ android/
 www/
 *.apk
 *.aab
+.neon
+.env.local
