@@ -168,7 +168,8 @@ function computeReport(state) {
     trabajos: 0,
     pendientes: 0,
     cotizaciones: 0,
-    ventas: 0
+    ventas: 0,
+    sinCosto: 0
   };
   const monthly = {};
   const active = jobs.filter((j) => j.status !== 'CANCELADO');
@@ -182,6 +183,7 @@ function computeReport(state) {
     totals.gastado += t.cost;
     totals.ganancia += t.margin;
     totals.trabajos++;
+    if (t.total > 0 && t.cost === 0) totals.sinCosto++;
     if (isCotizacion(j)) totals.cotizaciones++; else totals.ventas++;
     if (t.balance > 0) totals.pendientes++;
     const key = nowKey(new Date(j.date));
@@ -215,7 +217,8 @@ function computeReport(state) {
       status: j.status || '',
       total: money(t.total),
       balance: money(t.balance),
-      margin: money(t.margin)
+      margin: money(t.margin),
+      costMissing: t.total > 0 && t.cost === 0
     };
   });
 
@@ -313,6 +316,7 @@ function computeReport(state) {
       pendientes: totals.pendientes,
       cotizaciones: totals.cotizaciones,
       ventas: totals.ventas,
+      sinCosto: totals.sinCosto,
       clientes: (state.clients || []).length,
       productos: (state.catalog || []).length
     },

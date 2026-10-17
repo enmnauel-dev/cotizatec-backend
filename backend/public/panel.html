@@ -320,6 +320,7 @@
         <div class="stat c-amber"><div class="l">Por cobrar</div><div class="v" id="s-porcobrar">0</div></div>
         <div class="stat c-purple span2"><div class="l">Ganancia neta</div><div class="v" id="s-ganancia">0</div></div>
       </div>
+      <div id="s-sincosto" style="display:none;margin-bottom:10px;font-size:12px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px"></div>
 
       <div id="facturado-row" class="card">
         <div class="t-row">
@@ -419,6 +420,7 @@
             <div class="t-row"><span>Facturado (total)</span><b id="c-facturado">RD$ 0</b></div>
             <div class="t-row"><span>Margen bruto</span><b id="c-margen">0%</b></div>
           </div>
+          <div id="c-sincosto" style="display:none;margin-top:10px;font-size:12px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px"></div>
         </div>
       </div>
 
@@ -439,6 +441,7 @@
             <div class="t-row"><span>Trabajos totales</span><b id="f-trabajos">0</b></div>
             <div class="t-row"><span>Con saldo pendiente</span><b id="f-pendientes">0</b></div>
           </div>
+          <div id="f-sincosto" style="display:none;margin-top:10px;font-size:12px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px"></div>
         </div>
         <div class="card">
           <div style="font-weight:700;margin-bottom:8px">Últimas operaciones</div>
@@ -881,6 +884,18 @@ function renderContabContent(report) {
     const pct = t.facturado > 0 ? Math.round((t.ganancia / t.facturado) * 100) : 0;
     el('c-margen').textContent = pct + '%';
   }
+  sinCostoNote(el('c-sincosto'), t);
+}
+
+function sinCostoNote(node, t) {
+  if (!node) return;
+  const n = (t && t.sinCosto) || 0;
+  if (n > 0) {
+    node.style.display = '';
+    node.innerHTML = '⚠️ ' + n + (n === 1 ? ' operación' : ' operaciones') + ' sin costo registrado: su ganancia aparece igual al total. Pídele al técnico que anote el <b>costo de compra</b> en cada línea.';
+  } else {
+    node.style.display = 'none';
+  }
 }
 
 function renderFinanzasContent(report) {
@@ -896,6 +911,7 @@ function renderFinanzasContent(report) {
   if (el('f-pendientes')) el('f-pendientes').textContent = t.pendientes || 0;
   if (el('f-ventas')) el('f-ventas').textContent = t.ventas || 0;
   if (el('f-cotizaciones')) el('f-cotizaciones').textContent = t.cotizaciones || 0;
+  sinCostoNote(el('f-sincosto'), t);
   if (el('f-rec')) {
     const rec = report.recent || [];
     el('f-rec').innerHTML = rec.slice(0, 10).map(function (r) {
@@ -903,6 +919,7 @@ function renderFinanzasContent(report) {
       const cls = st === 'CANCELADO' ? 'red' : st === 'COBRADO' ? 'green' : st === 'TRABAJANDO' ? 'amber' : 'gray';
       return '<div class="recent-item"><div class="head"><span>' + esc(r.client) + '</span><span class="pill ' + cls + '">' + st + '</span></div>'
         + '<div class="t-row"><span>Total</span><b>' + money(r.total) + '</b></div>'
+        + (r.costMissing ? '<div class="t-row"><span style="color:#b45309">⚠️ Ganancia = total (sin costo)</span><b style="color:#b45309">' + money(r.margin) + '</b></div>' : '<div class="t-row"><span style="color:var(--green)">Ganancia</span><b style="color:var(--green)">' + money(r.margin) + '</b></div>')
         + (r.balance > 0 ? '<div class="t-row"><span style="color:var(--red)">Saldo</span><b style="color:var(--red)">' + money(r.balance) + '</b></div>' : '')
         + '</div>';
     }).join('') || '<div class="empty">Sin operaciones recientes.</div>';
@@ -1140,6 +1157,7 @@ const t = j.report.totals;
   document.getElementById('s-porcobrar').textContent = money(t.porCobrar);
   document.getElementById('s-gastado').textContent = money(t.gastado);
   document.getElementById('s-ganancia').textContent = money(t.ganancia);
+  sinCostoNote(document.getElementById('s-sincosto'), t);
   document.getElementById('s-trabajos').textContent = t.trabajos;
   document.getElementById('s-pendientes').textContent = t.pendientes;
   document.getElementById('s-clientes').textContent = t.clientes;
@@ -1182,7 +1200,9 @@ const t = j.report.totals;
       + '<div style="font-size:12px;color:var(--muted)">' + fmtWhen(r.date) + '</div>'
       + '<div class="t-row"><span>Total</span><b>' + money(r.total) + '</b></div>';
     if (r.balance > 0) rh += '<div class="t-row"><span style="color:var(--red)">Saldo pendiente</span><b style="color:var(--red)">' + money(r.balance) + '</b></div>';
-    rh += '<div class="t-row"><span style="color:var(--green)">Ganancia</span><b style="color:var(--green)">' + money(r.margin) + '</b></div></div>';
+    rh += r.costMissing
+      ? '<div class="t-row"><span style="color:#b45309">⚠️ Ganancia = total (sin costo)</span><b style="color:#b45309">' + money(r.margin) + '</b></div></div>'
+      : '<div class="t-row"><span style="color:var(--green)">Ganancia</span><b style="color:var(--green)">' + money(r.margin) + '</b></div></div>';
   });
   document.getElementById('recent-list').innerHTML = rh || '<div class="empty">Sin trabajos.</div>';
 

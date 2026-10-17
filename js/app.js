@@ -5,7 +5,7 @@ var UI = (function () {
   const { money, toast, isNativeEnv, capacitorPlugin, confirmar, escapeAttr,
     CLIENT_ICON, ITEM_ICON, TOOLS_ICON, WALLET_ICON, FLAG_ICON, PAPER_ICON,
     SAVE_ICON, PDF_ICON, WA_ICON, PLUS_ICON, BACK_ICON, TRASH_ICON,
-    PENCIL_ICON, CHECK_ICON, X_ICON, LOCK_ICON, INFO_ICON, APP_VERSION, PRINT_ICON } = Util;
+    PENCIL_ICON, CHECK_ICON, X_ICON, LOCK_ICON, INFO_ICON, WARNING_ICON, APP_VERSION, PRINT_ICON } = Util;
   const { compressImage, recompressExisting } = Media;
   const { exportBackup, importBackupFile, hashVal, doReset } = Backups;
   const { unlockApp, resetLock, showPasswordField, applyLockScreen, appPlugin, bioApi } = Lock;
@@ -656,6 +656,7 @@ let html = '<form class="card form" data-form="cliente">';
     html += '<section class="card form">';
     html += '<h3>' + ITEM_ICON + ' Conceptos (' + (j.items ? j.items.length : 0) + ')</h3>';
     html += '<div id="item-list">' + itemsListHtml(j) + '</div>';
+    if (!DB.isStaffMode()) html += '<p class="muted"><small>En cada línea: cantidad, descripción, <b>precio de venta</b> y <b>costo de compra</b>. El costo es lo que pagas tú; sirve para calcular tu ganancia.</small></p>';
     html += '<div class="row btns-row">';
     html += '<button class="btn small" data-action="openCatalogPicker">' + ITEM_ICON + ' Catálogo</button>';
     if (!DB.isStaffMode()) html += '<button class="btn small ghost" data-action="addManualLine">' + PLUS_ICON + ' Línea manual</button>';
@@ -688,7 +689,7 @@ let html = '<form class="card form" data-form="cliente">';
       h += '<div class="q-item"><input class="qi-qty" type="number" min="0" step="1" data-qf="qty" data-qi="' + idx + '" value="' + (it.qty || 1) + '">';
       h += '<input class="qi-desc" type="text" data-qf="desc" data-qi="' + idx + '" placeholder="Descripción" value="' + escapeAttr(it.desc || '') + '">';
       h += '<input class="qi-price" type="number" min="0" step="0.01" data-qf="price" data-qi="' + idx + '" value="' + (it.price || '') + '"' + ro + '>';
-      h += '<input class="qi-cost" type="number" min="0" step="0.01" data-qf="cost" data-qi="' + idx + '" placeholder="costo" value="' + (it.cost != null ? it.cost : '') + '"' + ro + '>';
+      h += '<input class="qi-cost" type="number" min="0" step="0.01" data-qf="cost" data-qi="' + idx + '" placeholder="costo" title="Lo que te cuesta a ti. Se usa para calcular tu ganancia real." value="' + (it.cost != null ? it.cost : '') + '"' + ro + '>';
       h += '<span class="qi-sub" id="qi-sub-' + idx + '">' + money((it.qty || 0) * (it.price || 0)) + '</span>';
       h += '<button class="icon-btn danger qi-del" data-action="removeQuoteItem" data-id="' + idx + '">' + X_ICON + '</button>';
       h += '</div>';
@@ -698,13 +699,20 @@ let html = '<form class="card form" data-form="cliente">';
 
   function totalsHtml(j) {
     const t = DB.jobTotals(j);
-    return '<section class="card totals"><div class="t-row"><span>Subtotal</span><b>' + money(t.subtotal) + '</b></div>'
-      + (t.discount > 0 ? '<div class="t-row"><span>Descuento</span><b style="color:#ef4444">-' + money(t.discount) + '</b></div>' : '')
-      + '<div class="t-row"><span>ITBIS (' + (j.itbis || 0) + '%)</span><b>' + money(t.tax) + '</b></div>'
-      + (t.itemsCost > 0 ? '<div class="t-row"><span>Costo de productos</span><b style="color:#ef4444">-' + money(t.itemsCost) + '</b></div>' : '')
-      + '<div class="t-row total"><span>Total</span><b class="big">' + money(t.total) + '</b></div>'
-      + (t.itemsCost > 0 ? '<div class="t-row"><span>Ganancia neta</span><b class="big" style="color:#16a34a">' + money(t.margin) + '</b></div>' : '')
-      + '</section>';
+    const hasItems = (j.items || []).length > 0;
+    const costMissing = hasItems && t.itemsCost === 0 && t.expenses === 0;
+    let h = '<section class="card totals">';
+    h += '<div class="t-row"><span>Subtotal</span><b>' + money(t.subtotal) + '</b></div>';
+    if (t.discount > 0) h += '<div class="t-row"><span>Descuento</span><b style="color:#ef4444">-' + money(t.discount) + '</b></div>';
+    h += '<div class="t-row"><span>ITBIS (' + (j.itbis || 0) + '%)</span><b>' + money(t.tax) + '</b></div>';
+    if (t.itemsCost > 0) h += '<div class="t-row"><span>Costo de productos</span><b style="color:#ef4444">-' + money(t.itemsCost) + '</b></div>';
+    h += '<div class="t-row total"><span>Total</span><b class="big">' + money(t.total) + '</b></div>';
+    if (hasItems) {
+      h += '<div class="t-row"><span>Ganancia neta</span><b class="big" style="color:' + (costMissing ? '#f59e0b' : '#16a34a') + '">' + money(t.margin) + '</b></div>';
+      if (costMissing) h += '<p class="muted" style="color:#f59e0b;margin:6px 0 0"><small>' + WARNING_ICON + ' Sin costo registrado: la ganancia aparece igual al total. Escribe el <b>costo de compra</b> en cada línea para ver tu ganancia real.</small></p>';
+    }
+    h += '</section>';
+    return h;
   }
 
   function jobsView() {
@@ -1088,8 +1096,8 @@ function settingsView() {
     html += '<p class="muted">Importa productos dominicanos predefinidos (arroz, aceite, habichuelas, café, etc.) a tu catálogo.</p>';
     html += '<button class="btn primary block" type="button" data-action="seedCatalog">' + ITEM_ICON + ' Cargar productos</button>';
     html += '<p class="muted" style="margin-top:12px">Importa tu propio catálogo desde un archivo CSV o JSON. Se creará un respaldo antes de aplicar cambios.</p>';
-    html += '<p class="muted"><b>Formato CSV:</b> nombre, precio, tipo (precio y tipo son opcionales)</p>';
-    html += '<p class="muted"><b>Formato JSON:</b> [{"name":"Producto","price":100,"type":"PRODUCTO"}]</p>';
+    html += '<p class="muted"><b>Formato CSV:</b> nombre, precio, tipo, costo (precio, tipo y costo son opcionales)</p>';
+    html += '<p class="muted"><b>Formato JSON:</b> [{"name":"Producto","price":100,"type":"PRODUCTO","cost":70}]</p>';
     html += '<button class="btn block" type="button" data-action="pickImportFile">' + SAVE_ICON + ' Importar desde archivo</button>';
     html += '<input type="file" id="catalog-import-file" accept=".csv,.json,.txt" style="display:none">';
     html += '</section>';
@@ -1294,23 +1302,37 @@ case 'trabajos': inner = jobsView(); break;
           if (!name) { items.push({ _error: 'Fila ' + (i + 1) + ': sin nombre' }); return; }
           var price = Number(row.price || row.precio || row.Precio) || 0;
           var type = (row.type || row.tipo || row.Tipo || 'PRODUCTO').trim().toUpperCase();
-          items.push({ name: name, price: price, type: type });
+          var cost = Number(row.cost || row.costo || row.Costo || row.inversion || row['Inversión'] || row.inversión) || 0;
+          items.push({ name: name, price: price, type: type, cost: cost > 0 ? cost : null });
         });
       } catch (e) {
         items.push({ _error: 'JSON inválido: ' + e.message });
       }
     } else {
       var lines = text.replace(/\r/g, '').split('\n').filter(function (l) { return l.trim(); });
+      var cols = null;
       lines.forEach(function (line, i) {
-        if (i === 0 && /^(nombre|name|producto|item)/i.test(line.trim())) return;
         var parts = line.split(',').map(function (p) { return p.replace(/^[\s"]+|[\s"]+$/g, ''); });
-        var name = (parts[0] || '').trim();
+        if (i === 0 && /^(nombre|name|producto|item|descripcion|descripción|articulo|artículo|precio|price|valor|costo|cost|tipo|type)$/i.test((parts[0] || '').trim())) {
+          cols = {};
+          parts.forEach(function (h, idx) {
+            var k = h.toLowerCase();
+            if (/^(nombre|name|producto|item|descripcion|descripción|articulo|artículo)/.test(k)) cols.name = idx;
+            else if (/^(precio|price|valor|venta)/.test(k)) cols.price = idx;
+            else if (/^(costo|cost|inversion|inversión|compra)/.test(k)) cols.cost = idx;
+            else if (/^(tipo|type)/.test(k)) cols.type = idx;
+          });
+          return;
+        }
+        var ci = function (key, def) { return (cols && cols[key] != null) ? cols[key] : def; };
+        var name = (parts[ci('name', 0)] || '').trim();
         if (!name) { items.push({ _error: 'Línea ' + (i + 1) + ': sin nombre' }); return; }
-        var price = Number(parts[1]) || 0;
-        var type = ((parts[2] || 'PRODUCTO').trim()).toUpperCase();
+        var price = Number(parts[ci('price', 1)]) || 0;
+        var type = ((parts[ci('type', 2)] || 'PRODUCTO').trim()).toUpperCase();
         if (['MO', 'MANO DE OBRA'].indexOf(type) >= 0) type = 'MO';
         else type = 'PRODUCTO';
-        items.push({ name: name, price: price, type: type });
+        var cost = Number(parts[ci('cost', 3)]) || 0;
+        items.push({ name: name, price: price, type: type, cost: cost > 0 ? cost : null });
       });
     }
     return items;
@@ -1337,7 +1359,8 @@ case 'trabajos': inner = jobsView(); break;
       html += '<div class="list">';
       newItems.forEach(function (it) {
         html += '<div class="item"><div><b>' + escapeHtml(it.name) + '</b>';
-        if (it.price > 0) html += '<br><span class="muted">' + formatCOP(it.price) + '</span>';
+        if (it.price > 0) html += '<br><span class="muted">Precio ' + formatCOP(it.price) + '</span>';
+        if (Number(it.cost) > 0) html += '<br><span class="muted">Costo ' + formatCOP(it.cost) + '</span>';
         html += '<br><span class="muted">' + escapeHtml(it.type) + '</span></div></div>';
       });
       html += '</div>';
