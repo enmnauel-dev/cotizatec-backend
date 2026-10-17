@@ -414,7 +414,8 @@ var DB = (function () {
     const t = s.seq;
     _seq.client = t.client || 0; _seq.catalog = t.catalog || 0; _seq.job = t.job || 0;
     _seq.expense = t.expense || 0; _seq.payment = t.payment || 0;
-    rebuildIndex();
+    state = s;
+    rebuildIndex(s);
     return s;
   }
 
@@ -528,15 +529,31 @@ var DB = (function () {
   // activar, el envelope aún no está en localStorage hasta que _encChain termine.
   function relock() {
     return _encChain.catch(function () {}).then(function () {
-      let raw = null;
-      try { raw = localStorage.getItem(KEY); } catch (e) {}
-      const env = raw ? parseEnvelope(raw) : null;
-      if (!env) return false;
-      _envelope = env;
-      _encKey = null;
-      _mkRaw = null;
-      _mkStored = false;
-      return true;
+      let env = null;
+      try { const raw = localStorage.getItem(KEY); if (raw) env = parseEnvelope(raw); } catch (e) {}
+      if (env) return env;
+      // Respaldo 1: espejo IndexedDB (localStorage pudo ser evacuado por el WebView).
+      return readMirror().then(function (row) {
+        if (row && row.value) { const e2 = parseEnvelope(row.value); if (e2) return e2; }
+        // Respaldo 2: archivo nativo (DATA).
+        const FS = fsPlugin();
+        if (FS && typeof Util !== 'undefined' && Util.isNativeEnv && Util.isNativeEnv()) {
+          return FS.readFile({ path: FS_KEY, directory: 'DATA' })
+            .then(function (res) { const s = fsDecode(res && res.data); const e3 = s ? parseEnvelope(s) : null; return e3 || null; })
+            .catch(function () { return null; });
+        }
+        return null;
+      }).catch(function () { return null; });
+    }).then(function (env) {
+      if (env) { _envelope = env; _encKey = null; _mkRaw = null; _mkStored = false; return true; }
+      // Último recurso: no se encontró envelope en ninguna capa. Si aún tenemos la
+      // clave en memoria, re-ciframos el estado actual para poder bloquear de verdad.
+      if (_encKey && state) {
+        return encryptState(JSON.stringify(state), _encKey).then(function (e) {
+          _envelope = e; _encKey = null; _mkRaw = null; _mkStored = false; return true;
+        }).catch(function () { return false; });
+      }
+      return false;
     });
   }
 
@@ -602,10 +619,11 @@ var DB = (function () {
     return found;
   }
 
-  function rebuildIndex() {
+  function rebuildIndex(src) {
+    src = src || state || {};
     _idIndex = {};
     ['clients', 'catalog', 'jobs'].forEach(function (list) {
-      (state[list] || []).forEach(function (item) {
+      (src[list] || []).forEach(function (item) {
         if (item && item.id) _idIndex[String(item.id)] = item;
       });
     });
@@ -827,6 +845,10 @@ var DB = (function () {
    function hasFingerprint() {
      const meta = readEncMeta();
      if (!(meta && meta.v === 2)) return false;
+     // fp === false: la clave maestra no está (o ya no está) en el keystore,
+     // aunque meta.v sea 2 (p. ej. protección solo con contraseña). En ese caso
+     // no se debe ofrecer el desbloqueo por huella. (Sin 'fp' = metadato legado.)
+     if (meta.fp === false) return false;
      const bio = bioPlugin();
      return !!bio;
    }
@@ -878,7 +900,7 @@ var DB = (function () {
         if (!vr.verified) { console.log('[CotizaTec] unlockFingerprint: bio failed'); return { ok: false, reason: 'bio' }; }
         return mkFromKeystore().then(function (mkRaw) {
           console.log('[CotizaTec] unlockFingerprint: mkRaw=' + !!mkRaw);
-          if (!mkRaw) { console.log('[CotizaTec] unlockFingerprint: mkRaw null, limpiando flag huella'); try { localStorage.removeItem(ENC_META); } catch (e) {} return { ok: false, reason: 'decrypt' }; }
+          if (!mkRaw) { console.log('[CotizaTec] unlockFingerprint: mkRaw null, marcando huella no disponible'); try { const m = readEncMeta(); if (m) { m.fp = false; writeEncMeta(m); } } catch (e) {} return { ok: false, reason: 'decrypt' }; }
           return importMk(mkRaw).then(function (key) {
             return decryptAndLoad(key).then(function (ok) {
               console.log('[CotizaTec] unlockFingerprint: decrypt=' + ok);
@@ -942,7 +964,7 @@ var DB = (function () {
       return doWrap.then(function (wrap) {
         if (!keystoreOk && !wrap) return false; // sin huella ni contraseña: no se puede desbloquear
         if (keystoreOk) _mkStored = true;
-        writeEncMeta({ v: 2, wrap: wrap });
+        writeEncMeta({ v: 2, wrap: wrap, fp: !!keystoreOk });
         return importMk(mkRaw).then(function (key) {
           _encKey = key;
           _mkRaw = mkRaw;

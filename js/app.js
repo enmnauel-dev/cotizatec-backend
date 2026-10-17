@@ -38,7 +38,22 @@ const NAV = [
   let params = {};
   let draftEntryMode = null;
   let biometricPromptActive = false;
+  let lastUnlockAt = 0;
+  let appStateListenerAttached = false;
   let licenseStatus = null;
+
+  // Marca el instante del desbloqueo. El ciclo de vida (onResume tras el
+  // dialogo biometrico, que vive en otra Activity) dispara appStateChange y no
+  // debe volver a bloquear la app recien desbloqueada. Este margen tambien
+  // cubre eventos retrasados cuando el hilo JS esta ocupado descifrando.
+  function markUnlocked() {
+    lastUnlockAt = Date.now();
+    biometricPromptActive = false;
+  }
+
+  function recentlyUnlocked() {
+    return Date.now() - lastUnlockAt < 4000;
+  }
   let reportDate = new Date();
 
 
@@ -1991,15 +2006,21 @@ case 'trabajos': inner = jobsView(); break;
 
 bioUnlock: function () {
       const bio = bioApi();
-      if (!bio) { toast('Huella no disponible en este equipo', false); showPasswordField(); return; }
+      if (!bio) { toast('Huella no disponible en este equipo', false); showLockFirst(true); return; }
       biometricPromptActive = true;
       if (DB.isProtected()) {
         DB.unlockFingerprint().then(function (result) {
           var ok = result && result.ok;
-          if (!ok) { toast('No se pudo desbloquear con huella', false); showPasswordField(); return; }
+          if (!ok) {
+            toast('No se pudo desbloquear con huella', false);
+            // Reconstruye el bloqueo ofreciendo contraseña o "entrar sin cifrado";
+            // nunca dejar la pantalla de bloqueo vacía/atascada.
+            showLockFirst(true);
+            return;
+          }
           const o = document.getElementById('lock-screen');
           if (o) o.remove();
-          unlockApp();
+          unlockApp(); markUnlocked();
           init();
           toast('¡Bienvenido!', true);
           License.check().then(function (st) {
@@ -2020,13 +2041,13 @@ bioUnlock: function () {
         subtitle: 'Usa la huella para continuar',
         negativeButtonText: 'Usar contraseña'
       }).then(function () {
-        unlockApp();
+        unlockApp(); markUnlocked();
         toast('¡Bienvenido!', true);
       }).catch(function (e) {
         const code = e && e.code;
-        if (code === 16 || code === 17 || code === 11 || code === 15) { showPasswordField(); return; }
+        if (code === 16 || code === 17 || code === 11 || code === 15) { showLockFirst(true); return; }
         toast('No se pudo desbloquear con huella', false);
-        showPasswordField();
+        showLockFirst(true);
       }).finally(function () {
         setTimeout(function () { biometricPromptActive = false; }, 1500);
       });
@@ -2042,14 +2063,14 @@ bioUnlock: function () {
           if (!ok) { toast('Contraseña incorrecta', false); return; }
           const o = document.getElementById('lock-screen');
           if (o) o.remove();
-          unlockApp();
+          unlockApp(); markUnlocked();
           init();
           toast('¡Bienvenido!', true);
         });
         return;
       }
       if (hashVal(v) !== DB.state.settings.resetPassword) { toast('Contraseña incorrecta', false); return; }
-      unlockApp();
+      unlockApp(); markUnlocked();
       init();
       toast('¡Bienvenido!', true);
     },
@@ -2064,6 +2085,11 @@ bioUnlock: function () {
         if (!ok) {
           if (reason === 'decrypt') {
             console.log('[CotizaTec] firstBioUnlock: decrypt failed -> showing password fallback');
+            if (!DB.canUnlockByPassword()) {
+              toast('Huella verificada pero clave no disponible.', false);
+              showLockFirst(true);
+              return;
+            }
             toast('Huella verificada pero clave no disponible. Usa tu contraseña.', false);
             const b = document.getElementById('lock-first-bio');
             if (b) b.style.display = 'none';
@@ -2098,7 +2124,7 @@ bioUnlock: function () {
         }
         const o = document.getElementById('lock-screen');
         if (o) o.remove();
-        unlockApp();
+        unlockApp(); markUnlocked();
         init();
         toast('¡Bienvenido!', true);
         License.check().then(function (st) {
@@ -2133,7 +2159,7 @@ bioUnlock: function () {
         if (!ok) { toast('Contraseña incorrecta', false); return; }
         const o = document.getElementById('lock-screen');
         if (o) o.remove();
-        unlockApp();
+        unlockApp(); markUnlocked();
         init();
         toast('¡Bienvenido!', true);
       });
@@ -2149,7 +2175,7 @@ bioUnlock: function () {
         console.log('[CotizaTec] forceUnlockRecover: encryption disabled');
         const o = document.getElementById('lock-screen');
         if (o) o.remove();
-        unlockApp();
+        unlockApp(); markUnlocked();
         init();
         console.log('[CotizaTec] forceUnlockRecover: init() done, app.innerHTML.length=' + (document.getElementById('app') ? document.getElementById('app').innerHTML.length : 'no app'));
         toast('Protección desactivada. Intentando restaurar datos desde la nube...', true);
@@ -2515,10 +2541,12 @@ bioUnlock: function () {
     });
   }
 
-  function showLockFirst() {
+  function showLockFirst(forceNoBio) {
+    const prev = document.getElementById('lock-screen');
+    if (prev) prev.remove();
     const d = document.createElement('div');
     d.id = 'lock-screen';
-    const hasBio = DB.hasFingerprint();
+    const hasBio = !forceNoBio && DB.hasFingerprint();
     const hasPwd = DB.canUnlockByPassword();
     let html = '<div class="lock-card">' + LOCK_ICON +
       '<b>CotizaTec</b><p class="muted">Los datos están protegidos.</p>';
@@ -2556,15 +2584,19 @@ bioUnlock: function () {
     }
     applyLockScreen();
     const ap = appPlugin();
-    if (ap && typeof ap.addListener === 'function') {
+    if (ap && typeof ap.addListener === 'function' && !appStateListenerAttached) {
+      appStateListenerAttached = true;
       ap.addListener('appStateChange', function (s) {
         if (s && s.isActive === false) {
           DB.fsFlush();
           if (!DB.state.settings.lockOnStart || !DB.state.settings.relockOnResume) return;
-          if (!biometricPromptActive) resetLock();
+          // El dialogo biometrico vive en otra Activity: al abrirse y cerrarse
+          // dispara pausa/reanudar. No re-bloquear si venimos de un desbloqueo.
+          if (biometricPromptActive || recentlyUnlocked()) return;
+          resetLock();
         } else if (s && s.isActive === true) {
           setTimeout(function () {
-            if (biometricPromptActive) return;
+            if (biometricPromptActive || recentlyUnlocked()) return;
             if (DB.state.settings.lockOnStart && DB.state.settings.relockOnResume) {
               applyLockScreen(true);
             } else {

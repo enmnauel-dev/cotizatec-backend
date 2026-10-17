@@ -5,6 +5,106 @@ const s = require('./load');
 const DB = s.DB;
 const Backups = s.Backups;
 
+// ---- Utilidades para simular un dispositivo con varias "sesiones" (arranques en frío) ----
+const vm = require('vm');
+const path = require('path');
+const fsx = require('fs');
+const nodeCrypto = require('crypto').webcrypto;
+const DB_SRC = fsx.readFileSync(path.join(__dirname, '..', 'js', 'db.js'), 'utf8');
+
+function makeStorage() {
+  const m = new Map();
+  return {
+    getItem: function (k) { return m.has(k) ? m.get(k) : null; },
+    setItem: function (k, v) { m.set(k, String(v)); },
+    removeItem: function (k) { m.delete(k); },
+    clear: function () { m.clear(); },
+    key: function (i) { return Array.from(m.keys())[i] || null; },
+    get length() { return m.size; }
+  };
+}
+
+function makeIdb() {
+  const store = new Map();
+  const dbObj = {
+    transaction: function () {
+      return {
+        objectStore: function () {
+          return {
+            get: function (key) { return { onsuccess: null, onerror: null, result: store.get(key) }; },
+            put: function (val, key) { store.set(key, val); return { onsuccess: null, onerror: null, result: key }; },
+            delete: function (key) { store.delete(key); return { onsuccess: null, onerror: null, result: key }; }
+          };
+        }
+      };
+    },
+    close: function () {},
+    createObjectStore: function () {}
+  };
+  return {
+    open: function () {
+      const req = { onupgradeneeded: null, onsuccess: null, onerror: null, result: dbObj };
+      setTimeout(function () {
+        if (req.onupgradeneeded) { try { req.onupgradeneeded(); } catch (e) {} }
+        if (req.onsuccess) { try { req.onsuccess(); } catch (e) {} }
+      }, 0);
+      return req;
+    }
+  };
+}
+
+// Un "dispositivo" = localStorage + IndexedDB + keystore biométrico persistentes.
+// newSession() abre una sesión nueva (módulo DB nuevo => state = null), como al
+// cerrar y reabrir la app. Comparte el almacenamiento entre sesiones.
+function makeDevice() {
+  const ls = makeStorage();
+  const idb = makeIdb();
+  const keystore = new Map();
+  const bio = {
+    isAvailable: function () { return Promise.resolve({ isAvailable: true }); },
+    verifyIdentity: function () { return Promise.resolve(); },
+    isDataSaved: function (o) { return Promise.resolve({ isSaved: keystore.has(o.key) }); },
+    setData: function (o) { keystore.set(o.key, o.value); return Promise.resolve(); },
+    getData: function (o) { return Promise.resolve({ value: keystore.has(o.key) ? keystore.get(o.key) : null }); },
+    deleteData: function (o) { keystore.delete(o.key); return Promise.resolve(); }
+  };
+  function newSession() {
+    const sandbox = {
+      window: null, document: global.document, localStorage: ls, indexedDB: idb,
+      location: { hash: '', reload: function () {} }, navigator: global.navigator,
+      console: console, crypto: nodeCrypto, btoa: global.btoa, atob: global.atob,
+      TextEncoder: global.TextEncoder, TextDecoder: global.TextDecoder,
+      setTimeout: setTimeout, clearTimeout: clearTimeout, Promise: Promise, Date: Date,
+      Math: Math, JSON: JSON, Object: Object, Array: Array, String: String,
+      Number: Number, Boolean: Boolean, Error: Error, RegExp: RegExp, Buffer: Buffer,
+      process: process, Util: global.Util, Media: global.Media, License: global.License,
+      fetch: global.fetch, require: require
+    };
+    sandbox.globalThis = sandbox;
+    sandbox.window = sandbox;
+    sandbox.window.Capacitor = { Plugins: { NativeBiometric: bio } };
+    vm.createContext(sandbox);
+    vm.runInContext(DB_SRC, sandbox, { filename: 'db.js' });
+    return sandbox;
+  }
+  return { ls: ls, idb: idb, keystore: keystore, newSession: newSession };
+}
+
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+function isEnvelopeStr(raw) {
+  if (!raw) return false;
+  try { const o = JSON.parse(raw); return !!(o && o.enc === 'aes-gcm' && o.iv && o.ct); } catch (e) { return false; }
+}
+
+async function waitForEnvelope(ls, key) {
+  for (let i = 0; i < 150; i++) {
+    if (isEnvelopeStr(ls.getItem(key))) return true;
+    await sleep(20);
+  }
+  return false;
+}
+
 let passed = 0;
 let failed = 0;
 
@@ -142,6 +242,49 @@ async function main() {
     DB.clearStaffPin();
     ok(DB.hasStaffPin() === false, 'clearStaffPin elimina el PIN');
     ok((await DB.verifyStaffPin('1234')) === false, 'sin PIN, verify falla (no desbloquea)');
+  }
+
+  // ============ 7. REGRESIÓN: arranque en frío + desbloqueo por huella ============
+  // Bug: decryptAndLoad() llamaba a normalize(s) antes de asignar state = s; en un
+  // arranque en frío state es null y rebuildIndex() lanzaba
+  // "Cannot read properties of null (reading 'clients')" => unlockFingerprint
+  // devolvía {ok:false, reason:'error'} y la app quedaba bloqueada.
+  section('7) Arranque en frío: desbloqueo por huella descifra sin crash');
+  {
+    const dev = makeDevice();
+
+    // --- Sesión 1: activar protección con huella y guardar el estado cifrado ---
+    const sb1 = dev.newSession();
+    const DB1 = sb1.DB;
+    DB1.state = {
+      settings: { itemTypes: [{ id: 'SERVICIO', label: 'Servicio', icon: 'tools' }], docTitle: 'X', businessName: 'Y' },
+      catalog: [{ id: 'c1', name: 'A', price: 1, type: 'SERVICIO' }],
+      clients: [{ id: 'cl1', name: 'Cliente Uno' }],
+      jobs: [],
+      seq: { client: 1, catalog: 1, job: 0, expense: 0, payment: 0 }
+    };
+    const activated = await DB1.setEncryption('');
+    ok(activated === true, 'setEncryption("") activa la protección con huella');
+    ok(DB1.hasFingerprint() === true, 'hasFingerprint() true tras activar');
+    ok(DB1.needsUnlock() === false, 'sesión 1 sigue desbloqueada (clave en memoria)');
+    const wroteEnv = await waitForEnvelope(dev.ls, DB1.KEY);
+    ok(wroteEnv && isEnvelopeStr(dev.ls.getItem(DB1.KEY)), 'el estado cifrado (envelope) quedó escrito en localStorage');
+    ok(dev.keystore.size > 0, 'la clave maestra quedó guardada en el keystore (huella)');
+
+    // --- Sesión 2: ARRANQUE EN FRÍO (mismo dispositivo, módulo DB nuevo => state = null) ---
+    const sb2 = dev.newSession();
+    const DB2 = sb2.DB;
+    DB2.load();
+    ok(DB2.needsUnlock() === true, 'arranque en frío: needsUnlock() true');
+    ok(DB2.state === null, 'arranque en frío: state es null antes de desbloquear (condición del bug)');
+
+    const res = await DB2.unlockFingerprint();
+    ok(res && res.ok === true, 'arranque en frío: unlockFingerprint() => {ok:true} (antes: reason=error)');
+    ok(DB2.needsUnlock() === false, 'arranque en frío: needsUnlock() false tras desbloquear');
+    ok(DB2.state && Array.isArray(DB2.state.clients) && DB2.state.clients.length === 1,
+      'arranque en frío: se descifraron y cargaron los datos (clients)');
+    ok(DB2.find('clients', 'cl1') && DB2.find('clients', 'cl1').name === 'Cliente Uno',
+      'arranque en frío: el índice se reconstruyó (find por id funciona)');
   }
 
   summary();

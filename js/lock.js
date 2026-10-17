@@ -1,5 +1,6 @@
 var Lock = (function () {
   let unlocked = false;
+  let relocking = false;
 
   function bioApi() {
     return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.NativeBiometric) || null;
@@ -49,48 +50,23 @@ var Lock = (function () {
 
   function buildOverlay(protectedApp, hasPwd, fingerprintActive) {
     const bio = bioApi();
-    if (bio && protectedApp) {
-      Promise.resolve(bio.isAvailable({ useFallback: false })).then(function (r) {
-        const avail = !!(r && r.isAvailable) && fingerprintActive;
-        if (!avail && !hasPwd) { unlockApp(); return; }
-        const old = document.getElementById('lock-screen');
-        if (old) old.remove();
-        const d = document.createElement('div');
-        d.innerHTML = lockOverlayHtml(avail, hasPwd);
-        document.body.appendChild(d.firstChild);
-      }).catch(function () {
-        if (!hasPwd) { unlockApp(); return; }
-        const old = document.getElementById('lock-screen');
-        if (old) old.remove();
-        const d = document.createElement('div');
-        d.innerHTML = lockOverlayHtml(false, hasPwd);
-        document.body.appendChild(d.firstChild);
-      });
-    } else if (bio) {
-      Promise.resolve(bio.isAvailable({ useFallback: false })).then(function (r) {
-        const avail = !!(r && r.isAvailable) && fingerprintActive;
-        if (!avail && !hasPwd) { unlockApp(); return; }
-        const old = document.getElementById('lock-screen');
-        if (old) old.remove();
-        const d = document.createElement('div');
-        d.innerHTML = lockOverlayHtml(avail, hasPwd);
-        document.body.appendChild(d.firstChild);
-      }).catch(function () {
-        if (!hasPwd) { unlockApp(); return; }
-        const old = document.getElementById('lock-screen');
-        if (old) old.remove();
-        const d = document.createElement('div');
-        d.innerHTML = lockOverlayHtml(false, hasPwd);
-        document.body.appendChild(d.firstChild);
-      });
-    } else {
-      if (!hasPwd) { unlockApp(); return; }
+    const render = function (avail) {
       const old = document.getElementById('lock-screen');
       if (old) old.remove();
       const d = document.createElement('div');
-      d.innerHTML = lockOverlayHtml(false, hasPwd);
+      d.innerHTML = lockOverlayHtml(avail, hasPwd);
       document.body.appendChild(d.firstChild);
-    }
+    };
+    // Sin protección y sin contraseña que pedir: no hay nada que bloquear.
+    if (!protectedApp && !hasPwd) { unlockApp(); return; }
+    // Con la app protegida SIEMPRE se muestra el bloqueo (aunque no haya huella
+    // ni contraseña: lockOverlayHtml ofrece "Entrar sin cifrado"). Nunca se debe
+    // auto-desbloquear datos cifrados sin la clave.
+    if (!bio) { render(false); return; }
+    Promise.resolve(bio.isAvailable({ useFallback: false })).then(function (r) {
+      const avail = !!(r && r.isAvailable) && fingerprintActive;
+      render(avail);
+    }).catch(function () { render(false); });
   }
 
   function applyLockScreen(force) {
@@ -99,9 +75,14 @@ var Lock = (function () {
       if (o) o.remove();
       return;
     }
-    const doRelock = (force === true && !DB.needsUnlock() && DB.isProtected());
+    const doRelock = (force === true && !relocking && DB.isProtected() && !DB.needsUnlock());
     if (doRelock) {
+      relocking = true;
       Promise.resolve(DB.relock()).then(function () {
+        relocking = false;
+        applyLockScreen(true);
+      }).catch(function () {
+        relocking = false;
         applyLockScreen(true);
       });
       return;
