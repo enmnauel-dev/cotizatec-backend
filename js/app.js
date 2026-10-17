@@ -40,6 +40,7 @@ const NAV = [
   let biometricPromptActive = false;
   let lastUnlockAt = 0;
   let appStateListenerAttached = false;
+  let settingsUnlocked = false;
   let licenseStatus = null;
 
   // Marca el instante del desbloqueo. El ciclo de vida (onResume tras el
@@ -118,6 +119,7 @@ const NAV = [
     if (!isEditor) {
       html += '<nav class="bottom-nav">';
       NAV.forEach(function (n) {
+        if (n.v === 'ajustes' && DB.isStaffMode()) return;
         const act = n.v === routeName || (routeName === 'cliente' && n.v === 'clientes') || (routeName === 'cotizacion' && n.v === 'trabajos') || (routeName === 'trabajo' && n.v === 'trabajos') ? ' active' : '';
         html += '<button class="nav-btn' + act + '" data-action="nav" data-to="' + n.v + '"><span class="ni">' + n.icon + '</span><span>' + n.label + '</span></button>';
       });
@@ -571,6 +573,19 @@ let html = '<form class="card form" data-form="cliente">';
     return html;
   }
 
+  // Pantalla de bloqueo de Ajustes: solo el dueño (PIN) entra. Se muestra en
+  // cada visita a #/ajustes (no se recuerda entre entradas).
+  function settingsPinGate() {
+    let html = '<section class="card"><h3>' + LOCK_ICON + ' Ajustes protegidos</h3>';
+    html += '<p class="muted">Introduce el PIN del dueño para entrar a Ajustes.</p>';
+    html += '<input type="password" inputmode="numeric" autocomplete="off" maxlength="8" id="settings-pin" class="sheet-input" placeholder="PIN del dueño">';
+    html += '<div class="btns-row">';
+    html += '<button class="btn primary" type="button" data-action="unlockSettings">' + LOCK_ICON + ' Entrar</button>';
+    html += '<button class="btn ghost" type="button" data-action="nav" data-to="dashboard">' + BACK_ICON + ' Volver</button>';
+    html += '</div></section>';
+    return html;
+  }
+
   function catalog() {
     const s = DB.state;
     const staff = DB.isStaffMode();
@@ -993,6 +1008,9 @@ let signCtx = null;
 function settingsView() {
     const s = DB.state.settings;
     let html = '<form data-form="settings">';
+    if (!DB.hasStaffPin()) {
+      html += '<section class="card"><p class="muted"><small>' + LOCK_ICON + ' Consejo: activa el "Modo vendedor" para crear un PIN que también protegerá esta pantalla de Ajustes.</small></p></section>';
+    }
     html += '<section class="card form">';
     html += '<h3>' + TOOLS_ICON + ' Tu negocio</h3>';
     html += '<label>Nombre del negocio / técnico</label><input type="text" name="businessName" value="' + escapeAttr(s.businessName) + '">';
@@ -1168,6 +1186,8 @@ function settingsView() {
   function render() {
     parseHash();
 
+    if (routeName !== 'ajustes') settingsUnlocked = false;
+
     if (routeName === 'cotizacion' && !draftEntryMode) {
       draft = null;
     } else if (routeName === 'cotizacion' && draftEntryMode === 'new' && !draft) {
@@ -1184,7 +1204,7 @@ case 'trabajos': inner = jobsView(); break;
   case 'trabajo': inner = jobDetail(); break;
       case 'reportes': inner = reportesView(); break;
   case 'reporte-detalle': inner = reportDetailView(); break;
-  case 'ajustes': inner = settingsView(); break;
+  case 'ajustes': inner = (DB.hasStaffPin() && !settingsUnlocked) ? settingsPinGate() : settingsView(); break;
       case 'catalogo-item': inner = catalogFormView(); break;
       default: inner = dashboard();
     }
@@ -1192,6 +1212,10 @@ case 'trabajos': inner = jobsView(); break;
     if (routeName === 'cotizacion') {
       const clientSel = document.getElementById('qc-client');
       if (clientSel) clientSel.addEventListener('change', function () { draft.clientId = this.value || null; DB.captureClient(draft); });
+    }
+    if (routeName === 'ajustes') {
+      const sp = document.getElementById('settings-pin');
+      if (sp) sp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ACTIONS.unlockSettings(); } });
     }
     refreshEditorBindings();
   }
@@ -1856,6 +1880,17 @@ case 'trabajos': inner = jobsView(); break;
         if (sh) sh.remove();
         render();
         toast('Modo dueño activado', true);
+      }).catch(function () { toast('No se pudo verificar el PIN', false); });
+    },
+
+    unlockSettings: function () {
+      const pin = String((document.getElementById('settings-pin') || {}).value || '').trim();
+      if (!pin) { toast('Escribe el PIN del dueño', false); return; }
+      DB.verifyStaffPin(pin).then(function (ok) {
+        if (!ok) { toast('PIN incorrecto', false); return; }
+        settingsUnlocked = true;
+        render();
+        toast('Acceso a Ajustes concedido', true);
       }).catch(function () { toast('No se pudo verificar el PIN', false); });
     },
 
