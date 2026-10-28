@@ -808,28 +808,91 @@ async function renderConducesContent(report) {
   const el = document.getElementById('conduces-list');
   if (!el) return;
   let conduces = [];
+  let catalog = [];
   try {
     const j = await api('/api/conduces');
     if (j && j.ok) conduces = j.conduces || [];
   } catch (e) { conduces = []; }
-  if (!conduces.length) {
-    el.innerHTML = '<div class="muted" style="padding:12px 0">Aún no hay conduces. Genera uno con el botón de arriba.</div>';
-    return;
+  try {
+    const d = await api('/api/client/data');
+    if (d && d.ok) catalog = d.catalog || [];
+  } catch (e) { catalog = []; }
+
+  let html = '';
+
+  // ----- Inventario (stock actual) -----
+  html += '<div style="margin-bottom:14px">';
+  html += '<div style="font-weight:700;margin-bottom:6px">📦 Inventario (stock actual)</div>';
+  if (!catalog.length) {
+    html += '<div class="muted" style="font-size:12px">Sin productos sincronizados. Abre la app para sincronizar el catálogo.</div>';
+  } else {
+    html += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>Producto</th><th style="text-align:right">Stock</th><th style="text-align:right">Entrada</th></tr></thead><tbody>';
+    catalog.forEach(function (p) {
+      const stock = (p.stock == null ? '—' : p.stock);
+      html += '<tr>' +
+        '<td style="padding:4px 2px">' + esc(p.name || '-') + '</td>' +
+        '<td style="padding:4px 2px;text-align:right;font-weight:600">' + stock + '</td>' +
+        '<td style="padding:4px 2px;text-align:right"><button class="btn small ghost" onclick="openStockEntry(\'' + p.id + '\',\'' + esc(p.name || '') + '\')">+ Entrada</button></td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
   }
-  el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Nº</th><th>Cliente</th><th>Fecha</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
-    conduces.map(function (d) {
-      const st = d.status || 'emitido';
-      const color = st === 'anulado' ? '#ef4444' : (st === 'emitido' ? '#10b981' : '#6b7280');
-      return '<tr>' +
-        '<td style="padding:6px 4px;font-weight:600">' + esc(d.number || d.id) + '</td>' +
-        '<td style="padding:6px 4px">' + esc(d.clientName || '-') + '</td>' +
-        '<td style="padding:6px 4px">' + (d.createdAt ? new Date(d.createdAt).toLocaleDateString('es-DO') : '-') + '</td>' +
-        '<td style="padding:6px 4px"><span style="color:' + color + ';font-weight:600">' + esc(st) + '</span></td>' +
-        '<td style="padding:6px 4px;text-align:right;white-space:nowrap">' +
-          '<button class="btn small ghost" onclick="viewConduce(\'' + d.id + '\')">Ver</button> ' +
-          (st !== 'anulado' ? '<button class="btn small danger-ghost" onclick="anularConduce(\'' + d.id + '\')">Anular</button>' : '') +
-        '</td></tr>';
-    }).join('') + '</tbody></table>';
+  html += '<div id="stock-entry-form" style="display:none;margin-top:8px;padding:10px;border:1px dashed #cbd5e1;border-radius:8px"></div>';
+  html += '</div>';
+
+  // ----- Conduces -----
+  html += '<div style="font-weight:700;margin-bottom:6px">📋 Conduces emitidos</div>';
+  if (!conduces.length) {
+    html += '<div class="muted" style="padding:8px 0">Aún no hay conduces. Genera uno con el botón de arriba.</div>';
+  } else {
+    html += '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Nº</th><th>Cliente</th><th>Fecha</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
+      conduces.map(function (d) {
+        const st = d.status || 'emitido';
+        const color = st === 'anulado' ? '#ef4444' : (st === 'emitido' ? '#10b981' : '#6b7280');
+        return '<tr>' +
+          '<td style="padding:6px 4px;font-weight:600">' + esc(d.number || d.id) + '</td>' +
+          '<td style="padding:6px 4px">' + esc(d.clientName || '-') + '</td>' +
+          '<td style="padding:6px 4px">' + (d.createdAt ? new Date(d.createdAt).toLocaleDateString('es-DO') : '-') + '</td>' +
+          '<td style="padding:6px 4px"><span style="color:' + color + ';font-weight:600">' + esc(st) + '</span></td>' +
+          '<td style="padding:6px 4px;text-align:right;white-space:nowrap">' +
+            '<button class="btn small ghost" onclick="viewConduce(\'' + d.id + '\')">Ver</button> ' +
+            (st !== 'anulado' ? '<button class="btn small danger-ghost" onclick="anularConduce(\'' + d.id + '\')">Anular</button>' : '') +
+          '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+  el.innerHTML = html;
+}
+
+function openStockEntry(catalogId, productName) {
+  const form = document.getElementById('stock-entry-form');
+  if (!form) return;
+  form.style.display = 'block';
+  form.innerHTML =
+    '<div style="font-weight:600;margin-bottom:6px">Registrar entrada — ' + esc(productName) + '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
+      '<div><label class="doc-lbl">Cantidad</label><input type="number" step="1" min="1" id="se-qty" style="width:100%"></div>' +
+      '<div><label class="doc-lbl">Costo unitario (opcional)</label><input type="number" step="0.01" min="0" id="se-cost" style="width:100%"></div>' +
+    '</div>' +
+    '<div style="margin-bottom:8px"><label class="doc-lbl">Proveedor (opcional)</label><input type="text" id="se-supplier" style="width:100%"></div>' +
+    '<div style="display:flex;gap:8px">' +
+      '<button class="btn primary" onclick="submitStockEntry(\'' + catalogId + '\',\'' + esc(productName) + '\')">Registrar</button>' +
+      '<button class="btn ghost" onclick="document.getElementById(\'stock-entry-form\').style.display=\'none\'">Cancelar</button>' +
+    '</div>';
+  const q = document.getElementById('se-qty'); if (q) q.focus();
+}
+
+async function submitStockEntry(catalogId, productName) {
+  const qty = Number((document.getElementById('se-qty') || {}).value) || 0;
+  if (qty <= 0) { alert('Indica una cantidad mayor a 0.'); return; }
+  const costStr = ((document.getElementById('se-cost') || {}).value || '').trim();
+  const supplier = ((document.getElementById('se-supplier') || {}).value || '').trim();
+  try {
+    const j = await api('/api/stock-entries', { method: 'POST', body: JSON.stringify({ catalogId, productName, qty, unitCost: costStr === '' ? null : Number(costStr), supplier }) });
+    if (!j || !j.ok) { alert((j && j.error) || 'No se pudo registrar la entrada.'); return; }
+    document.getElementById('stock-entry-form').style.display = 'none';
+    await renderConducesContent();
+    alert('Entrada registrada: +' + qty + ' ' + productName);
+  } catch (e) { alert(e.message); }
 }
 
 async function viewConduce(id) {

@@ -809,6 +809,23 @@ function updateDocument(docId, patch) {
   return doc;
 }
 
+function listStockEntriesByClient(clientId) {
+  const db = load();
+  if (!db.stockEntries) db.stockEntries = [];
+  return db.stockEntries.filter((e) => String(e.businessId) === String(clientId)).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+function addStockEntry(entry) {
+  const db = load();
+  if (!db.stockEntries) db.stockEntries = [];
+  db.stockEntries.push(entry);
+  save();
+  if (DATABASE_URL) {
+    pgSet('stockEntries', db.stockEntries).catch(function (e) { console.error('[pg] save stockEntries:', e.message); });
+  }
+  return entry;
+}
+
 function removeDocument(docId) {
   const db = load();
   const before = db.documents ? db.documents.length : 0;
@@ -903,6 +920,8 @@ module.exports = {
   addDocument,
   removeDocument,
   updateDocument,
+  listStockEntriesByClient,
+  addStockEntry,
   getGpsMap,
   setGpsPosition
 };

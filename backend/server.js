@@ -501,11 +501,12 @@ app.get('/api/client/data', async (req, res) => {
     if (!data.ok || !data.state) return res.json({ ok: true, clients: [], jobs: [] });
     const st = data.state;
     const clients = (st.clients || []).map((c) => ({ id: c.id, name: c.name, phone: c.phone || '' }));
+    const catalog = (st.catalog || []).map((c) => ({ id: c.id, name: c.name, price: c.price || 0, cost: c.cost || 0, stock: (c.stock == null ? null : c.stock), unit: c.unit || '', type: c.type || '' }));
     const jobs = (st.jobs || []).map((j) => {
       const t = jobTotalsWeb(j);
       return { id: j.id, code: j.code || '', number: j.number, date: j.date, clientId: j.clientId, clientName: j.clientName || '', status: j.status || 'COTIZADO', total: t.total, collected: t.collected, balance: t.balance };
     });
-    res.json({ ok: true, clients, jobs });
+    res.json({ ok: true, clients, jobs, catalog });
   } catch (e) {
     console.error('[client] data error:', e.message);
     res.status(500).json({ error: 'Error al leer los datos.' });
@@ -798,6 +799,44 @@ app.get('/api/conduces/:id', (req, res) => {
     return res.status(404).json({ error: 'Conduce no encontrado.' });
   }
   res.json({ ok: true, doc: publicDoc(doc), html: docHTML(doc) });
+});
+
+// ===== Entradas de inventario (compras a proveedor) =====
+app.get('/api/stock-entries', (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  res.json({ ok: true, entries: store.listStockEntriesByClient(auth.account.clientId) });
+});
+
+app.post('/api/stock-entries', (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const account = auth.account;
+  const client = store.getClient(account.clientId);
+  const modules = (client && client.modules) || [];
+  if (modules.indexOf('conduce') === -1 && modules.indexOf('documentos') === -1) {
+    return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de Inventario/Conduces.' });
+  }
+  const catalogId = String(req.body.catalogId || '').trim();
+  const qty = Number(req.body.qty) || 0;
+  if (!catalogId) return res.status(400).json({ error: 'Selecciona un producto.' });
+  if (qty <= 0) return res.status(400).json({ error: 'La cantidad debe ser mayor a 0.' });
+  const unitCost = (req.body.unitCost === null || req.body.unitCost === undefined || req.body.unitCost === '') ? null : Number(req.body.unitCost);
+  const supplier = String(req.body.supplier || '').trim();
+  const notes = String(req.body.notes || '').trim();
+  const entry = {
+    id: 'se-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    businessId: account.clientId,
+    catalogId: catalogId,
+    productName: String(req.body.productName || '').trim(),
+    qty: qty,
+    unitCost: (unitCost !== null && !isNaN(unitCost)) ? unitCost : null,
+    supplier: supplier,
+    notes: notes,
+    createdAt: Date.now()
+  };
+  store.addStockEntry(entry);
+  res.json({ ok: true, entry });
 });
 
 // ===== GestiÃ³n de usuarios del portal (solo el dueÃ±o del negocio) =====
