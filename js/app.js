@@ -121,7 +121,6 @@ const NAV = [
     if (!isEditor) {
       html += '<nav class="bottom-nav">';
       NAV.forEach(function (n) {
-        if (n.v === 'ajustes' && DB.isStaffMode()) return;
         const act = n.v === routeName || (routeName === 'cliente' && n.v === 'clientes') || (routeName === 'cotizacion' && n.v === 'trabajos') || (routeName === 'trabajo' && n.v === 'trabajos') ? ' active' : '';
         html += '<button class="nav-btn' + act + '" data-action="nav" data-to="' + n.v + '"><span class="ni">' + n.icon + '</span><span>' + n.label + '</span></button>';
       });
