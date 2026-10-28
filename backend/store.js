@@ -785,6 +785,18 @@ function addDocument(doc) {
   return doc;
 }
 
+function updateDocument(docId, patch) {
+  const db = load();
+  const doc = (db.documents || []).find((d) => String(d.id) === String(docId));
+  if (!doc) return null;
+  Object.assign(doc, patch || {});
+  save();
+  if (DATABASE_URL) {
+    pgSet('documents', db.documents).catch(function (e) { console.error('[pg] update documents:', e.message); });
+  }
+  return doc;
+}
+
 function removeDocument(docId) {
   const db = load();
   const before = db.documents ? db.documents.length : 0;
@@ -878,6 +890,7 @@ module.exports = {
   getDocument,
   addDocument,
   removeDocument,
+  updateDocument,
   getGpsMap,
   setGpsPosition
 };

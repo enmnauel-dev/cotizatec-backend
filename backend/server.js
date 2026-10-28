@@ -307,7 +307,8 @@ const DOC_ENABLED = {
   'pagare-garantia': true,
   'entrega-voluntaria': true,
   'debo-pagare-garantia': true,
-  'intimacion': true
+  'intimacion': true,
+  'conduce': true
 };
 const DOC_TITLES = {
   'carta-saldo': 'Carta de Saldo',
@@ -317,7 +318,8 @@ const DOC_TITLES = {
   'pagare-garantia': 'Pagaré con Garantía',
   'entrega-voluntaria': 'Entrega Voluntaria del Bien',
   'debo-pagare-garantia': 'Debo y Pagaré con Garantía',
-  'intimacion': 'Intimación de Pago'
+  'intimacion': 'Intimación de Pago',
+  'conduce': 'Conduce de Entrega'
 };
 // Reglas por tipo: unos exigen saldo pendiente, carta-saldo exige saldo RD$ 0.
 const DOC_REQUIRES_PENDING = { 'debo-pagare': true, 'pagare-notarial': true, 'pagare-garantia': true, 'debo-pagare-garantia': true, 'entrega-voluntaria': true, 'intimacion': true };
@@ -451,7 +453,27 @@ function docHTML(doc) {
         <p>Firmado en ${ciudad}, República Dominicana, a los ${hoy}.</p>
         <div class="sign"><div class="box"><div>.</div><div class="line2">Firma — ${escHTML(biz)}</div></div><div class="box"><div>.</div><div class="line2">Recibido: firma del DEUDOR</div></div></div>`;
       break;
-    default:
+    case 'conduce':
+      title = 'Conduce de Entrega'; sub = 'CONSTANCIA DE ENTREGA DE MERCANCIA';
+      var _items = (c.items && Array.isArray(c.items)) ? c.items : [];
+      var _units = _items.reduce(function (a, i) { return a + (Number(i.qty) || 0); }, 0);
+      var _subtotal = _items.reduce(function (a, i) { return a + (Number(i.qty) || 0) * (Number(i.price) || 0); }, 0);
+      var _itemsHtml = _items.length
+        ? '<table><tr><th>Cant.</th><th>Descripcion</th><th>P. Unit.</th><th>Subtotal</th></tr>' +
+          _items.map(function (it) {
+            const qty = Number(it.qty) || 0;
+            const price = Number(it.price) || 0;
+            return '<tr><td class="amt">' + qty + '</td><td>' + escHTML(it.desc || '') + '</td><td class="amt">' + docMoney(price) + '</td><td class="amt">' + (price > 0 ? docMoney(qty * price) : '-') + '</td></tr>';
+          }).join('') + '</table>'
+        : '<p>Sin conceptos.</p>';
+      body = `
+        <p><b>${biz}</b> hace constar la entrega de la siguiente mercancia al(la) senor(a) <b>${debtor}</b>, con documento de identidad No. <b>${debtorId}</b>, domiciliado(a) en <b>${debtorAddr}</b>.</p>
+        <p>Operacion origen: <b>${jobCode}</b>. Fecha de emision: <b>${hoy}</b>. Estado: <b>${doc.status || 'emitido'}</b>.</p>
+        ${_itemsHtml}
+        <table style="margin-top:6px"><tr><th>Total unidades entregadas</th><th class="amt">${_units}</th></tr>${_subtotal > 0 ? '<tr><td>Valor referencial</td><td class="amt">' + docMoney(_subtotal) + '</td></tr>' : ''}</table>
+        <p style="font-size:11px;color:#666;margin-top:8px">Constancia de entrega de mercancia - no valido como factura fiscal.</p>
+        <div class="sign"><div class="box"><div>.</div><div class="line2">Recibido por (cliente) - ${escHTML(c.clientName || debtor)}</div></div><div class="box"><div>.</div><div class="line2">Entregado por - ${escHTML(biz)}</div></div></div>`;
+      break;    default:
       return '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"></head><body><p>Documento no disponible.</p></body></html>';
   }
 
@@ -572,6 +594,27 @@ app.post('/api/client/documents', async (req, res) => {
     if (DOC_REQUIRES_BIEN[type] && !bien) {
       return res.status(400).json({ error: 'Indica la descripción del bien que respalda la garantía.' });
     }
+    let _conduceItems = null;
+    if (type === 'conduce') {
+      const _catalog = (data.state.catalog || []);
+      _conduceItems = (job.items || []).map(function (it) {
+        return { desc: it.desc || '', qty: Number(it.qty) || 0, price: Number(it.price) || 0, type: it.type || 'PRODUCTO', catalogId: it.catalogId || null, catalogQty: Number(it.catalogQty) || 1 };
+      });
+      const _missing = [];
+      _conduceItems.forEach(function (it) {
+        if (!it.catalogId) return;
+        const p = _catalog.find(function (x) { return String(x.id) === String(it.catalogId); });
+        if (!p) return;
+        if (p.stock === null || p.stock === undefined || p.stock === '') return;
+        const need = (Number(it.qty) || 0) * (Number(it.catalogQty) || 1);
+        const have = Number(p.stock) || 0;
+        if (have < need) _missing.push({ desc: it.desc, need: need, available: have });
+      });
+      if (_missing.length) {
+        return res.status(400).json({ error: 'Inventario insuficiente.', missing: _missing });
+      }
+    }
+
     const doc = {
       id: 'doc-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       number: docNumber(),
@@ -600,7 +643,10 @@ app.post('/api/client/documents', async (req, res) => {
         bien: bien,
         fechaPago: req.body.fechaPago || null,
         testigos: Array.isArray(req.body.testigos) ? req.body.testigos.slice(0, 5).map((w) => ({ name: String((w && w.name) || '').trim(), doc: String((w && w.doc) || '').trim() })).filter((w) => w.name) : [],
-        ciudad: String(req.body.ciudad || '').trim() || null
+        ciudad: String(req.body.ciudad || '').trim() || null,
+         items: _conduceItems || null,
+         units: _conduceItems ? _conduceItems.reduce(function (a, i) { return a + (Number(i.qty) || 0); }, 0) : 0,
+         subtotal: _conduceItems ? _conduceItems.reduce(function (a, i) { return a + (Number(i.qty) || 0) * (Number(i.price) || 0); }, 0) : 0
       }
     };
     store.addDocument(doc);
@@ -648,6 +694,110 @@ app.delete('/api/client/documents/:id', (req, res) => {
   }
   store.removeDocument(doc.id);
   res.json({ ok: true });
+});
+
+// ===== Conduces de entrega (portal web) =====
+app.get('/api/conduces', (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const docs = store.listDocumentsByClient(auth.account.clientId).filter((d) => d.type === 'conduce');
+  res.json({ ok: true, conduces: docs.map(publicDoc) });
+});
+
+app.post('/api/conduces', async (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const account = auth.account;
+  const client = store.getClient(account.clientId);
+  const modules = (client && client.modules) || [];
+  if (modules.indexOf('documentos') === -1) return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de Documentos.' });
+  const jobId = String(req.body.jobId || '').trim();
+  if (!jobId) return res.status(400).json({ error: 'Selecciona un trabajo.' });
+  try {
+    const data = await readClientData(account.clientId);
+    if (!data.ok || !data.state) return res.status(404).json({ error: 'No hay datos del negocio.' });
+    const job = (data.state.jobs || []).find((j) => String(j.id) === String(jobId));
+    if (!job) return res.status(404).json({ error: 'Trabajo no encontrado.' });
+    const t = jobTotalsWeb(job);
+    const c = data.state.clients || [];
+    const clientRow = c.find((x) => String(x.id) === String(job.clientId)) || null;
+    const catalog = data.state.catalog || [];
+    const items = (job.items || []).map((it) => ({
+      desc: it.desc || '', qty: Number(it.qty) || 0, price: Number(it.price) || 0,
+      type: it.type || 'PRODUCTO', catalogId: it.catalogId || null, catalogQty: Number(it.catalogQty) || 1
+    }));
+    const missing = [];
+    items.forEach((it) => {
+      if (!it.catalogId) return;
+      const p = catalog.find((x) => String(x.id) === String(it.catalogId));
+      if (!p) return;
+      if (p.stock === null || p.stock === undefined || p.stock === '') return;
+      const need = (Number(it.qty) || 0) * (Number(it.catalogQty) || 1);
+      const have = Number(p.stock) || 0;
+      if (have < need) missing.push({ desc: it.desc, need: need, available: have });
+    });
+    if (missing.length) {
+      return res.status(400).json({ error: 'Inventario insuficiente.', missing });
+    }
+    const doc = {
+      id: 'doc-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      number: 'COND-' + String(Date.now()).slice(-5),
+      businessId: account.clientId,
+      clientId: job.clientId || null,
+      jobId: job.id,
+      jobCode: job.code || (job.number || ''),
+      type: 'conduce',
+      status: 'emitido',
+      createdAt: Date.now(),
+      amount: t.total,
+      collected: t.collected,
+      balance: t.balance,
+      paidInFull: t.balance <= 0,
+      templateVersion: 'v1.0',
+      stockApplied: items.some((it) => it.catalogId),
+      data: {
+        businessName: (data.state.settings && data.state.settings.businessName) || (client && client.name) || '',
+        clientName: job.clientName || (clientRow && clientRow.name) || '',
+        clientPhone: job.clientPhone || (clientRow && clientRow.phone) || '',
+        debtorId: (clientRow && clientRow.document) || '',
+        debtorAddr: (clientRow && clientRow.address) || '',
+        jobCode: job.code || (job.number || ''),
+        total: t.total, collected: t.collected, balance: t.balance,
+        items: items,
+        units: items.reduce((a, i) => a + (Number(i.qty) || 0), 0),
+        subtotal: items.reduce((a, i) => a + (Number(i.qty) || 0) * (Number(i.price) || 0), 0),
+        deliveredBy: '', notes: ''
+      }
+    };
+    store.addDocument(doc);
+    res.json({ ok: true, doc: publicDoc(doc), html: docHTML(doc) });
+  } catch (e) {
+    console.error('[client] conduce create error:', e.message);
+    res.status(500).json({ error: 'Error al generar el conduce.' });
+  }
+});
+
+app.put('/api/conduces/:id/anular', (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const doc = store.getDocument(String(req.params.id || '').trim());
+  if (!doc || String(doc.businessId) !== String(auth.account.clientId) || doc.type !== 'conduce') {
+    return res.status(404).json({ error: 'Conduce no encontrado.' });
+  }
+  if (doc.status === 'anulado') return res.json({ ok: true, doc: publicDoc(doc) });
+  doc.status = 'anulado';
+  store.updateDocument(doc.id, { status: 'anulado' });
+  res.json({ ok: true, doc: publicDoc(doc) });
+});
+
+app.get('/api/conduces/:id', (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const doc = store.getDocument(String(req.params.id || '').trim());
+  if (!doc || String(doc.businessId) !== String(auth.account.clientId) || doc.type !== 'conduce') {
+    return res.status(404).json({ error: 'Conduce no encontrado.' });
+  }
+  res.json({ ok: true, doc: publicDoc(doc), html: docHTML(doc) });
 });
 
 // ===== GestiÃ³n de usuarios del portal (solo el dueÃ±o del negocio) =====
