@@ -495,7 +495,7 @@ app.get('/api/client/data', async (req, res) => {
   const { account } = auth;
   const client = store.getClient(account.clientId);
   const modules = (client && client.modules) || [];
-  if (modules.indexOf('documentos') === -1) return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de Documentos.' });
+  if (modules.indexOf('documentos') === -1 && modules.indexOf('conduce') === -1) return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de Documentos/Conduces.' });
   try {
     const data = await readClientData(account.clientId);
     if (!data.ok || !data.state) return res.json({ ok: true, clients: [], jobs: [] });
