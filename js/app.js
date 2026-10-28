@@ -1663,6 +1663,19 @@ case 'trabajos': inner = jobsView(); break;
       const c = DB.find('clients', el.dataset.id);
       if (!c) return;
       const jobs = DB.state.jobs.filter(function (j) { return String(j.clientId) === String(c.id); }).length;
+      if (DB.isStaffMode() && DB.hasStaffPin() && DB.requireSupervisorPin()) {
+        const pin = window.prompt('PIN del administrador para eliminar el cliente:');
+        if (pin === null) return;
+        DB.verifyStaffPin(String(pin).trim()).then(function (ok) {
+          if (!ok) { toast('PIN incorrecto', false); return; }
+          if (!confirmar('¿Eliminar a ' + c.name + '?' + (jobs ? ' Tiene ' + jobs + ' trabajo(s) asociado(s).' : ''))) return;
+          DB.remove('clients', c.id);
+          if (routeName === 'cliente' && params.id === 'perfil') { go('#/clientes'); return; }
+          render();
+        }).catch(function () { toast('No se pudo verificar el PIN', false); });
+        return;
+      }
+      if (DB.isStaffMode()) { toast('Solo el administrador puede eliminar clientes', false); return; }
       if (!confirmar('¿Eliminar a ' + c.name + '?' + (jobs ? ' Tiene ' + jobs + ' trabajo(s) asociado(s).' : ''))) return;
       DB.remove('clients', c.id);
       if (routeName === 'cliente' && params.id === 'perfil') { go('#/clientes'); return; }
