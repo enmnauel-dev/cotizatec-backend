@@ -180,6 +180,80 @@ var Printer = (function () {
     return B.b;
   }
 
+  // Conduce de entrega (constancia de entrega de mercancia) en ESC/POS.
+  function buildConduce(c, cols, job) {
+    cols = cols || 32;
+    var st = DB.state.settings;
+    var tot = DB.conduceTotals(c);
+    var B = new Builder(cols);
+
+    B.init();
+    B.align(1).bold(true);
+    var bn = normalize(st.businessName || 'Mi Negocio');
+    var bnSize = bn.length <= Math.floor(cols / 2) ? 3 : (bn.length <= cols ? 1 : 0);
+    if (bnSize) B.size(bnSize);
+    B.text(bn).lf();
+    B.size(0).bold(false);
+    if (st.phone) B.text('Tel: ' + st.phone).lf();
+    if (st.address) B.text(st.address).lf();
+    B.line('=');
+
+    B.align(1).bold(true).size(1).text('CONDUCE DE ENTREGA').lf().size(0).bold(false);
+    B.align(0).text('No.: ' + (c.code || '')).lf();
+    B.text('Fecha: ' + DB.date(c.date, true)).lf();
+    B.text('Estado: ' + DB.conduceStatusLabel(c.status)).lf();
+    B.line('-');
+
+    B.bold(true).text('CLIENTE').lf().bold(false);
+    B.text(normalize(c.clientName || '-')).lf();
+    if (c.clientAddress) wrap(c.clientAddress, cols).forEach(function (l) { B.text(l).lf(); });
+    if (c.clientPhone) B.text('Tel: ' + c.clientPhone).lf();
+    B.line('-');
+
+    B.bold(true);
+    B.text('CANT  DESCRIPCION').lf().bold(false);
+    B.line('-');
+
+    (c.items || []).forEach(function (it) {
+      var qty = Number(it.qty) || 0;
+      var head = qty + ' x ' + (it.desc || '');
+      var lines = wrap(head, cols);
+      lines.forEach(function (ln) { B.text(ln).lf(); });
+      if (Number(it.price) > 0) {
+        var sub = money(qty * (Number(it.price) || 0));
+        B.text('     ' + money(it.price) + ' c/u').lf();
+        B.align(2).text(sub).lf().align(0);
+      }
+    });
+    B.line('-');
+    B.text(row('Total unidades', String(tot.units), cols)).lf();
+    if (tot.subtotal > 0) B.text(row('Valor referencial', money(tot.subtotal), cols)).lf();
+
+    if ((c.notes || '').trim()) {
+      B.line('-');
+      wrap(c.notes, cols).forEach(function (l) { B.text(l).lf(); });
+    }
+
+    B.line('=');
+    B.lf();
+    B.text(new Array(cols + 1).join('_')); B.lf();
+    B.align(1).text('Recibido por (cliente)').lf().align(0);
+    B.text('Nombre: ______________________________').lf();
+    B.text('Cedula: ______________________________').lf();
+    B.lf();
+    B.text(new Array(cols + 1).join('_')); B.lf();
+    B.align(1).text('Entregado por').lf().align(0);
+    if (c.deliveredBy) B.text(normalize(c.deliveredBy)).lf();
+    B.lf();
+    B.align(1).text('Gracias por su preferencia').lf().text('CotizaTec').lf().align(0);
+    B.feed(3).cut();
+    return B.b;
+  }
+
+  function printConduce(c) {
+    if (!available()) return Promise.reject(new Error('La impresion solo funciona en la app instalada'));
+    return printBytes(buildConduce(c, getSaved().cols));
+  }
   function toBase64(bytes) {
     var s = '';
     for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
@@ -251,6 +325,8 @@ var Printer = (function () {
     listDevices: listDevices,
     printTicket: printTicket,
     testPrint: testPrint,
-    buildTicket: buildTicket
+    buildTicket: buildTicket,
+    buildConduce: buildConduce,
+    printConduce: printConduce
   };
 })();

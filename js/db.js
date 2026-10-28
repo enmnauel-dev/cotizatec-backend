@@ -38,6 +38,13 @@ var DB = (function () {
     { type: 'PRODUCTO', name: 'Material / accesorio estándar', price: 400 }
   ];
 
+  // Estados del conduce de entrega.
+  const CONDUCE_STATUS = [
+    { id: 'PENDIENTE', label: 'Pendiente', color: '#f59e0b' },
+    { id: 'ENTREGADO', label: 'Entregado', color: '#10b981' },
+    { id: 'ANULADO', label: 'Anulado', color: '#ef4444' }
+  ];
+
   const STATUS = [
     { id: 'COTIZADO', label: 'Cotizado', color: '#f59e0b' },
     { id: 'APROBADO', label: 'Aprobado', color: '#3b82f6' },
@@ -52,11 +59,12 @@ var DB = (function () {
       clients: [],
       catalog: JSON.parse(JSON.stringify(SEED_CATALOG)).map(a => ({ id: 'c' + (++_seq.catalog), ...a })),
       jobs: [],
-      seq: { client: 0, catalog: 0, job: 0, expense: 0, payment: 0 }
+      conduces: [],
+      seq: { client: 0, catalog: 0, job: 0, expense: 0, payment: 0, conduce: 0 }
     };
   }
 
-  const _seq = { client: 0, catalog: 0, job: 0, expense: 0, payment: 0 };
+  const _seq = { client: 0, catalog: 0, job: 0, expense: 0, payment: 0, conduce: 0 };
   let state = null;
   let _idIndex = {};
 
@@ -398,10 +406,12 @@ var DB = (function () {
     if (!s.catalog) s.catalog = [];
     if (!s.clients) s.clients = [];
     if (!s.jobs) s.jobs = [];
+    if (!s.conduces) s.conduces = [];
     if (!Array.isArray(s.settings.itemTypes)) s.settings.itemTypes = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.itemTypes));
     if (!s.settings.docTitle) s.settings.docTitle = DEFAULT_SETTINGS.docTitle;
     if (typeof s.settings.staffMode !== 'boolean') s.settings.staffMode = false;
     if (typeof s.settings.staffPin !== 'string') s.settings.staffPin = '';
+    if (!s.settings.conducePrefix) s.settings.conducePrefix = 'CON';
     const LEGACY_TYPES = { MO: 'SERVICIO', REP: 'PRODUCTO' };
     (s.catalog || []).forEach(function (i) {
       if (i && LEGACY_TYPES[i.type]) i.type = LEGACY_TYPES[i.type];
@@ -413,7 +423,7 @@ var DB = (function () {
     });
     const t = s.seq;
     _seq.client = t.client || 0; _seq.catalog = t.catalog || 0; _seq.job = t.job || 0;
-    _seq.expense = t.expense || 0; _seq.payment = t.payment || 0;
+    _seq.expense = t.expense || 0; _seq.payment = t.payment || 0; _seq.conduce = t.conduce || 0;
     state = s;
     rebuildIndex(s);
     return s;
@@ -461,7 +471,7 @@ var DB = (function () {
 
   // Guardado seguro: respaldo del estado anterior antes de sobreescribir la clave principal.
   function save(skipMirror) {
-    state.seq = { client: _seq.client, catalog: _seq.catalog, job: _seq.job, expense: _seq.expense, payment: _seq.payment };
+    state.seq = { client: _seq.client, catalog: _seq.catalog, job: _seq.job, expense: _seq.expense, payment: _seq.payment, conduce: _seq.conduce };
     if (_encKey) { scheduleEncSave(); notifySave(); return; }
     try {
       var jsonStr = JSON.stringify(state);
@@ -622,7 +632,7 @@ var DB = (function () {
   function rebuildIndex(src) {
     src = src || state || {};
     _idIndex = {};
-    ['clients', 'catalog', 'jobs'].forEach(function (list) {
+    ['clients', 'catalog', 'jobs', 'conduces'].forEach(function (list) {
       (src[list] || []).forEach(function (item) {
         if (item && item.id) _idIndex[String(item.id)] = item;
       });
@@ -705,6 +715,119 @@ var DB = (function () {
     return s ? s.color : '#6b7280';
   }
 
+  // ===== Conduces de entrega =====
+  function conduceStatusLabel(id) {
+    const s = CONDUCE_STATUS.find(x => x.id === id);
+    return s ? s.label : id;
+  }
+
+  function conduceStatusColor(id) {
+    const s = CONDUCE_STATUS.find(x => x.id === id);
+    return s ? s.color : '#6b7280';
+  }
+
+  // Crea (sin guardar) un conduce a partir de un trabajo/cotizacion.
+  function newConduce(job) {
+    const c = (job && job.clientId) ? find('clients', job.clientId) : null;
+    const items = ((job && job.items) || []).map(function (it) {
+      return {
+        desc: it.desc || '',
+        qty: Number(it.qty) || 0,
+        price: Number(it.price) || 0,
+        type: it.type || 'PRODUCTO',
+        unit: it.unit || '',
+        catalogId: it.catalogId || null,
+        catalogQty: Number(it.catalogQty) || 1
+      };
+    });
+    return {
+      id: uid(),
+      code: '',
+      jobId: (job && job.id) || null,
+      jobCode: (job && job.code) || '',
+      clientId: (job && job.clientId) || null,
+      clientName: (c && c.name) || (job && job.clientName) || '',
+      clientPhone: (c && c.phone) || (job && job.clientPhone) || '',
+      clientAddress: (c && c.address) || '',
+      date: new Date().toISOString(),
+      items: items,
+      status: 'PENDIENTE',
+      notes: '',
+      deliveredBy: '',
+      receivedBy: '',
+      stockApplied: false
+    };
+  }
+
+  // Correlativo: CON-000001, CON-000002, ...
+  function nextConduceNumber() {
+    const prefix = (state && state.settings && state.settings.conducePrefix) || 'CON';
+    const n = incr('conduce');
+    return prefix + '-' + String(n).padStart(6, '0');
+  }
+
+  function saveConduce(c) {
+    if (!c.code) c.code = nextConduceNumber();
+    const i = state.conduces.findIndex(x => String(x.id) === String(c.id));
+    if (i >= 0) state.conduces[i] = c; else state.conduces.unshift(c);
+    save();
+    return c;
+  }
+
+  function conduceTotals(c) {
+    const items = (c && c.items) || [];
+    const subtotal = items.reduce(function (a, i) { return a + (Number(i.qty) || 0) * (Number(i.price) || 0); }, 0);
+    const units = items.reduce(function (a, i) { return a + (Number(i.qty) || 0); }, 0);
+    return { subtotal: subtotal, units: units, count: items.length };
+  }
+
+  // Compara lo despachado con el stock del catalogo (solo items con stock numerico).
+  function conduceStockCheck(c) {
+    const out = [];
+    ((c && c.items) || []).forEach(function (it) {
+      if (!it.catalogId) return;
+      const p = find('catalog', it.catalogId);
+      if (!p) return;
+      if (p.stock === null || p.stock === undefined || p.stock === '') return;
+      const need = (Number(it.qty) || 0) * (Number(it.catalogQty) || 1);
+      const have = Number(p.stock) || 0;
+      out.push({ id: p.id, desc: it.desc, need: need, available: have, ok: have >= need });
+    });
+    return out;
+  }
+
+  // Descuenta stock. No aplica nada si algun item controlado no alcanza.
+  function conduceApplyStock(c) {
+    const check = conduceStockCheck(c);
+    const missing = check.filter(function (x) { return !x.ok; });
+    if (missing.length) return { ok: false, missing: missing, applied: 0 };
+    check.forEach(function (x) {
+      const p = find('catalog', x.id);
+      if (p) p.stock = Math.max(0, (Number(p.stock) || 0) - x.need);
+    });
+    c.stockApplied = check.length > 0;
+    save();
+    return { ok: true, missing: [], applied: check.length };
+  }
+
+  // Devuelve el stock si el conduce se anula.
+  function conduceRestoreStock(c) {
+    if (!c || !c.stockApplied) return false;
+    ((c.items) || []).forEach(function (it) {
+      if (!it.catalogId) return;
+      const p = find('catalog', it.catalogId);
+      if (!p) return;
+      if (p.stock === null || p.stock === undefined || p.stock === '') return;
+      p.stock = (Number(p.stock) || 0) + (Number(it.qty) || 0) * (Number(it.catalogQty) || 1);
+    });
+    c.stockApplied = false;
+    save();
+    return true;
+  }
+
+  function conducesForJob(jobId) {
+    return (state.conduces || []).filter(function (c) { return String(c.jobId) === String(jobId); });
+  }
   function buildBackup() {
     return JSON.stringify({
       format: 'cotizatec-backup',
@@ -1106,6 +1229,8 @@ var DB = (function () {
    Object.assign(api, {
      load, save, incr, esc, money, date, push, find, update, remove, uid,
      jobTotals, newJob, saveJob, captureClient,
+     CONDUCE_STATUS, conduceStatusLabel, conduceStatusColor, newConduce, saveConduce,
+     conduceTotals, conduceStockCheck, conduceApplyStock, conduceRestoreStock, conducesForJob, nextConduceNumber,
      statusLabel, statusColor, STATUS, KEY, BAK_KEY, TS_KEY, FS_KEY, ENC_META,
      buildBackup, parseBackup, applyBackup, backupError,
      encryptBackupJson, decryptBackupJson,

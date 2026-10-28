@@ -287,6 +287,49 @@ async function main() {
       'arranque en frío: el índice se reconstruyó (find por id funciona)');
   }
 
+  // ============ 8. Conduce de entrega: correlativo y stock ============
+  section('8) Conduce de entrega: correlativo, items y stock');
+  {
+    DB.state = {
+      settings: { itemTypes: [{ id: 'PRODUCTO', label: 'Producto', icon: 'box' }], docTitle: 'X', businessName: 'Taller', conducePrefix: 'CON' },
+      catalog: [{ id: 'c50', name: 'Tornillo 2"', price: 50, cost: 20, type: 'PRODUCTO', stock: 5 }],
+      clients: [{ id: 'cl9', name: 'Cliente Conduce', phone: '809-000', address: 'Calle 1' }],
+      jobs: [],
+      conduces: [],
+      seq: { client: 1, catalog: 1, job: 0, expense: 0, payment: 0, conduce: 0 }
+    };
+    DB.save(true); DB.load();
+
+    const job8 = { id: 'j9001', code: 'COT-9001', clientId: 'cl9', clientName: 'Cliente Conduce', clientPhone: '809-000', items: [{ desc: 'Tornillo 2"', qty: 2, price: 50, cost: 20, type: 'PRODUCTO', catalogId: 'c50', catalogQty: 1 }] };
+    const c8 = DB.newConduce(job8);
+    ok(c8.status === 'PENDIENTE', 'newConduce arranca en estado PENDIENTE');
+    ok(c8.items.length === 1 && c8.clientName === 'Cliente Conduce', 'newConduce copia items y cliente');
+    ok(c8.clientAddress === 'Calle 1', 'newConduce copia la direccion del cliente');
+
+    const check8 = DB.conduceStockCheck(c8);
+    ok(check8.length === 1 && check8[0].ok === true, 'stock suficiente: check8 ok');
+
+    DB.saveConduce(c8);
+    ok(/^CON-\d{6}$/.test(c8.code), 'saveConduce asigna correlativo CON-000001');
+
+    const c9 = DB.newConduce(job8);
+    DB.saveConduce(c9);
+    ok(c9.code !== c8.code, 'correlativo se incrementa entre conduces');
+
+    const applied = DB.conduceApplyStock(c8);
+    ok(applied.ok === true && applied.applied === 1, 'conduceApplyStock descuenta cuando hay stock');
+    ok(DB.find('catalog', 'c50').stock === 3, 'stock descontado: 5 - 2 = 3');
+
+    const restored = DB.conduceRestoreStock(c8);
+    ok(restored === true && DB.find('catalog', 'c50').stock === 5, 'conduceRestoreStock devuelve el stock al anular');
+
+    // Conduce con stock insuficiente: no descuenta y reporta missing.
+    const jobShort = { id: 'j9002', code: 'COT-9002', clientId: 'cl9', clientName: 'Cliente Conduce', items: [{ desc: 'Tornillo 2"', qty: 10, price: 50, cost: 20, type: 'PRODUCTO', catalogId: 'c50', catalogQty: 1 }] };
+    const cShort = DB.newConduce(jobShort);
+    const appliedShort = DB.conduceApplyStock(cShort);
+    ok(appliedShort.ok === false && appliedShort.missing.length === 1, 'stock insuficiente: conduceApplyStock reporta missing');
+    ok(DB.find('catalog', 'c50').stock === 5, 'stock insuficiente: no se desconta (sigue en 5)');
+  }
   summary();
 }
 

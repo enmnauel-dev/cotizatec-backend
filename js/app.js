@@ -22,6 +22,8 @@ const TITLES = {
   trabajo: 'Detalle',
   reportes: 'Reportes',
   'reporte-detalle': 'Detalle',
+  conduces: 'Conduces',
+  conduce: 'Conduce',
   ajustes: 'Ajustes'
 };
 
@@ -640,6 +642,7 @@ let html = '<form class="card form" data-form="cliente">';
     }).join('') + '</select>';
     html += '<label>Precio (RD$) *</label><input type="number" step="0.01" min="0" name="price" value="' + (i ? i.price : '') + '" placeholder="0.00">';
     html += '<label>Costo de compra (RD$, opcional)</label><input type="number" step="0.01" min="0" name="cost" value="' + (i && Number(i.cost) ? i.cost : '') + '" placeholder="Lo que te cuesta a ti">';
+    html += '<label>Inventario / stock (opcional)</label><input type="number" step="1" min="0" name="stock" value="' + (i && i.stock != null ? i.stock : '') + '" placeholder="Vacio = no se controla stock">';
     html += '<details class="pack-fields"><summary>' + PLUS_ICON + ' Se vende por caja (opcional)</summary>';
     html += '<label>Unidad de medida</label><input type="text" name="unit" value="' + escapeAttr(i ? i.unit || '' : '') + '" placeholder="Ej. pieza, metro, libra">';
     html += '<label>Unidades por caja</label><input type="number" step="1" min="0" name="packQty" value="' + (i && i.packQty ? i.packQty : '') + '" placeholder="Ej. 12">';
@@ -782,6 +785,7 @@ let html = '<form class="card form" data-form="cliente">';
         html += '</div>';
       });
     }
+    html += '<button class="btn block ghost" data-action="nav" data-to="conduces">' + PAPER_ICON + ' Conduces de entrega</button>';
     html += '<button class="fab" data-action="newQuote"><span>' + PLUS_ICON + '</span></button>';
     return html;
   }
@@ -808,6 +812,10 @@ let html = '<form class="card form" data-form="cliente">';
     html += '</div>';
     html += '<div class="do">';
     html += '<button class="btn" data-action="printTicket" data-id="' + j.id + '">' + PRINT_ICON + ' Imprimir ticket</button>';
+    html += '</div>';
+    const conds = DB.conducesForJob(j.id);
+    html += '<div class="do">';
+    html += '<button class="btn" data-action="newConduce" data-id="' + j.id + '">' + PAPER_ICON + ' ' + (conds.length ? 'Ver conduce' : 'Generar conduce') + '</button>';
     html += '</div>';
 
     html += '<section class="card"><h3>' + ITEM_ICON + ' Conceptos</h3>';
@@ -1005,6 +1013,98 @@ let signCtx = null;
     });
   }
 
+  function conducePill(status) {
+    return '<span class="pill" style="background:' + DB.conduceStatusColor(status) + '">' + DB.conduceStatusLabel(status) + '</span>';
+  }
+
+  function conducesView() {
+    const list = (DB.state.conduces || []).slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+    let html = '';
+    if (!list.length) {
+      return emptyBox(PAPER_ICON, 'Aun no hay conduces. Genera uno desde un trabajo o cotizacion.', { action: 'nav', label: 'Ir a Trabajos' });
+    }
+    html += '<p class="muted"><small>' + list.length + ' conduce(s). Se generan desde el detalle de un trabajo.</small></p>';
+    list.forEach(function (c) {
+      const t = DB.conduceTotals(c);
+      html += '<div class="job" data-action="openConduce" data-id="' + c.id + '">';
+      html += '<div class="job-head"><b>' + escapeAttr(c.code || 'Conduce') + '</b>' + conducePill(c.status) + '</div>';
+      html += '<small>' + escapeAttr(c.clientName || 'Sin cliente') + ' · ' + DB.date(c.date) + '</small>';
+      html += '<div class="job-money"><div class="m">Items <b>' + t.count + '</b></div><div class="m">Unidades <b>' + t.units + '</b></div></div>';
+      html += '</div>';
+    });
+    return html;
+  }
+
+  // Vista previa del documento (formato recibo / constancia de entrega).
+  function conduceDoc(c) {
+    const st = DB.state.settings;
+    const t = DB.conduceTotals(c);
+    const job = c.jobId ? DB.find('jobs', c.jobId) : null;
+    let h = '<div class="card" style="background:#fff;color:#111;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;padding:14px;">';
+    h += '<div style="text-align:center;font-weight:800;font-size:14px;">' + escapeAttr(st.businessName || 'Mi Negocio') + '</div>';
+    if (st.phone) h += '<div style="text-align:center;">Tel: ' + escapeAttr(st.phone) + '</div>';
+    if (st.address) h += '<div style="text-align:center;">' + escapeAttr(st.address) + '</div>';
+    h += '<div style="border-top:1px dashed #9ca3af;margin:8px 0;"></div>';
+    h += '<div style="text-align:center;font-weight:800;letter-spacing:.5px;font-size:13px;">CONDUCE DE ENTREGA</div>';
+    h += '<div style="display:flex;justify-content:space-between;gap:8px;"><span><b>No.:</b> ' + escapeAttr(c.code || '') + '</span><span>' + escapeAttr(DB.date(c.date, true)) + '</span></div>';
+    h += '<div><b>Estado:</b> ' + escapeAttr(DB.conduceStatusLabel(c.status)) + (c.jobCode ? ' &middot; <b>Origen:</b> ' + escapeAttr(c.jobCode) : '') + '</div>';
+    h += '<div style="border-top:1px dashed #9ca3af;margin:8px 0;"></div>';
+    h += '<div><b>CLIENTE:</b> ' + escapeAttr(c.clientName || '-') + '</div>';
+    if (c.clientAddress) h += '<div>' + escapeAttr(c.clientAddress) + '</div>';
+    if (c.clientPhone) h += '<div>Tel: ' + escapeAttr(c.clientPhone) + '</div>';
+    h += '<div style="border-top:1px dashed #9ca3af;margin:8px 0;"></div>';
+    h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px;">';
+    h += '<thead><tr><th style="text-align:left;border-bottom:1px solid #d1d5db;padding:2px 0;">Cant</th><th style="text-align:left;border-bottom:1px solid #d1d5db;padding:2px 0;">Descripcion</th><th style="text-align:right;border-bottom:1px solid #d1d5db;padding:2px 0;">P.Unit</th><th style="text-align:right;border-bottom:1px solid #d1d5db;padding:2px 0;">Subtotal</th></tr></thead><tbody>';
+    (c.items || []).forEach(function (it) {
+      const qty = Number(it.qty) || 0;
+      const price = Number(it.price) || 0;
+      h += '<tr><td style="padding:2px 0;vertical-align:top;">' + qty + '</td><td style="padding:2px 0;">' + escapeAttr(it.desc || '') + '</td><td style="padding:2px 0;text-align:right;white-space:nowrap;">' + (price > 0 ? money(price) : '-') + '</td><td style="padding:2px 0;text-align:right;white-space:nowrap;">' + (price > 0 ? money(qty * price) : '-') + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div style="border-top:1px dashed #9ca3af;margin:8px 0;"></div>';
+    h += '<div style="display:flex;justify-content:space-between;"><span>Total unidades</span><b>' + t.units + '</b></div>';
+    if (t.subtotal > 0) h += '<div style="display:flex;justify-content:space-between;"><span>Valor referencial</span><b>' + money(t.subtotal) + '</b></div>';
+    if (c.notes) h += '<div style="margin-top:6px;"><b>Obs.:</b> ' + escapeAttr(c.notes) + '</div>';
+    h += '<div style="margin-top:14px;display:flex;gap:10px;">';
+    h += '<div style="flex:1;text-align:center;"><div style="height:34px;display:flex;align-items:flex-end;justify-content:center;">' + (job && job.signature ? '<img src="' + job.signature + '" alt="firma" style="max-height:32px;max-width:100%;">' : '') + '</div><div style="border-top:1px solid #6b7280;padding-top:3px;font-size:10.5px;">Recibido por (cliente)</div></div>';
+    h += '<div style="flex:1;text-align:center;"><div style="height:34px;"></div><div style="border-top:1px solid #6b7280;padding-top:3px;font-size:10.5px;">Entregado por' + (c.deliveredBy ? '<br><b>' + escapeAttr(c.deliveredBy) + '</b>' : '') + '</div></div>';
+    h += '</div>';
+    h += '<div style="text-align:center;font-size:9.5px;color:#6b7280;margin-top:10px;">Constancia de entrega de mercancia - no valido como factura fiscal</div>';
+    h += '</div>';
+    return h;
+  }
+
+  function conduceView() {
+    const c = DB.find('conduces', params.id);
+    if (!c) { mount(emptyBox(PAPER_ICON, 'Conduce no encontrado', { action: 'nav', label: 'Volver', icon: BACK_ICON })); return; }
+    let html = conduceDoc(c);
+    html += '<div class="do">';
+    html += '<button class="btn" data-action="printConduce" data-id="' + c.id + '">' + PRINT_ICON + ' Imprimir</button>';
+    html += '<button class="btn p" data-action="pdfConduce" data-id="' + c.id + '">' + PDF_ICON + ' PDF</button>';
+    html += '</div>';
+    html += '<section class="card"><h3>' + TOOLS_ICON + ' Estado del conduce</h3><div class="btns-row">';
+    DB.CONDUCE_STATUS.forEach(function (s) {
+      html += '<button class="chip' + (c.status === s.id ? ' on' : '') + '" data-action="setConduceStatus" data-id="' + c.id + '" data-status="' + s.id + '">' + s.label + '</button>';
+    });
+    html += '</div></section>';
+    html += '<section class="card form"><h3>' + PENCIL_ICON + ' Datos de entrega</h3>';
+    html += '<label>Entregado por</label><input type="text" id="conduce-by" value="' + escapeAttr(c.deliveredBy || '') + '" placeholder="Nombre de quien entrega">';
+    html += '<label>Observaciones</label><input type="text" id="conduce-notes" value="' + escapeAttr(c.notes || '') + '" placeholder="Notas de la entrega">';
+    html += '<button class="btn small primary" type="button" data-action="saveConduceMeta" data-id="' + c.id + '">' + SAVE_ICON + ' Guardar</button>';
+    html += '</section>';
+    html += '<button class="btn block danger-ghost" data-action="deleteConduce" data-id="' + c.id + '">' + TRASH_ICON + ' Eliminar conduce</button>';
+    return html;
+  }
+
+  function maybeOfferConduce(j, st) {
+    if (!j || DB.isStaffMode()) return;
+    if (st !== 'COMPLETADO' && st !== 'COBRADO') return;
+    if (DB.conducesForJob(j.id).length) return;
+    if (!(j.items && j.items.length)) return;
+    if (confirmar('¿Generar el conduce de entrega para ' + (j.code || 'este trabajo') + '?')) {
+      ACTIONS.newConduce({ dataset: { id: j.id } });
+    }
+  }
 function settingsView() {
     const s = DB.state.settings;
     let html = '<form data-form="settings">';
@@ -1205,6 +1305,8 @@ case 'trabajos': inner = jobsView(); break;
       case 'reportes': inner = reportesView(); break;
   case 'reporte-detalle': inner = reportDetailView(); break;
   case 'ajustes': inner = (DB.hasStaffPin() && !settingsUnlocked) ? settingsPinGate() : settingsView(); break;
+      case 'conduces': inner = conducesView(); break;
+      case 'conduce': inner = conduceView(); break;
       case 'catalogo-item': inner = catalogFormView(); break;
       default: inner = dashboard();
     }
@@ -1599,7 +1701,7 @@ case 'trabajos': inner = jobsView(); break;
       }
       ensureDraft();
       if (!draft.items) draft.items = [];
-      draft.items.push({ desc: it.name, qty: 1, price: it.price, cost: Number(it.cost) || 0, type: it.type });
+      draft.items.push({ desc: it.name, qty: 1, price: it.price, cost: Number(it.cost) || 0, type: it.type, catalogId: it.id, catalogQty: 1 });
       const close = document.getElementById('sheet-holder');
       if (close) close.remove();
       const lst = document.getElementById('item-list');
@@ -1613,7 +1715,7 @@ case 'trabajos': inner = jobsView(); break;
       ensureDraft();
       if (!draft.items) draft.items = [];
       const unitLabel = it.unit ? (it.unit + ' (unidad)') : '';
-      draft.items.push({ desc: unitLabel ? (it.name + ' · ' + unitLabel) : it.name, qty: 1, price: it.price, cost: Number(it.cost) || 0, type: it.type });
+      draft.items.push({ desc: unitLabel ? (it.name + ' · ' + unitLabel) : it.name, qty: 1, price: it.price, cost: Number(it.cost) || 0, type: it.type, catalogId: it.id, catalogQty: 1 });
       const close = document.getElementById('sheet-holder');
       if (close) close.remove();
       const lst = document.getElementById('item-list');
@@ -1628,7 +1730,7 @@ case 'trabajos': inner = jobsView(); break;
       const packPrice = Number(it.packPrice) > 0 ? it.packPrice : (Number(it.price) * packQty);
       ensureDraft();
       if (!draft.items) draft.items = [];
-      draft.items.push({ desc: it.name + ' · caja × ' + packQty, qty: 1, price: packPrice, cost: (Number(it.cost) || 0) * packQty, type: it.type });
+      draft.items.push({ desc: it.name + ' · caja × ' + packQty, qty: 1, price: packPrice, cost: (Number(it.cost) || 0) * packQty, type: it.type, catalogId: it.id, catalogQty: packQty });
       const close = document.getElementById('sheet-holder');
       if (close) close.remove();
       const lst = document.getElementById('item-list');
@@ -1717,12 +1819,14 @@ case 'trabajos': inner = jobsView(); break;
           DB.save();
           render();
           toast('Cobro de ' + money(amt) + ' registrado. Trabajo cobrado', true);
+          maybeOfferConduce(j, st);
           return;
         }
       }
       DB.update('jobs', el.dataset.id, { status: st });
       render();
       toast('Estado actualizado', true);
+      maybeOfferConduce(j, st);
     },
 
     pdfDownload: function (el) {
@@ -1773,6 +1877,91 @@ case 'trabajos': inner = jobsView(); break;
       window.open(url, '_blank');
     },
 
+    newConduce: function (el) {
+      const j = DB.find('jobs', el.dataset.id);
+      if (!j) return;
+      const existing = DB.conducesForJob(j.id)[0];
+      if (existing) { go('#/conduce/' + existing.id); return; }
+      if (!(j.items && j.items.length)) { toast('El trabajo no tiene conceptos', false); return; }
+      const c = DB.newConduce(j);
+      const check = DB.conduceStockCheck(c);
+      const missing = check.filter(function (x) { return !x.ok; });
+      if (missing.length) {
+        const det = missing.map(function (x) { return '- ' + x.desc + ': pides ' + x.need + ', hay ' + x.available; }).join('\n');
+        if (!confirmar('Inventario insuficiente:\n' + det + '\n\n¿Generar el conduce igual (sin descontar stock)?')) return;
+      }
+      DB.saveConduce(c);
+      if (!missing.length) {
+        const r = DB.conduceApplyStock(c);
+        if (r.applied > 0) toast('Conduce ' + c.code + ' creado. Stock actualizado.', true);
+        else toast('Conduce ' + c.code + ' creado.', true);
+      } else {
+        toast('Conduce ' + c.code + ' creado. Revisa el inventario.', false);
+      }
+      go('#/conduce/' + c.id);
+    },
+
+    openConduce: function (el) { go('#/conduce/' + el.dataset.id); },
+
+    printConduce: function (el) {
+      const c = DB.find('conduces', el.dataset.id);
+      if (!c) return;
+      if (!Printer.available()) { toast('La impresión solo funciona en la app instalada', false); return; }
+      if (!Printer.getSaved().address) { toast('Selecciona tu impresora en Ajustes', false); return; }
+      toast('Imprimiendo conduce…', true);
+      Printer.printConduce(c).then(function () {
+        toast('Conduce enviado a la impresora', true);
+      }).catch(function (e) {
+        toast((e && e.message) ? e.message : 'No se pudo imprimir', false);
+      });
+    },
+
+    pdfConduce: function (el) {
+      const c = DB.find('conduces', el.dataset.id);
+      if (!c) return;
+      PDF.downloadConduce(c).then(function (ok) {
+        if (ok) toast('PDF del conduce listo', true);
+      }).catch(function (e) {
+        toast('PDF: ' + ((e && e.message) ? e.message : 'no se pudo generar'), false);
+      });
+    },
+
+    setConduceStatus: function (el) {
+      const c = DB.find('conduces', el.dataset.id);
+      if (!c) return;
+      const st = el.dataset.status;
+      if (st === c.status) return;
+      if (st === 'ANULADO') {
+        if (!confirmar('¿Anular ' + c.code + '?' + (c.stockApplied ? ' Se devolverá el stock al inventario.' : ''))) return;
+        DB.conduceRestoreStock(c);
+      }
+      c.status = st;
+      DB.saveConduce(c);
+      render();
+      toast('Conduce: ' + DB.conduceStatusLabel(st), true);
+    },
+
+    saveConduceMeta: function (el) {
+      const c = DB.find('conduces', el.dataset.id);
+      if (!c) return;
+      const by = document.getElementById('conduce-by');
+      const nt = document.getElementById('conduce-notes');
+      if (by) c.deliveredBy = by.value.trim();
+      if (nt) c.notes = nt.value.trim();
+      DB.saveConduce(c);
+      render();
+      toast('Conduce actualizado', true);
+    },
+
+    deleteConduce: function (el) {
+      const c = DB.find('conduces', el.dataset.id);
+      if (!c) return;
+      if (!confirmar('¿Eliminar ' + c.code + '?' + (c.stockApplied ? ' Se devolverá el stock al inventario.' : ''))) return;
+      DB.conduceRestoreStock(c);
+      DB.remove('conduces', c.id);
+      toast('Conduce eliminado', true);
+      go('#/conduces');
+    },
     printTicket: function (el) {
       const j = DB.find('jobs', el.dataset.id);
       if (!j) return;
@@ -2328,6 +2517,7 @@ bioUnlock: function () {
       const patch = { name: name, type: form.elements.type.value, price: price };
       const costVal = form.elements.cost ? Number(form.elements.cost.value) : 0;
       patch.cost = costVal > 0 ? costVal : null;
+      patch.stock = (form.elements.stock && String(form.elements.stock.value).trim() !== '') ? Math.max(0, Number(form.elements.stock.value) || 0) : null;
       if (form.elements.unit) patch.unit = form.elements.unit.value.trim();
       const packQty = form.elements.packQty ? (Number(form.elements.packQty.value) || 0) : 0;
       patch.packQty = packQty > 0 ? packQty : null;

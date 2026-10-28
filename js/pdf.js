@@ -197,6 +197,188 @@ var PDF = (function () {
     return doc;
   }
 
+  function generateConduce(c) {
+    const st = DB.state.settings;
+    const t = DB.conduceTotals(c);
+    const doc = new jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+    let y = M;
+
+    if (st.logo) {
+      try {
+        const prop = doc.getImageProperties(st.logo);
+        const h = 18;
+        const w = h * (prop.width / prop.height);
+        if (w < W - M * 2) { doc.addImage(st.logo, 'PNG', M, y, w, h); y += h + 3; }
+      } catch (e) {}
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(COL[0], COL[1], COL[2]);
+    doc.text(st.businessName || 'Mi Negocio', M, y);
+    y += 6;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(110);
+    const contact = [];
+    if (st.phone) contact.push('Tel: ' + st.phone);
+    if (st.address) contact.push(st.address);
+    if (contact.length) { doc.text(contact.join('  -  '), M, y); y += 5; }
+
+    doc.setFillColor(ACCENT[0], ACCENT[1], ACCENT[2]);
+    doc.rect(M, y, W - M * 2, 0.6, 'F');
+    y += 6;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2]);
+    doc.text('CONDUCE DE ENTREGA', M, y);
+    doc.setFontSize(11);
+    doc.setTextColor(COL[0], COL[1], COL[2]);
+    doc.text(c.code || '', W - M, y, { align: 'right' });
+    y += 7;
+
+    doc.setFontSize(9);
+    doc.setTextColor(90);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Fecha:', M, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(DB.date(c.date, true), M + 13, y);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Estado:', M + 95, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(DB.conduceStatusLabel(c.status), M + 110, y);
+    y += 5;
+    if (c.jobCode) {
+      doc.setFont('helvetica', 'bold');
+      doc.text('Origen:', M, y);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(c.jobCode), M + 14, y);
+      y += 5;
+    }
+    y += 2;
+
+    doc.setFillColor(245, 247, 250);
+    doc.rect(M, y - 4, W - M * 2, 20, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(COL[0], COL[1], COL[2]);
+    doc.text('CLIENTE', M + 3, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.text(c.clientName || '-', M + 3, y + 4.5);
+    if (c.clientAddress) doc.text(doc.splitTextToSize(c.clientAddress, 110), M + 3, y + 9);
+    if (c.clientPhone) doc.text('Tel: ' + c.clientPhone, M + 130, y + 4.5);
+    y += 21;
+
+    const head = [['Cant.', 'Descripcion', 'P. Unit.', 'Subtotal']];
+    const body = (c.items || []).map(function (it) {
+      const qty = Number(it.qty) || 0;
+      return [String(qty), String(it.desc || ''), money(it.price), money(qty * (Number(it.price) || 0))];
+    });
+
+    doc.autoTable({
+      startY: y,
+      margin: { left: M, right: M },
+      head: head,
+      body: body,
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 2.4, textColor: [55, 65, 81] },
+      headStyles: { fillColor: COL, textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      columnStyles: {
+        0: { cellWidth: 16, halign: 'center' },
+        2: { cellWidth: 30, halign: 'right' },
+        3: { cellWidth: 34, halign: 'right' }
+      }
+    });
+
+    y = doc.lastAutoTable.finalY + 7;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(COL[0], COL[1], COL[2]);
+    doc.text('Total unidades entregadas:', W - M - 90, y);
+    doc.text(String(t.units), W - M, y, { align: 'right' });
+    y += 5;
+    if (t.subtotal > 0) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      doc.text('Valor referencial (no constituye factura):', W - M - 90, y);
+      doc.text(money(t.subtotal), W - M, y, { align: 'right' });
+      y += 5;
+    }
+
+    if ((c.notes || '').trim()) {
+      y += 2;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(COL[0], COL[1], COL[2]);
+      doc.text('Observaciones:', M, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(90);
+      const nl = doc.splitTextToSize(c.notes, W - M * 2);
+      doc.text(nl, M, y + 4.5);
+      y += 4.5 + nl.length * 4.5;
+    }
+
+    let fY = Math.max(y + 30, H - 70);
+    if (fY > H - 55) fY = H - 55;
+
+    doc.setDrawColor(140);
+    doc.setLineWidth(0.3);
+    doc.line(M, fY, M + 78, fY);
+    doc.line(W - M - 78, fY, W - M, fY);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(110);
+    doc.text('Recibido por (cliente)', M, fY + 4);
+    doc.text('Entregado por', W - M - 78, fY + 4);
+
+    doc.setFontSize(7.5);
+    doc.setTextColor(140);
+    doc.text('Nombre: ______________________________', M, fY + 11);
+    doc.text('Cedula: ______________________________', M, fY + 16);
+    if (c.deliveredBy) doc.text(String(c.deliveredBy), W - M - 78, fY + 11);
+    doc.text('Fecha: ______________________________', W - M - 78, fY + 16);
+    doc.text('Firma: ______________________________', W - M - 78, fY + 21);
+
+    doc.setFontSize(7.5);
+    doc.setTextColor(160);
+    doc.text('Documento de constancia de entrega de mercancia - no valido como factura fiscal', W / 2, H - 12, { align: 'center' });
+    doc.text('Creado con CotizaTec', W / 2, H - 8, { align: 'center' });
+
+    return doc;
+  }
+
+  function conduceToBlob(c) {
+    const blob = generateConduce(c).output('blob');
+    blob.name = (c.code || 'conduce') + '.pdf';
+    return blob;
+  }
+
+  function downloadConduce(c) {
+    const doc = generateConduce(c);
+    const fname = (c.code || 'conduce') + '.pdf';
+    if (isNative()) return saveNative(doc, fname);
+    doc.save(fname);
+    return Promise.resolve(true);
+  }
+
+  async function shareConduce(c) {
+    if (isNative()) return await saveNative(generateConduce(c), (c.code || 'conduce') + '.pdf');
+    const blob = conduceToBlob(c);
+    const file = new File([blob], blob.name, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: blob.name }); return true; }
+      catch (e) { if (e && e.name === 'AbortError') return true; }
+    }
+    downloadConduce(c);
+    return false;
+  }
   function report(opts) {
     const st = DB.state.settings;
     const r = opts.totals;
@@ -400,5 +582,5 @@ var PDF = (function () {
     return false;
   }
 
-  return { generate, download, share, toBlob, report, reportShare, reportBlob };
+  return { generate, download, share, toBlob, report, reportShare, reportBlob, generateConduce, conduceToBlob, downloadConduce, shareConduce };
 })();
