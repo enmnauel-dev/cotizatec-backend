@@ -187,7 +187,7 @@ const NAV = [
     html += statCard(PAPER_ICON, 'Cotizado', money(totCotizado), 'total estimado', '#3b82f6', 'trabajos/f/SINCOBRAR');
     html += statCard(WALLET_ICON, 'Cobrado', money(cobrado), 'en caja', '#10b981', 'trabajos/f/COBRADO');
     html += statCard('&#128176;', 'Por cobrar', money(porCobrar), 'saldo pendiente', '#ef4444', 'trabajos/f/DEBE');
-    if (!DB.isStaffMode()) html += '<div class="span2">' + statCard(TOOLS_ICON, 'Ganancia real', money(ganancia), 'cobrado − materiales', '#8b5cf6', 'reportes') + '</div>';
+    if (DB.showMargins()) html += '<div class="span2">' + statCard(TOOLS_ICON, 'Ganancia real', money(ganancia), 'cobrado − materiales', '#8b5cf6', 'reportes') + '</div>';
     html += '</div>';
 
     if (porCobrar > 0.005) {
@@ -697,7 +697,7 @@ let html = '<form class="card form" data-form="cliente">';
     html += '<section class="card form">';
     html += '<h3>' + ITEM_ICON + ' Conceptos (' + (j.items ? j.items.length : 0) + ')</h3>';
     html += '<div id="item-list">' + itemsListHtml(j) + '</div>';
-    if (!DB.isStaffMode()) html += '<p class="muted"><small>En cada línea: cantidad, descripción, <b>precio de venta</b> y <b>costo de compra</b>. El costo es lo que pagas tú; sirve para calcular tu ganancia.</small></p>';
+    if (DB.showCosts()) html += '<p class="muted"><small>En cada línea: cantidad, descripción, <b>precio de venta</b> y <b>costo de compra</b>. El costo es lo que pagas tú; sirve para calcular tu ganancia.</small></p>';
     html += '<div class="row btns-row">';
     html += '<button class="btn small" data-action="openCatalogPicker">' + ITEM_ICON + ' Catálogo</button>';
     if (!DB.isStaffMode()) html += '<button class="btn small ghost" data-action="addManualLine">' + PLUS_ICON + ' Línea manual</button>';
@@ -730,7 +730,7 @@ let html = '<form class="card form" data-form="cliente">';
       h += '<div class="q-item"><input class="qi-qty" type="number" min="0" step="1" data-qf="qty" data-qi="' + idx + '" value="' + (it.qty || 1) + '">';
       h += '<input class="qi-desc" type="text" data-qf="desc" data-qi="' + idx + '" placeholder="Descripción" value="' + escapeAttr(it.desc || '') + '">';
       h += '<input class="qi-price" type="number" min="0" step="0.01" data-qf="price" data-qi="' + idx + '" value="' + (it.price || '') + '"' + ro + '>';
-       if (!DB.isStaffMode()) h += '<input class="qi-cost" type="number" min="0" step="0.01" data-qf="cost" data-qi="' + idx + '" placeholder="costo" title="Lo que te cuesta a ti. Se usa para calcular tu ganancia real." value="' + (it.cost != null ? it.cost : '') + '"' + ro + '>';
+       if (DB.showCosts()) h += '<input class="qi-cost" type="number" min="0" step="0.01" data-qf="cost" data-qi="' + idx + '" placeholder="costo" title="Lo que te cuesta a ti. Se usa para calcular tu ganancia real." value="' + (it.cost != null ? it.cost : '') + '"' + ro + '>';
       h += '<span class="qi-sub" id="qi-sub-' + idx + '">' + money((it.qty || 0) * (it.price || 0)) + '</span>';
       h += '<button class="icon-btn danger qi-del" data-action="removeQuoteItem" data-id="' + idx + '">' + X_ICON + '</button>';
       h += '</div>';
@@ -849,7 +849,7 @@ let html = '<form class="card form" data-form="cliente">';
     html += '<button class="btn small" data-action="duplicateJob" data-id="' + j.id + '">' + ITEM_ICON + ' Duplicar</button>';
     html += '</div></section>';
 
-    if (!DB.isStaffMode()) html += expensesCard(j);
+    if (DB.showCosts()) html += expensesCard(j);
     html += paymentsCard(j);
 
     html += '<button class="btn block danger-ghost" data-action="deleteJob" data-id="' + j.id + '">' + TRASH_ICON + ' Eliminar trabajo</button>';
@@ -1807,7 +1807,7 @@ case 'trabajos': inner = jobsView(); break;
     deleteJob: function (el) {
       const j = DB.find('jobs', el.dataset.id);
       if (!j) return;
-      if (DB.isStaffMode() && DB.hasStaffPin()) {
+      if (DB.isStaffMode() && DB.hasStaffPin() && DB.requireSupervisorPin()) {
         const pin = window.prompt('PIN del administrador para eliminar el trabajo:');
         if (pin === null) return;
         DB.verifyStaffPin(String(pin).trim()).then(function (ok) {
@@ -1900,6 +1900,7 @@ case 'trabajos': inner = jobsView(); break;
     },
 
     newConduce: function (el) {
+      if (!DB.canCreateConduce()) { toast('No tienes permiso para crear conduces', false); return; }
       const j = DB.find('jobs', el.dataset.id);
       if (!j) return;
       const existing = DB.conducesForJob(j.id)[0];
@@ -2016,6 +2017,7 @@ case 'trabajos': inner = jobsView(); break;
       go('#/conduces');
     },
     registerStockEntry: function (el) {
+      if (!DB.canRegisterStockEntry()) { toast('No tienes permiso para registrar entradas', false); return; }
       const it = DB.find('catalog', el.dataset.id);
       if (!it) return;
       const qtyEl = document.getElementById('entry-qty');

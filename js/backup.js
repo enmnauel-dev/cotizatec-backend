@@ -291,7 +291,107 @@ var Backups = (function () {
   }
 
   const api = { render: function () {} };
-  Object.assign(api, { exportBackup, importBackupFile, doExportBackup, doImportBackup, hashVal, doReset, pushToCloud, pullFromCloud });
+  // ===== Sincronizacion bidireccional (entradas de stock + conduces) =====
+  // Aplica en el dispositivo las entradas/conduces creados en la web (u otros
+  // dispositivos) y sube los creados localmente, usando Neon como fuente comun.
+  function _appliedConduceStock() {
+    try { return JSON.parse(localStorage.getItem('cotizatec_conduce_stock_applied') || '[]'); } catch (e) { return []; }
+  }
+  function _setAppliedConduceStock(arr) {
+    try { localStorage.setItem('cotizatec_conduce_stock_applied', JSON.stringify(arr || [])); } catch (e) {}
+  }
+
+  function _applyPulled(entries, conduces) {
+    let changed = false;
+    (entries || []).forEach(function (e) {
+      if (!e || !e.id) return;
+      if (!DB.state.stockEntries) DB.state.stockEntries = [];
+      if (DB.state.stockEntries.some(function (x) { return String(x.id) === String(e.id); })) return;
+      const it = DB.find('catalog', e.catalogId);
+      if (it) it.stock = (Number(it.stock) || 0) + (Number(e.qty) || 0);
+      DB.state.stockEntries.unshift({
+        id: e.id, catalogId: e.catalogId, productName: e.productName || '',
+        qty: Number(e.qty) || 0, unitCost: e.unitCost, supplier: e.supplier || '',
+        notes: e.notes || '', date: e.date || new Date(e.createdAt || Date.now()).toISOString()
+      });
+      changed = true;
+    });
+    (conduces || []).forEach(function (c) {
+      if (!c || !c.id) return;
+      if (!DB.state.conduces) DB.state.conduces = [];
+      if (DB.state.conduces.some(function (x) { return String(x.id) === String(c.id); })) return;
+      const items = (c.data && Array.isArray(c.data.items)) ? c.data.items : [];
+      const cond = {
+        id: c.id, code: c.number || c.id, jobId: c.jobId, jobCode: c.jobCode || '',
+        clientId: c.clientId, clientName: (c.data && c.data.clientName) || '',
+        clientPhone: (c.data && c.data.clientPhone) || '',
+        clientAddress: (c.data && c.data.debtorAddr) || '',
+        date: c.createdAt ? new Date(c.createdAt).toISOString() : new Date().toISOString(),
+        items: items, status: c.status === 'anulado' ? 'ANULADO' : (c.status === 'emitido' ? 'PENDIENTE' : (c.status || 'PENDIENTE')),
+        notes: (c.data && c.data.notes) || '', deliveredBy: (c.data && c.data.deliveredBy) || '',
+        receivedBy: '', stockApplied: !!c.stockApplied
+      };
+      DB.state.conduces.unshift(cond);
+      if (cond.stockApplied) {
+        const applied = _appliedConduceStock();
+        if (applied.indexOf(cond.id) === -1) {
+          items.forEach(function (it) {
+            if (!it.catalogId) return;
+            const p = DB.find('catalog', it.catalogId);
+            if (!p) return;
+            if (p.stock === null || p.stock === undefined || p.stock === '') return;
+            const need = (Number(it.qty) || 0) * (Number(it.catalogQty) || 1);
+            p.stock = Math.max(0, (Number(p.stock) || 0) - need);
+          });
+          applied.push(cond.id);
+          _setAppliedConduceStock(applied);
+        }
+      }
+      changed = true;
+    });
+    if (changed) DB.save();
+    return changed;
+  }
+
+  function _pushBidirectional(deviceId) {
+    if (typeof fetch === 'undefined' || !deviceId) return Promise.resolve(false);
+    const entries = (DB.state && DB.state.stockEntries) ? DB.state.stockEntries.slice(0, 100) : [];
+    const conduces = (DB.state && DB.state.conduces) ? DB.state.conduces.slice(0, 100) : [];
+    const p1 = fetch(CLOUD_BASE + '/api/device/' + encodeURIComponent(deviceId) + '/stock-entries', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entries: entries })
+    }).catch(function () { return null; });
+    const p2 = fetch(CLOUD_BASE + '/api/device/' + encodeURIComponent(deviceId) + '/conduces', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conduces: conduces })
+    }).catch(function () { return null; });
+    return Promise.all([p1, p2]).then(function () { return true; });
+  }
+
+  function syncBidirectional(deviceId) {
+    if (typeof fetch === 'undefined' || !deviceId) return Promise.resolve(false);
+    const since = Number((function () { try { return localStorage.getItem('cotizatec_last_sync_' + deviceId) || '0'; } catch (e) { return '0'; } })()) || 0;
+    return fetch(CLOUD_BASE + '/api/device/' + encodeURIComponent(deviceId) + '/pending?since=' + since)
+      .then(function (r) { return r.json(); })
+      .then(function (body) {
+        if (!body || !body.ok) return false;
+        if (body.operatorPermissions && typeof body.operatorPermissions === 'object') {
+          if (!DB.state.settings) DB.state.settings = {};
+          DB.state.settings.operatorPermissions = body.operatorPermissions;
+          DB.save();
+        }
+        var changed = _applyPulled(body.stockEntries, body.conduces);
+        var maxTs = since;
+        (body.stockEntries || []).forEach(function (e) { if ((e.createdAt || 0) > maxTs) maxTs = e.createdAt; });
+        (body.conduces || []).forEach(function (c) { if ((c.createdAt || 0) > maxTs) maxTs = c.createdAt; });
+        if (maxTs > since) { try { localStorage.setItem('cotizatec_last_sync_' + deviceId, String(maxTs)); } catch (e) {} }
+        return _pushBidirectional(deviceId).then(function () {
+          return changed;
+        });
+      })
+      .catch(function () { return false; });
+  }
+  Object.assign(api, { exportBackup, importBackupFile, doExportBackup, doImportBackup, hashVal, doReset, pushToCloud, pullFromCloud, syncBidirectional });
 
   // Auto-respaldo: cada vez que se guardan datos locales, se sube el respaldo
   // cifrado a la nube (debounce para agrupar cambios consecutivos).

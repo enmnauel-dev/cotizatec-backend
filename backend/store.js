@@ -125,6 +125,9 @@ function ensureShape(c) {
   if (!c.documents) c.documents = [];
   if (!c.gps) c.gps = {};
   if (!c.wipes) c.wipes = {};
+  (c.clients || []).forEach(function (cl) {
+    if (!cl.operatorPermissions) cl.operatorPermissions = { canCreateConduce: true, canRegisterStockEntry: true, showCosts: false, showMargins: false, requireSupervisorPin: true };
+  });
   return c;
 }
 
@@ -600,6 +603,7 @@ function createClient(data) {
     modules: Array.isArray(data.modules) && data.modules.length
       ? data.modules.slice()
       : ['cotizaciones', 'clientes', 'ventas', 'reportes'],
+    operatorPermissions: data.operatorPermissions || { canCreateConduce: true, canRegisterStockEntry: true, showCosts: false, showMargins: false, requireSupervisorPin: true },
     planLimit: data.planLimit != null ? parseInt(data.planLimit, 10) : null,
     createdAt: Date.now(),
     devices: []
@@ -621,6 +625,8 @@ function updateClient(clientKey, patch) {
   if (typeof patch.plan === 'string') c.plan = String(patch.plan).trim();
   if (Array.isArray(patch.modules)) c.modules = patch.modules.slice();
   if (patch.planLimit !== undefined) c.planLimit = patch.planLimit != null ? parseInt(patch.planLimit, 10) : null;
+  if (patch.operatorPermissions && typeof patch.operatorPermissions === 'object') c.operatorPermissions = patch.operatorPermissions;
+  if (patch.updatedAt !== undefined) c.updatedAt = patch.updatedAt;
   save();
   if (DATABASE_URL) {
     pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients:', e.message); });

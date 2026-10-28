@@ -1250,6 +1250,17 @@ var DB = (function () {
     if (state && state.settings) { state.settings.staffPin = ''; state.settings.staffMode = false; }
   }
 
+  // Permisos del operador (descargados desde la web). Por defecto restrictivos.
+  function _opPerms() {
+    const p = state && state.settings && state.settings.operatorPermissions;
+    return p || { canCreateConduce: true, canRegisterStockEntry: true, showCosts: false, showMargins: false, requireSupervisorPin: true };
+  }
+  function showCosts() { if (!isStaffMode()) return true; return !!_opPerms().showCosts; }
+  function showMargins() { if (!isStaffMode()) return true; return !!_opPerms().showMargins; }
+  function canCreateConduce() { if (!isStaffMode()) return true; return _opPerms().canCreateConduce !== false; }
+  function canRegisterStockEntry() { if (!isStaffMode()) return true; return _opPerms().canRegisterStockEntry !== false; }
+  function requireSupervisorPin() { if (!isStaffMode()) return false; return _opPerms().requireSupervisorPin !== false; }
+
   function boot() {
     return Promise.resolve().then(function () {
       if (_envelope) return 'locked';

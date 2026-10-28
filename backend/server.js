@@ -506,7 +506,7 @@ app.get('/api/client/data', async (req, res) => {
       const t = jobTotalsWeb(j);
       return { id: j.id, code: j.code || '', number: j.number, date: j.date, clientId: j.clientId, clientName: j.clientName || '', status: j.status || 'COTIZADO', total: t.total, collected: t.collected, balance: t.balance };
     });
-    res.json({ ok: true, clients, jobs, catalog, auditLog: (st.auditLog || []).slice(0, 100) });
+    res.json({ ok: true, clients, jobs, catalog, auditLog: (st.auditLog || []).slice(0, 100), operatorPermissions: (store.getClient(account.clientId) || {}).operatorPermissions || null });
   } catch (e) {
     console.error('[client] data error:', e.message);
     res.status(500).json({ error: 'Error al leer los datos.' });
@@ -853,7 +853,7 @@ app.get('/api/device/:deviceId/pending', (req, res) => {
   const since = Number(req.query.since) || 0;
   const entries = store.listStockEntriesByClient(client.id).filter((e) => (e.createdAt || 0) > since);
   const conduces = store.listDocumentsByClient(client.id).filter((d) => d.type === 'conduce' && (d.createdAt || 0) > since);
-  res.json({ ok: true, stockEntries: entries, conduces: conduces, serverTime: Date.now() });
+  res.json({ ok: true, stockEntries: entries, conduces: conduces, operatorPermissions: client.operatorPermissions || null, serverTime: Date.now() });
 });
 
 // El dispositivo sube sus entradas de stock locales para que el panel web las vea.
@@ -1023,6 +1023,31 @@ app.get('/api/client/users', (req, res) => {
   res.json({ ok: true, limit, users });
 });
 
+// ===== Permisos del operador (configurados por el dueño) =====
+app.get('/api/client/operator-permissions', (req, res) => {
+  const auth = requireOwner(req, res);
+  if (!auth) return;
+  const client = store.getClient(auth.account.clientId) || {};
+  res.json({ ok: true, permissions: client.operatorPermissions || { canCreateConduce: true, canRegisterStockEntry: true, showCosts: false, showMargins: false, requireSupervisorPin: true } });
+});
+
+app.put('/api/client/operator-permissions', (req, res) => {
+  const auth = requireOwner(req, res);
+  if (!auth) return;
+  const client = store.getClient(auth.account.clientId);
+  if (!client) return res.status(404).json({ error: 'Negocio no encontrado.' });
+  const p = req.body.permissions || req.body || {};
+  client.operatorPermissions = {
+    canCreateConduce: p.canCreateConduce !== false,
+    canRegisterStockEntry: p.canRegisterStockEntry !== false,
+    showCosts: !!p.showCosts,
+    showMargins: !!p.showMargins,
+    requireSupervisorPin: p.requireSupervisorPin !== false
+  };
+  client.updatedAt = Date.now();
+  store.updateClient(client.id, { operatorPermissions: client.operatorPermissions, updatedAt: client.updatedAt });
+  res.json({ ok: true, permissions: client.operatorPermissions });
+});
 app.post('/api/client/users', async (req, res) => {
   const auth = requireOwner(req, res);
   if (!auth) return;
