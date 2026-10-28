@@ -407,7 +407,10 @@
 
       <div class="mod-panel" id="mod-inventario">
         <div class="card">
-          <div style="font-weight:700;margin-bottom:8px">📊 Inventario — Entradas de mercancía</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
+            <div style="font-weight:700">📊 Inventario — Entradas de mercancía</div>
+            <button class="btn primary" onclick="openStockEntryModal()">+ Registrar entrada</button>
+          </div>
           <div class="muted" style="font-size:12px;margin-bottom:10px">Stock actual y registro de compras a proveedores. Suma al inventario del catálogo.</div>
           <div id="inventario-list">Cargando…</div>
           <div id="stock-entry-form" style="display:none;margin-top:10px;padding:10px;border:1px dashed #cbd5e1;border-radius:8px"></div>
@@ -876,11 +879,60 @@ async function renderInventarioContent(report) {
       return '<tr>' +
         '<td style="padding:4px 2px">' + esc(p.name || '-') + '</td>' +
         '<td style="padding:4px 2px;text-align:right;font-weight:600">' + stock + '</td>' +
-        '<td style="padding:4px 2px;text-align:right"><button class="btn small ghost" onclick="openStockEntry(\'' + p.id + '\',\'' + esc(p.name || '') + '\')">+ Entrada</button></td>' +
+        '<td style="padding:4px 2px;text-align:right"><button class="btn small ghost" onclick="openStockEntryModal(\'' + p.id + '\')">+ Entrada</button></td>' +
       '</tr>';
     }).join('') + '</tbody></table>';
 }
 
+let _seCatalog = [];
+async function openStockEntryModal(preselectId) {
+  const modal = document.getElementById('stock-entry-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  const msg = document.getElementById('se-msg');
+  if (msg) msg.textContent = '';
+  // load catalog
+  try {
+    const d = await api('/api/client/data');
+    if (d && d.ok) _seCatalog = d.catalog || [];
+  } catch (e) { _seCatalog = []; }
+  const sel = document.getElementById('se-product');
+  if (sel) {
+    sel.innerHTML = _seCatalog.map(function (p) {
+      return '<option value="' + esc(p.id) + '"' + (preselectId && String(p.id) === String(preselectId) ? ' selected' : '') + '>' + esc(p.name || '-') + ' (stock: ' + (p.stock == null ? '—' : p.stock) + ')</option>';
+    }).join('');
+  }
+  const q = document.getElementById('se-qty'); if (q) q.value = '';
+  const c = document.getElementById('se-cost'); if (c) c.value = '';
+  const sp = document.getElementById('se-supplier'); if (sp) sp.value = '';
+  const n = document.getElementById('se-notes'); if (n) n.value = '';
+  if (q) q.focus();
+}
+
+function closeStockEntryModal() {
+  const m = document.getElementById('stock-entry-modal');
+  if (m) m.style.display = 'none';
+}
+
+async function submitStockEntryModal() {
+  const sel = document.getElementById('se-product');
+  const catalogId = sel ? sel.value : '';
+  const productName = sel ? (sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text.split(' (stock:')[0] : '') : '';
+  const qty = Number((document.getElementById('se-qty') || {}).value) || 0;
+  if (!catalogId) { alert('Selecciona un producto.'); return; }
+  if (qty <= 0) { alert('Indica una cantidad mayor a 0.'); return; }
+  const costStr = ((document.getElementById('se-cost') || {}).value || '').trim();
+  const supplier = ((document.getElementById('se-supplier') || {}).value || '').trim();
+  const notes = ((document.getElementById('se-notes') || {}).value || '').trim();
+  const msg = document.getElementById('se-msg');
+  try {
+    const j = await api('/api/stock-entries', { method: 'POST', body: JSON.stringify({ catalogId, productName, qty, unitCost: costStr === '' ? null : Number(costStr), supplier, notes }) });
+    if (!j || !j.ok) { if (msg) msg.textContent = (j && j.error) || 'No se pudo registrar.'; return; }
+    closeStockEntryModal();
+    await renderInventarioContent();
+    alert('Entrada registrada: +' + qty + ' ' + productName);
+  } catch (e) { if (msg) msg.textContent = e.message; }
+}
 async function viewConduce(id) {
   try {
     const j = await api('/api/conduces/' + encodeURIComponent(id));
@@ -1553,6 +1605,24 @@ window.addEventListener('DOMContentLoaded', function () {
         <button class="btn" style="flex:1;background:var(--line);color:var(--ink)" onclick="closePermsModal()">Cerrar</button>
       </div>
       <div class="msg" id="perms-msg"></div>
+    </div>
+  </div>
+  <div id="stock-entry-modal" style="display:none;position:fixed;inset:0;background:rgba(3,6,12,.75);z-index:50;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px)">
+    <div style="background:rgba(19,27,50,.97);border:1px solid rgba(0,240,255,.3);border-radius:18px;padding:20px;max-width:460px;width:100%;box-shadow:0 22px 60px rgba(0,0,0,.55);color:var(--ink);max-height:90vh;overflow:auto">
+      <div style="font-weight:700;margin-bottom:12px" id="se-title">Registrar entrada de mercancía</div>
+      <label class="doc-lbl">Producto</label>
+      <select id="se-product" style="width:100%;padding:10px;border:1px solid rgba(157,176,201,.3);border-radius:10px;background:rgba(8,12,24,.72);color:var(--ink);margin-bottom:8px"></select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label class="doc-lbl">Cantidad a ingresar *</label><input type="number" step="1" min="1" id="se-qty" style="width:100%"></div>
+        <div><label class="doc-lbl">Costo unitario (opcional)</label><input type="number" step="0.01" min="0" id="se-cost" style="width:100%"></div>
+      </div>
+      <div style="margin-bottom:8px"><label class="doc-lbl">Proveedor (opcional)</label><input type="text" id="se-supplier" style="width:100%"></div>
+      <div style="margin-bottom:12px"><label class="doc-lbl">Nota / observación (opcional)</label><input type="text" id="se-notes" style="width:100%"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn primary" style="flex:1" onclick="submitStockEntryModal()">Guardar entrada</button>
+        <button class="btn" style="flex:1;background:var(--line);color:var(--ink)" onclick="closeStockEntryModal()">Cancelar</button>
+      </div>
+      <div class="msg" id="se-msg"></div>
     </div>
   </div>
 </body>
