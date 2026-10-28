@@ -710,7 +710,7 @@ app.post('/api/conduces', async (req, res) => {
   const account = auth.account;
   const client = store.getClient(account.clientId);
   const modules = (client && client.modules) || [];
-  if (modules.indexOf('conduce') === -1 && modules.indexOf('documentos') === -1) return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de Conduces.' });
+  if (modules.indexOf('conduce') === -1) return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de Conduces.' });
   const jobId = String(req.body.jobId || '').trim();
   if (!jobId) return res.status(400).json({ error: 'Selecciona un trabajo.' });
   try {

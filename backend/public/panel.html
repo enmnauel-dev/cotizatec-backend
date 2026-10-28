@@ -754,7 +754,7 @@ function renderModTabs(modules, report) {
   const available = MOD_DEFS.filter(function (m) {
     if (m.key === 'clientes') return mods.indexOf('clientes') !== -1;
     if (m.key === 'docs') return mods.indexOf('documentos') !== -1;
-    if (m.key === 'conduce') return mods.indexOf('conduce') !== -1 || mods.indexOf('documentos') !== -1;
+    if (m.key === 'conduce') return mods.indexOf('conduce') !== -1;
     if (m.key === 'gps') return mods.indexOf('gps') !== -1;
     if (m.key === 'contab') return mods.indexOf('contabilidad') !== -1;
     if (m.key === 'finanzas') return mods.indexOf('finanzas') !== -1;

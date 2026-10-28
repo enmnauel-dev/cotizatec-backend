@@ -574,7 +574,19 @@ function listClients() {
 function getClient(clientKey) {
   const db = load();
   if (!db.clients) return null;
-  return db.clients.find((c) => c.id === clientKey) || null;
+  const c = db.clients.find((c) => c.id === clientKey) || null;
+  // Migracion: el modulo 'conduce' es independiente de 'documentos'.
+  // Los negocios que tenian 'documentos' (y por tanto conduce) conservan
+  // el modulo 'conduce' como entrada propia, para que desactivar
+  // 'documentos' NO desactive 'conduce'.
+  if (c && Array.isArray(c.modules) && c.modules.indexOf('documentos') !== -1 && c.modules.indexOf('conduce') === -1) {
+    c.modules = c.modules.concat(['conduce']);
+    save();
+    if (DATABASE_URL) {
+      pgSet('clients', db.clients).catch(function (e) { console.error('[pg] save clients (migrate conduce):', e.message); });
+    }
+  }
+  return c;
 }
 
 function createClient(data) {
