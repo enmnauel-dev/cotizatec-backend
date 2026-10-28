@@ -307,10 +307,17 @@ var Backups = (function () {
       if (!e || !e.id) return;
       if (!DB.state.stockEntries) DB.state.stockEntries = [];
       if (DB.state.stockEntries.some(function (x) { return String(x.id) === String(e.id); })) return;
-      const it = DB.find('catalog', e.catalogId);
+      // Producto nuevo creado desde la web: crearlo en el catalogo local
+      let catalogId = e.catalogId;
+      if (!catalogId && e.productName) {
+        const newItem = { id: 'c' + DB.incr('catalog'), name: e.productName, type: 'PRODUCTO', price: 0, cost: (e.unitCost != null ? Number(e.unitCost) : 0), stock: 0, unit: '' };
+        DB.state.catalog.push(newItem);
+        catalogId = newItem.id;
+      }
+      const it = catalogId ? DB.find('catalog', catalogId) : null;
       if (it) it.stock = (Number(it.stock) || 0) + (Number(e.qty) || 0);
       DB.state.stockEntries.unshift({
-        id: e.id, catalogId: e.catalogId, productName: e.productName || '',
+        id: e.id, catalogId: catalogId, productName: e.productName || (it ? it.name : ''),
         qty: Number(e.qty) || 0, unitCost: e.unitCost, supplier: e.supplier || '',
         notes: e.notes || '', date: e.date || new Date(e.createdAt || Date.now()).toISOString()
       });

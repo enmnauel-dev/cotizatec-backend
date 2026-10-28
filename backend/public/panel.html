@@ -891,521 +891,91 @@ async function openStockEntryModal(preselectId) {
   modal.style.display = 'flex';
   const msg = document.getElementById('se-msg');
   if (msg) msg.textContent = '';
-  // load catalog
   try {
     const d = await api('/api/client/data');
     if (d && d.ok) _seCatalog = d.catalog || [];
   } catch (e) { _seCatalog = []; }
-  const sel = document.getElementById('se-product');
-  if (sel) {
-    sel.innerHTML = _seCatalog.map(function (p) {
-      return '<option value="' + esc(p.id) + '"' + (preselectId && String(p.id) === String(preselectId) ? ' selected' : '') + '>' + esc(p.name || '-') + ' (stock: ' + (p.stock == null ? '—' : p.stock) + ')</option>';
-    }).join('');
+  const search = document.getElementById('se-product-search');
+  const hid = document.getElementById('se-product-id');
+  const list = document.getElementById('se-product-list');
+  if (hid) hid.value = preselectId || '';
+  if (preselectId) {
+    const found = _seCatalog.find(function (p) { return String(p.id) === String(preselectId); });
+    if (found && search) search.value = found.name || '';
+    if (list) list.style.display = 'none';
+  } else {
+    if (search) search.value = '';
+    if (list) { list.style.display = 'none'; list.innerHTML = ''; }
   }
   const q = document.getElementById('se-qty'); if (q) q.value = '';
   const c = document.getElementById('se-cost'); if (c) c.value = '';
   const sp = document.getElementById('se-supplier'); if (sp) sp.value = '';
   const n = document.getElementById('se-notes'); if (n) n.value = '';
-  if (q) q.focus();
+  if (search) search.focus();
 }
 
-function closeStockEntryModal() {
-  const m = document.getElementById('stock-entry-modal');
-  if (m) m.style.display = 'none';
+function filterStockProducts() {
+  const search = document.getElementById('se-product-search');
+  const list = document.getElementById('se-product-list');
+  const hid = document.getElementById('se-product-id');
+  if (!search || !list) return;
+  const q = (search.value || '').trim().toLowerCase();
+  if (hid) hid.value = '';
+  if (!q) { list.style.display = 'none'; list.innerHTML = ''; return; }
+  const matches = _seCatalog.filter(function (p) { return (p.name || '').toLowerCase().indexOf(q) !== -1; });
+  let html = '';
+  matches.forEach(function (p) {
+    html += '<div style="padding:6px 8px;cursor:pointer;border-bottom:1px solid rgba(157,176,201,.1)" onclick="selectStockProduct('' + esc(p.id) + '','' + esc(p.name || '') + '',' + (p.stock == null ? 'null' : p.stock) + ')">' +
+      esc(p.name || '-') + ' <span style="color:var(--muted);font-size:11px">(stock: ' + (p.stock == null ? '—' : p.stock) + ')</span></div>';
+  });
+  // option to create new
+  const exactMatch = _seCatalog.some(function (p) { return (p.name || '').toLowerCase() === q; });
+  if (!exactMatch) {
+    html += '<div style="padding:6px 8px;cursor:pointer;color:#22d3ee;font-weight:600" onclick="selectNewStockProduct('' + esc(search.value.trim()) + '')">+ Crear producto nuevo: "' + esc(search.value.trim()) + '"</div>';
+  }
+  if (html) { list.innerHTML = html; list.style.display = 'block'; } else { list.style.display = 'none'; }
+}
+
+function selectStockProduct(id, name, stock) {
+  const search = document.getElementById('se-product-search');
+  const hid = document.getElementById('se-product-id');
+  const list = document.getElementById('se-product-list');
+  if (search) search.value = name;
+  if (hid) hid.value = id;
+  if (list) { list.style.display = 'none'; list.innerHTML = ''; }
+}
+
+function selectNewStockProduct(name) {
+  const search = document.getElementById('se-product-search');
+  const hid = document.getElementById('se-product-id');
+  const list = document.getElementById('se-product-list');
+  if (search) search.value = name;
+  if (hid) hid.value = '__NEW__';
+  if (list) { list.style.display = 'none'; list.innerHTML = ''; }
 }
 
 async function submitStockEntryModal() {
-  const sel = document.getElementById('se-product');
-  const catalogId = sel ? sel.value : '';
-  const productName = sel ? (sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text.split(' (stock:')[0] : '') : '';
+  const search = document.getElementById('se-product-search');
+  const hid = document.getElementById('se-product-id');
+  const productName = (search ? search.value.trim() : '');
+  let catalogId = hid ? hid.value : '';
   const qty = Number((document.getElementById('se-qty') || {}).value) || 0;
-  if (!catalogId) { alert('Selecciona un producto.'); return; }
+  if (!productName) { alert('Indica el nombre del producto.'); return; }
   if (qty <= 0) { alert('Indica una cantidad mayor a 0.'); return; }
   const costStr = ((document.getElementById('se-cost') || {}).value || '').trim();
   const supplier = ((document.getElementById('se-supplier') || {}).value || '').trim();
   const notes = ((document.getElementById('se-notes') || {}).value || '').trim();
   const msg = document.getElementById('se-msg');
+  // If creating new product, catalogId is null; backend will create it
+  const isNew = (catalogId === '__NEW__');
+  const body = { catalogId: isNew ? null : catalogId, productName: productName, qty, unitCost: costStr === '' ? null : Number(costStr), supplier, notes, createIfMissing: isNew };
   try {
-    const j = await api('/api/stock-entries', { method: 'POST', body: JSON.stringify({ catalogId, productName, qty, unitCost: costStr === '' ? null : Number(costStr), supplier, notes }) });
+    const j = await api('/api/stock-entries', { method: 'POST', body: JSON.stringify(body) });
     if (!j || !j.ok) { if (msg) msg.textContent = (j && j.error) || 'No se pudo registrar.'; return; }
     closeStockEntryModal();
     await renderInventarioContent();
     alert('Entrada registrada: +' + qty + ' ' + productName);
   } catch (e) { if (msg) msg.textContent = e.message; }
-}
-async function viewConduce(id) {
-  try {
-    const j = await api('/api/conduces/' + encodeURIComponent(id));
-    if (!j || !j.ok) { alert((j && j.error) || 'No se pudo cargar el conduce.'); return; }
-    printDocHTML(j.html);
-  } catch (e) { alert(e.message); }
-}
-
-async function anularConduce(id) {
-  if (!confirm('¿Anular este conduce?')) return;
-  try {
-    const j = await api('/api/conduces/' + encodeURIComponent(id) + '/anular', { method: 'PUT' });
-    if (!j || !j.ok) { alert((j && j.error) || 'No se pudo anular.'); return; }
-    await renderConducesContent();
-  } catch (e) { alert(e.message); }
-}
-let clData = [];
-let clView = [];
-
-function renderClientesContent(report) {
-  const el = document.getElementById('clientes-list');
-  if (!el) return;
-  el.innerHTML = '<div class="empty">Cargando…</div>';
-  api('/api/client/clients').then(function (j) {
-    if (!j || !j.ok) {
-      el.innerHTML = '<div class="empty">' + esc((j && j.error) || 'No se pudo cargar la cartera.') + '</div>';
-      return;
-    }
-    const t = j.totals || {};
-    const set = function (id, v) { const e = document.getElementById(id); if (e) e.textContent = v; };
-    set('cl-count', t.clientes || 0);
-    set('cl-deudores', t.deudores || 0);
-    set('cl-porcobrar', money(t.porCobrar || 0));
-    set('cl-facturado', money(t.facturado || 0));
-    clData = j.clients || [];
-    renderClientesList(clData);
-  }).catch(function () {
-    el.innerHTML = '<div class="empty">Error de conexión.</div>';
-  });
-}
-
-function renderClientesList(list) {
-  const el = document.getElementById('clientes-list');
-  if (!el) return;
-  const inp = document.getElementById('clientes-search');
-  const q = ((inp && inp.value) || '').trim().toLowerCase();
-  const rows = (list || []).filter(function (c) {
-    if (!q) return true;
-    return (c.name || '').toLowerCase().indexOf(q) !== -1 || String(c.phone || '').indexOf(q) !== -1;
-  });
-  clView = rows;
-  if (!rows.length) { el.innerHTML = '<div class="empty">Sin clientes que coincidan.</div>'; return; }
-  el.innerHTML = rows.map(function (c, i) {
-    const owes = c.balance > 0.5;
-    const badge = owes ? '<span class="pill red">Debe</span>' : '<span class="pill green">Al día</span>';
-    const age = owes && c.daysOverdue > 0
-      ? '<span class="pill ' + (c.daysOverdue >= 90 ? 'red' : c.daysOverdue >= 30 ? 'amber' : 'gray') + '">' + c.daysOverdue + ' d</span>'
-      : '';
-    const wa = owes && c.phone
-      ? '<button class="doc-soon go" onclick="waRemindAt(' + i + ')">💬 Recordar</button>'
-      : '';
-    const sub = (c.phone ? esc(c.phone) + ' · ' : '') + c.jobs + ' operación(es)' +
-      (c.lastDate ? ' · últ. ' + fmtDate(new Date(c.lastDate).toISOString()) : '');
-    return '<div class="doc-item">' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="font-weight:600;font-size:14px">' + esc(c.name) + ' ' + badge + ' ' + age + '</div>' +
-        '<div class="muted" style="font-size:12px">' + sub + '</div>' +
-      '</div>' +
-      '<div style="text-align:right;display:flex;align-items:center;gap:10px">' +
-        '<div>' +
-          (owes
-            ? '<div style="font-weight:700;color:#fca5a5">' + money(c.balance) + '</div><div class="muted" style="font-size:11px">pendiente</div>'
-            : '<div style="font-weight:700;color:#6ee7b7">' + money(c.total) + '</div><div class="muted" style="font-size:11px">facturado</div>') +
-        '</div>' +
-        wa +
-      '</div>' +
-    '</div>';
-  }).join('');
-}
-
-function waRemindAt(i) {
-  const c = clView[i];
-  if (!c || !c.phone) return;
-  let d = String(c.phone).replace(/\D/g, '');
-  if (!d) return;
-  if (d.length === 10) d = '1' + d;
-  const msg = 'Hola' + (c.name ? ' ' + c.name : '') + ', le recordamos su saldo pendiente de ' + money(c.balance) + '. ¡Gracias!';
-  window.open('https://wa.me/' + d + '?text=' + encodeURIComponent(msg), '_blank');
-}
-
-function renderGpsContent(report) {
-  refreshGps();
-  if (!gpsTimer) gpsTimer = setInterval(refreshGps, 30000);
-}
-
-function renderContabContent(report) {
-  if (!report) return;
-  const t = report.totals || {};
-  const el = function (id) { return document.getElementById(id); };
-  if (el('c-ingresos')) el('c-ingresos').textContent = money(t.cobrado || 0);
-  if (el('c-gastos')) el('c-gastos').textContent = money(t.gastado || 0);
-  if (el('c-ganancia')) el('c-ganancia').textContent = money(t.ganancia || 0);
-  if (el('c-porcobrar')) el('c-porcobrar').textContent = money(t.porCobrar || 0);
-  if (el('c-cobrado')) el('c-cobrado').textContent = money(t.cobrado || 0);
-  if (el('c-facturado')) el('c-facturado').textContent = money(t.facturado || 0);
-  if (el('c-margen')) {
-    const pct = t.facturado > 0 ? Math.round((t.ganancia / t.facturado) * 100) : 0;
-    el('c-margen').textContent = pct + '%';
-  }
-  sinCostoNote(el('c-sincosto'), t);
-}
-
-function sinCostoNote(node, t) {
-  if (!node) return;
-  const n = (t && t.sinCosto) || 0;
-  if (n > 0) {
-    node.style.display = '';
-    node.innerHTML = '⚠️ ' + n + (n === 1 ? ' operación' : ' operaciones') + ' sin costo registrado: su ganancia aparece igual al total. Pídele al técnico que anote el <b>costo de compra</b> en cada línea.';
-  } else {
-    node.style.display = 'none';
-  }
-}
-
-function renderFinanzasContent(report) {
-  if (!report) return;
-  const t = report.totals || {};
-  const el = function (id) { return document.getElementById(id); };
-  if (el('f-facturado')) el('f-facturado').textContent = money(t.facturado || 0);
-  if (el('f-cobrado')) el('f-cobrado').textContent = money(t.cobrado || 0);
-  if (el('f-porcobrar')) el('f-porcobrar').textContent = money(t.porCobrar || 0);
-  if (el('f-ganancia')) el('f-ganancia').textContent = money(t.ganancia || 0);
-  if (el('f-gastado')) el('f-gastado').textContent = money(t.gastado || 0);
-  if (el('f-trabajos')) el('f-trabajos').textContent = t.trabajos || 0;
-  if (el('f-pendientes')) el('f-pendientes').textContent = t.pendientes || 0;
-  if (el('f-ventas')) el('f-ventas').textContent = t.ventas || 0;
-  if (el('f-cotizaciones')) el('f-cotizaciones').textContent = t.cotizaciones || 0;
-  sinCostoNote(el('f-sincosto'), t);
-  if (el('f-rec')) {
-    const rec = report.recent || [];
-    el('f-rec').innerHTML = rec.slice(0, 10).map(function (r) {
-      const st = (r.status || '').toUpperCase();
-      const cls = st === 'CANCELADO' ? 'red' : st === 'COBRADO' ? 'green' : st === 'TRABAJANDO' ? 'amber' : 'gray';
-      return '<div class="recent-item"><div class="head"><span>' + esc(r.client) + '</span><span class="pill ' + cls + '">' + st + '</span></div>'
-        + '<div class="t-row"><span>Total</span><b>' + money(r.total) + '</b></div>'
-        + (r.costMissing ? '<div class="t-row"><span style="color:#b45309">⚠️ Ganancia = total (sin costo)</span><b style="color:#b45309">' + money(r.margin) + '</b></div>' : '<div class="t-row"><span style="color:var(--green)">Ganancia</span><b style="color:var(--green)">' + money(r.margin) + '</b></div>')
-        + (r.balance > 0 ? '<div class="t-row"><span style="color:var(--red)">Saldo</span><b style="color:var(--red)">' + money(r.balance) + '</b></div>' : '')
-        + '</div>';
-    }).join('') || '<div class="empty">Sin operaciones recientes.</div>';
-  }
-}
-
-function renderGarantiasContent(report) {
-  if (!report) return;
-  const el = function (id) { return document.getElementById(id); };
-  const rec = report.recent || [];
-  const garantias = rec.filter(function (r) { return r.balance > 0; });
-  if (el('g-count')) el('g-count').textContent = garantias.length;
-  if (el('g-monto')) {
-    const total = garantias.reduce(function (s, r) { return s + (r.balance || 0); }, 0);
-    el('g-monto').textContent = money(total);
-  }
-  if (el('g-list')) {
-    if (!garantias.length) {
-      el('g-list').innerHTML = '<div class="empty">No hay operaciones con saldo pendiente.</div>';
-      return;
-    }
-    el('g-list').innerHTML = garantias.map(function (r) {
-      const st = (r.status || '').toUpperCase();
-      const cls = st === 'CANCELADO' ? 'red' : st === 'COBRADO' ? 'green' : st === 'TRABAJANDO' ? 'amber' : 'gray';
-      return '<div class="doc-item">' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="font-weight:600;font-size:14px">' + esc(r.client) + ' <span class="pill ' + cls + '">' + st + '</span></div>' +
-          '<div class="muted" style="font-size:12px">Total: ' + money(r.total) + '</div>' +
-        '</div>' +
-        '<div style="text-align:right">' +
-          '<div style="font-weight:700;color:#fca5a5">' + money(r.balance) + '</div>' +
-          '<div class="muted" style="font-size:11px">pendiente</div>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }
-}
-
-function refreshGps() {
-  api('/api/client/gps').then(function (j) {
-    if (!j || !j.ok) return;
-    const list = j.positions || [];
-    const el = document.getElementById('gps-list');
-    if (!el) return;
-    if (!list.length) {
-      el.innerHTML = '<div class="empty">Aún no hay reportes de ubicación de la flota.</div>';
-      return;
-    }
-    const now = Date.now();
-    el.innerHTML = list.map(function (p) {
-      const age = now - (p.pos.ts || 0);
-      const online = age < 5 * 60 * 1000;
-      const dot = online ? 'pill green' : 'pill gray';
-      return '<div class="doc-item">' +
-        '<div class="doc-icon" style="background:rgba(59,130,246,.16);color:#93c5fd">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
-            '<path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/>' +
-            '<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/>' +
-          '</svg>' +
-        '</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="font-weight:600;font-size:14px">' + esc(p.name) + ' <span class="' + dot + '">' + (online ? 'En línea' : 'Sin señal') + '</span></div>' +
-          '<div class="muted" style="font-size:12px;line-height:1.45">' + p.pos.lat.toFixed(5) + ', ' + p.pos.lon.toFixed(5) + ' · ' + fmtAgo(age) + '</div>' +
-        '</div>' +
-        '<div class="doc-chev"><a href="https://www.google.com/maps?q=' + p.pos.lat + ',' + p.pos.lon + '" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">Mapa ↗</a></div>' +
-      '</div>';
-    }).join('');
-  }).catch(function () { /* sesión expirada u otro error: se ignora */ });
-}
-
-function fmtAgo(ms) {
-  if (ms < 60000) return 'hace un momento';
-  const m = Math.floor(ms / 60000);
-  if (m < 60) return 'hace ' + m + ' min';
-  const h = Math.floor(m / 60);
-  if (h < 24) return 'hace ' + h + ' h';
-  return 'hace ' + Math.floor(h / 24) + ' d';
-}
-
-// ===== Generación de documentos =====
-let docType = null;
-let docJobs = [];
-let docClients = [];
-let docSelJob = null;
-
-function openDocModal(type) {
-  docType = type;
-  docSelJob = null;
-  document.getElementById('doc-err').style.display = 'none';
-  document.getElementById('doc-search').value = '';
-  const title = document.getElementById('doc-modal-title');
-  const found = DOC_TYPES.filter(function (d) { return d.key === type; })[0];
-  title.textContent = 'Generar — ' + (found ? found.name : type);
-  document.getElementById('doc-fields').innerHTML = docFieldsHTML(type);
-  document.getElementById('doc-modal').style.display = 'block';
-  document.getElementById('doc-jobs').innerHTML = '<div class="muted">Cargando datos…</div>';
-  api('/api/client/data').then(function (j) {
-    if (!j || !j.ok) {
-      showDocErr((j && j.error) || 'No se pudieron cargar los datos.');
-      return;
-    }
-    docClients = j.clients || [];
-    docJobs = j.jobs || [];
-    renderDocJobs();
-  }).catch(function (e) { showDocErr(e.message); });
-}
-
-function showDocErr(msg) { const el = document.getElementById('doc-err'); el.textContent = msg; el.style.display = 'block'; }
-
-function closeDocModal() {
-  document.getElementById('doc-modal').style.display = 'none';
-  docType = null; docJobs = []; docClients = []; docSelJob = null;
-}
-
-function renderDocJobs() {
-  const q = (document.getElementById('doc-search').value || '').toLowerCase().trim();
-  const list = docJobs.filter(function (job) {
-    if (docType === 'carta-saldo' && job.balance > 0) return false;
-    if (PENDING_TYPES[docType] && job.balance <= 0) return false;
-    if (q && (job.clientName || '').toLowerCase().indexOf(q) === -1 && (job.code || '').toLowerCase().indexOf(q) === -1) return false;
-    return true;
-  });
-  if (!list.length) {
-    document.getElementById('doc-jobs').innerHTML = '<div class="muted" style="padding:12px 0">No hay trabajos disponibles para este documento.</div>';
-    return;
-  }
-  document.getElementById('doc-jobs').innerHTML = list.map(function (job) {
-    const selected = docSelJob && String(docSelJob.id) === String(job.id) ? ' doc-row-sel' : '';
-    return '<div class="doc-row' + selected + '" onclick="docPickJob(\'' + job.id + '\')">' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="font-weight:600;font-size:13px">' + esc(job.clientName || 'Cliente') + '</div>' +
-        '<div class="muted" style="font-size:11px">' + esc(job.code || ('Operación ' + job.number)) + ' · ' + (job.status || '') + '</div>' +
-      '</div>' +
-      '<div style="text-align:right;font-size:12px">' +
-        '<div class="muted">Total ' + money(job.total) + '</div>' +
-        (job.balance > 0 ? '<div style="color:#b45309">Saldo ' + money(job.balance) + '</div>' : '<div style="color:#047857">Pagado ✓</div>') +
-      '</div>' +
-    '</div>';
-  }).join('');
-}
-
-function docPickJob(id) {
-  docSelJob = docJobs.filter(function (j) { return String(j.id) === String(id); })[0] || null;
-  renderDocJobs();
-}
-
-function doGenDoc() {
-  if (!docType || !docSelJob) { showDocErr('Selecciona un trabajo.'); return; }
-const body = { type: docType, jobId: docSelJob.id };
-  const ciudad = (document.getElementById('doc-ciudad').value || '').trim();
-  if (ciudad) body.ciudad = ciudad;
-  if (BIEN_TYPES[docType]) {
-    const bien = (document.getElementById('doc-bien').value || '').trim();
-    if (!bien) { showDocErr('Indica el bien que respalda la garantía.'); return; }
-    body.bien = bien;
-  }
-  if (FECHA_TYPES[docType]) {
-    const fecha = document.getElementById('doc-fecha').value;
-    if (fecha) body.fechaPago = new Date(fecha).toISOString();
-  }
-  if (docType === 'testigos') {
-    const testigos = [];
-    for (let i = 1; i <= 5; i++) {
-      const name = (document.getElementById('doc-tw' + i).value || '').trim();
-      if (name) testigos.push({ name: name, doc: (document.getElementById('doc-td' + i).value || '').trim() });
-    }
-    body.testigos = testigos;
-  }
-  showDocErr('Generando…');
-  api('/api/client/documents', { method: 'POST', body: JSON.stringify(body) })
-    .then(function (r) {
-      if (!r || !r.ok || !r.html) { showDocErr((r && r.error) || 'No se pudo generar el documento.'); return; }
-      printDocHTML(r.html);
-      closeDocModal();
-    })
-    .catch(function (e) { showDocErr(e.message); });
-}
-
-function printDocHTML(html) {
-  const w = window.open('', '_blank');
-  if (!w) { alert('Permite las ventanas emergentes para ver el documento.'); return; }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-  setTimeout(function () {
-    try { w.focus(); w.print(); } catch (e) { window.open(w.document.title); }
-  }, 450);
-}
-
-async function loadReport() {
-  const j = await api(isView ? viewReportPath() : '/api/client/report');
-  if (!j || !j.ok) {
-    if (isView) { showAuth(); return; }
-    if (j && j.error && j.error.indexOf('Sesión') === 0) { localStorage.removeItem('ct_token'); token=''; showAuth(); return; }
-    document.getElementById('dash-empty').style.display = 'block';
-    document.getElementById('dash-content').style.display = 'none';
-    document.getElementById('dash-empty').textContent = 'No se pudieron cargar tus datos.';
-    return;
-  }
-  if (!j.hasData || !j.report) {
-    renderModTabs(j.modules, null);
-    document.getElementById('dash-empty').style.display = 'block';
-    document.getElementById('dash-content').style.display = 'none';
-    document.getElementById('dash-empty').textContent = j.message || 'Todavía no hay datos de ventas.';
-    return;
-  }
-const t = j.report.totals;
-  const meta = j.report.meta || {};
-  renderModTabs(j.modules, j.report);
-  // Saludo: usa el nombre del negocio desde la app cuando existe
-  if (meta.businessName) {
-    document.getElementById('dash-name').textContent = meta.businessName;
-    document.getElementById('dash-sub').textContent = 'Resumen de tu negocio';
-  } else {
-    document.getElementById('dash-sub').textContent = 'Resumen de tu negocio';
-  }
-  document.getElementById('dash-empty').style.display = 'none';
-  document.getElementById('dash-content').style.display = 'block';
-  document.getElementById('s-facturado').textContent = money(t.facturado);
-  const m12 = (j.report.monthly || []).slice(0, 12);
-  const trendEl = document.getElementById('s-facturado-trend');
-  if (m12.length >= 2 && trendEl) {
-    const last = m12[m12.length - 1], prev = m12[m12.length - 2];
-    let pct = null;
-    if (prev.facturado > 0) pct = Math.round(((last.facturado - prev.facturado) / prev.facturado) * 100);
-    if (pct != null) {
-      trendEl.className = 'trend ' + (pct >= 0 ? 'up' : 'down');
-      trendEl.textContent = (pct >= 0 ? '▲' : '▼') + ' ' + Math.abs(pct) + '% vs ' + (prev.month || 'mes anterior');
-    } else {
-      trendEl.className = 'trend muted';
-      trendEl.textContent = 'vs ' + (prev.month || 'mes anterior');
-    }
-  }
-  document.getElementById('s-cobrado').textContent = money(t.cobrado);
-  document.getElementById('s-porcobrar').textContent = money(t.porCobrar);
-  document.getElementById('s-gastado').textContent = money(t.gastado);
-  document.getElementById('s-ganancia').textContent = money(t.ganancia);
-  sinCostoNote(document.getElementById('s-sincosto'), t);
-  document.getElementById('s-trabajos').textContent = t.trabajos;
-  document.getElementById('s-pendientes').textContent = t.pendientes;
-  document.getElementById('s-clientes').textContent = t.clientes;
-  document.getElementById('s-productos').textContent = t.productos;
-  document.getElementById('s-ventas').textContent = t.ventas || 0;
-  document.getElementById('s-cotizaciones').textContent = t.cotizaciones || 0;
-
-  // Comparativa mes actual vs. mismo período del mes anterior
-  const cmp = meta.comparison || {};
-  if (cmp.current != null || cmp.prev != null) {
-    const card = document.getElementById('cmp-card');
-    card.style.display = 'block';
-    document.getElementById('cmp-title').textContent = 'Facturado este mes (' + (cmp.monthName || '') + ' hasta hoy)';
-    document.getElementById('cmp-current').textContent = money(cmp.current);
-    document.getElementById('cmp-prev').textContent = money(cmp.prev) + ' (' + (cmp.prevName || '') + ' 1–' + (cmp.dayOfMonth != null ? cmp.dayOfMonth : '') + ')';
-    const arrow = document.getElementById('cmp-arrow');
-    if (cmp.pctDiff == null || cmp.pctDiff === 0) { arrow.textContent = '—'; arrow.className = 'arrow'; }
-    else if (cmp.pctDiff > 0) { arrow.textContent = '▲'; arrow.className = 'arrow up'; }
-    else { arrow.textContent = '▼'; arrow.className = 'arrow down'; }
-    const msg = document.getElementById('cmp-msg');
-    msg.textContent = cmp.vsText || cmp.comparisonMsg || '';
-    msg.className = 'cmp-txt' + (cmp.vsText && cmp.vsText.indexOf('No hubo') === 0 ? ' note' : '');
-  }
-
-  // Gráfico de 12 meses
-  drawChart(j.report.series || []);
-
-  // Tabla mensual
-  let mh = '<table><tr><th>Mes</th><th class="num">Facturado</th><th class="num">Cobrado</th><th class="num">Ganancia</th></tr>';
-  (j.report.monthly || []).slice(0, 12).forEach((m) => {
-    mh += '<tr><td>' + m.month + '</td><td class="num">' + money(m.facturado) + '</td><td class="num">' + money(m.cobrado) + '</td><td class="num">' + money(m.ganancia) + '</td></tr>';
-  });
-  mh += '</table>';
-  document.getElementById('monthly-table').innerHTML = mh || '<div class="empty">Sin datos mensuales.</div>';
-
-  let rh = '';
-  (j.report.recent || []).forEach((r) => {
-    const accion = (r.status || '').toUpperCase() === 'COTIZADO' ? 'Nueva cotización' : (r.status === 'CANCELADO' ? 'Cancelada' : 'Venta registrada');
-    rh += '<div class="recent-item"><div class="head"><span>' + accion + ' · ' + r.client + '</span>' + statusPill(r.status) + '</div>'
-      + '<div style="font-size:12px;color:var(--muted)">' + fmtWhen(r.date) + '</div>'
-      + '<div class="t-row"><span>Total</span><b>' + money(r.total) + '</b></div>';
-    if (r.balance > 0) rh += '<div class="t-row"><span style="color:var(--red)">Saldo pendiente</span><b style="color:var(--red)">' + money(r.balance) + '</b></div>';
-    rh += r.costMissing
-      ? '<div class="t-row"><span style="color:#b45309">⚠️ Ganancia = total (sin costo)</span><b style="color:#b45309">' + money(r.margin) + '</b></div></div>'
-      : '<div class="t-row"><span style="color:var(--green)">Ganancia</span><b style="color:var(--green)">' + money(r.margin) + '</b></div></div>';
-  });
-  document.getElementById('recent-list').innerHTML = rh || '<div class="empty">Sin trabajos.</div>';
-
-  // Actualizar encabezado del reporte imprimible
-  const biz = meta.businessName || document.getElementById('dash-name').textContent;
-  document.getElementById('ph-name').textContent = biz ? 'Reporte de ventas — ' + biz : 'Reporte de ventas';
-  document.getElementById('ph-date').textContent = new Date().toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' });
-}
-
-// ===== Gestión de usuarios del portal (MVP: la hace el administrador) =====
-// En esta versión el dueño del negocio NO gestiona usuarios desde el portal;
-// el administrador crea/administra todos los usuarios. La estructura interna
-// (clientId + userId + role + status) queda lista para que en el futuro el
-// propio dueño gestione a sus empleados según su rol/plan.
-let myRole = (localStorage.getItem('ct_role') || '').toLowerCase();
-let myCreds = { username: '', password: '' };
-
-function initUsers(role) {
-  myRole = (role || myRole || '').toLowerCase();
-  localStorage.setItem('ct_role', myRole);
-  // MVP: la gestión de usuarios se hace desde el panel del administrador.
-  var card = document.getElementById('users-card');
-  if (card) card.style.display = 'none';
-}
-
-function renderUsers(data) {
-  const list = data.users || [];
-  const used = list.filter(u => u.role !== 'owner' || true).length;
-  document.getElementById('users-limit').textContent = 'Usuarios: ' + used + ' de ' + (data.limit || 10);
-  if (!list.length) {
-    document.getElementById('users-list').innerHTML = '<div class="empty">Aún no hay usuarios.</div>';
-    return;
-  }
-  document.getElementById('users-list').innerHTML = list.map(function (u) {
-    const active = u.status !== 'inactivo';
-    return '<div class="recent-item" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
-      '<div style="flex:1;min-width:120px"><div style="font-weight:600">' + esc(u.name) + '</div>' +
-      '<div style="font-size:12px;color:var(--muted)">@' + esc(u.username) + '</div></div>' +
-      '<span class="pill ' + (active ? 'green' : 'gray') + '">' + (active ? '● Activo' : '○ Inactivo') + '</span>' +
-      '<div style="display:flex;gap:6px">' +
-        (u.role === 'owner' ? '' :
-          '<button class="btn small" style="padding:5px 9px;font-size:12px;background:' + (active ? '#fee2e2;color:#991b1b' : '#d1fae5;color:#065f46') + ';border:none;border-radius:8px;cursor:pointer" onclick="toggleUser(\'' + u.userId + '\')">' + (active ? 'Desactivar' : 'Activar') + '</button>') +
-        '<button class="btn small" style="padding:5px 9px;font-size:12px;background:#e2e8f0;color:#334155;border:none;border-radius:8px;cursor:pointer" onclick="resetUserPass(\'' + u.userId + '\')">Resetear clave</button>' +
-      '</div></div>';
-  }).join('');
 }
 
 let _permsUserId = null;
