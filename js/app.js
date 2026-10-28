@@ -643,6 +643,14 @@ let html = '<form class="card form" data-form="cliente">';
     html += '<label>Precio (RD$) *</label><input type="number" step="0.01" min="0" name="price" value="' + (i ? i.price : '') + '" placeholder="0.00">';
     html += '<label>Costo de compra (RD$, opcional)</label><input type="number" step="0.01" min="0" name="cost" value="' + (i && Number(i.cost) ? i.cost : '') + '" placeholder="Lo que te cuesta a ti">';
     html += '<label>Inventario / stock (opcional)</label><input type="number" step="1" min="0" name="stock" value="' + (i && i.stock != null ? i.stock : '') + '" placeholder="Vacio = no se controla stock">';
+    if (i) {
+      html += '<details class="pack-fields" open><summary>' + PLUS_ICON + ' Registrar entrada de stock (compra a proveedor)</summary>';
+      html += '<label>Cantidad a ingresar</label><input type="number" step="1" min="1" id="entry-qty" placeholder="Ej. 10">';
+      html += '<label>Costo unitario (RD$, opcional)</label><input type="number" step="0.01" min="0" id="entry-cost" placeholder="Dejar vacio para no cambiar el costo">';
+      html += '<label>Proveedor (opcional)</label><input type="text" id="entry-supplier" placeholder="Nombre del proveedor">';
+      html += '<button class="btn small primary block" type="button" data-action="registerStockEntry" data-id="' + escapeAttr(i.id) + '">' + PLUS_ICON + ' Registrar entrada</button>';
+      html += '</details>';
+    }
     html += '<details class="pack-fields"><summary>' + PLUS_ICON + ' Se vende por caja (opcional)</summary>';
     html += '<label>Unidad de medida</label><input type="text" name="unit" value="' + escapeAttr(i ? i.unit || '' : '') + '" placeholder="Ej. pieza, metro, libra">';
     html += '<label>Unidades por caja</label><input type="number" step="1" min="0" name="packQty" value="' + (i && i.packQty ? i.packQty : '') + '" placeholder="Ej. 12">';
@@ -1961,6 +1969,27 @@ case 'trabajos': inner = jobsView(); break;
       DB.remove('conduces', c.id);
       toast('Conduce eliminado', true);
       go('#/conduces');
+    },
+    registerStockEntry: function (el) {
+      const it = DB.find('catalog', el.dataset.id);
+      if (!it) return;
+      const qtyEl = document.getElementById('entry-qty');
+      const costEl = document.getElementById('entry-cost');
+      const supEl = document.getElementById('entry-supplier');
+      const qty = Number(qtyEl && qtyEl.value) || 0;
+      if (qty <= 0) { toast('Indica una cantidad mayor a 0', false); return; }
+      const costStr = costEl ? String(costEl.value).trim() : '';
+      const cost = costStr !== '' ? Number(costStr) : null;
+      const supplier = supEl ? supEl.value.trim() : '';
+      const entry = DB.registerStockEntry(it.id, qty, cost, supplier);
+      if (!entry) { toast('No se pudo registrar la entrada', false); return; }
+      const updated = DB.find('catalog', it.id);
+      if (qtyEl) qtyEl.value = '';
+      if (costEl) costEl.value = '';
+      if (supEl) supEl.value = '';
+      const stockInput = document.querySelector('input[name="stock"]');
+      if (stockInput && updated) stockInput.value = (updated.stock != null ? updated.stock : '');
+      toast('Entrada registrada: +' + qty + ' ' + (it.name || '') + '. Stock actual: ' + (updated ? updated.stock : ''), true);
     },
     printTicket: function (el) {
       const j = DB.find('jobs', el.dataset.id);

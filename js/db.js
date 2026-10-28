@@ -407,6 +407,7 @@ var DB = (function () {
     if (!s.clients) s.clients = [];
     if (!s.jobs) s.jobs = [];
     if (!s.conduces) s.conduces = [];
+    if (!s.stockEntries) s.stockEntries = [];
     if (!Array.isArray(s.settings.itemTypes)) s.settings.itemTypes = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.itemTypes));
     if (!s.settings.docTitle) s.settings.docTitle = DEFAULT_SETTINGS.docTitle;
     if (typeof s.settings.staffMode !== 'boolean') s.settings.staffMode = false;
@@ -828,6 +829,31 @@ var DB = (function () {
   function conducesForJob(jobId) {
     return (state.conduces || []).filter(function (c) { return String(c.jobId) === String(jobId); });
   }
+  // ===== Entradas de inventario (compras a proveedor) =====
+  function registerStockEntry(catalogId, qty, unitCost, supplier, notes) {
+    const it = find('catalog', catalogId);
+    if (!it) return null;
+    const q = Number(qty) || 0;
+    if (q <= 0) return null;
+    it.stock = (Number(it.stock) || 0) + q;
+    if (unitCost != null && unitCost !== '' && !isNaN(Number(unitCost)) && Number(unitCost) >= 0) {
+      it.cost = Number(unitCost);
+    }
+    if (!state.stockEntries) state.stockEntries = [];
+    const entry = {
+      id: uid(),
+      catalogId: it.id,
+      productName: it.name,
+      qty: q,
+      unitCost: (unitCost != null && unitCost !== '' && !isNaN(Number(unitCost))) ? Number(unitCost) : null,
+      supplier: supplier || '',
+      notes: notes || '',
+      date: new Date().toISOString()
+    };
+    state.stockEntries.unshift(entry);
+    save();
+    return entry;
+  }
   function buildBackup() {
     return JSON.stringify({
       format: 'cotizatec-backup',
@@ -1230,6 +1256,7 @@ var DB = (function () {
      load, save, incr, esc, money, date, push, find, update, remove, uid,
      jobTotals, newJob, saveJob, captureClient,
      CONDUCE_STATUS, conduceStatusLabel, conduceStatusColor, newConduce, saveConduce,
+     registerStockEntry,
      conduceTotals, conduceStockCheck, conduceApplyStock, conduceRestoreStock, conducesForJob, nextConduceNumber,
      statusLabel, statusColor, STATUS, KEY, BAK_KEY, TS_KEY, FS_KEY, ENC_META,
      buildBackup, parseBackup, applyBackup, backupError,
