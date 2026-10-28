@@ -861,6 +861,22 @@ async function renderConducesContent(report) {
     }).join('') + '</tbody></table>';
 }
 
+async function viewConduce(id) {
+  try {
+    const j = await api('/api/conduces/' + encodeURIComponent(id));
+    if (!j || !j.ok) { alert((j && j.error) || 'No se pudo cargar el conduce.'); return; }
+    printDocHTML(j.html);
+  } catch (e) { alert(e.message); }
+}
+
+async function anularConduce(id) {
+  if (!confirm('¿Anular este conduce?')) return;
+  try {
+    const j = await api('/api/conduces/' + encodeURIComponent(id) + '/anular', { method: 'PUT' });
+    if (!j || !j.ok) { alert((j && j.error) || 'No se pudo anular.'); return; }
+    await renderConducesContent();
+  } catch (e) { alert(e.message); }
+}
 async function renderInventarioContent(report) {
   const el = document.getElementById('inventario-list');
   if (!el) return;
