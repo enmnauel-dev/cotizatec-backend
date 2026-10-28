@@ -941,13 +941,13 @@ function filterStockProducts() {
   const matches = _seCatalog.filter(function (p) { return (p.name || '').toLowerCase().indexOf(q) !== -1; });
   let html = '';
   matches.forEach(function (p) {
-    html += '<div style="padding:6px 8px;cursor:pointer;border-bottom:1px solid rgba(157,176,201,.1)" onclick="selectStockProduct('' + esc(p.id) + '','' + esc(p.name || '') + '',' + (p.stock == null ? 'null' : p.stock) + ')">' +
+    html += '<div style="padding:6px 8px;cursor:pointer;border-bottom:1px solid rgba(157,176,201,.1)" onclick="selectStockProduct(\'' + esc(p.id) + '\',\'' + esc(p.name || '') + '\',' + (p.stock == null ? 'null' : p.stock) + ')">' +
       esc(p.name || '-') + ' <span style="color:var(--muted);font-size:11px">(stock: ' + (p.stock == null ? '—' : p.stock) + ')</span></div>';
   });
   // option to create new
   const exactMatch = _seCatalog.some(function (p) { return (p.name || '').toLowerCase() === q; });
   if (!exactMatch) {
-    html += '<div style="padding:6px 8px;cursor:pointer;color:#22d3ee;font-weight:600" onclick="selectNewStockProduct('' + esc(search.value.trim()) + '')">+ Crear producto nuevo: "' + esc(search.value.trim()) + '"</div>';
+    html += '<div style="padding:6px 8px;cursor:pointer;color:#22d3ee;font-weight:600" onclick="selectNewStockProduct(\'' + esc(search.value.trim()) + '\')">+ Crear producto nuevo: "' + esc(search.value.trim()) + '"</div>';
   }
   if (html) { list.innerHTML = html; list.style.display = 'block'; } else { list.style.display = 'none'; }
 }
