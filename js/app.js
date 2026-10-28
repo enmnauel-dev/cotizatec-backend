@@ -187,7 +187,7 @@ const NAV = [
     html += statCard(PAPER_ICON, 'Cotizado', money(totCotizado), 'total estimado', '#3b82f6', 'trabajos/f/SINCOBRAR');
     html += statCard(WALLET_ICON, 'Cobrado', money(cobrado), 'en caja', '#10b981', 'trabajos/f/COBRADO');
     html += statCard('&#128176;', 'Por cobrar', money(porCobrar), 'saldo pendiente', '#ef4444', 'trabajos/f/DEBE');
-    html += '<div class="span2">' + statCard(TOOLS_ICON, 'Ganancia real', money(ganancia), 'cobrado − materiales', '#8b5cf6', 'reportes') + '</div>';
+    if (!DB.isStaffMode()) html += '<div class="span2">' + statCard(TOOLS_ICON, 'Ganancia real', money(ganancia), 'cobrado − materiales', '#8b5cf6', 'reportes') + '</div>';
     html += '</div>';
 
     if (porCobrar > 0.005) {
@@ -730,7 +730,7 @@ let html = '<form class="card form" data-form="cliente">';
       h += '<div class="q-item"><input class="qi-qty" type="number" min="0" step="1" data-qf="qty" data-qi="' + idx + '" value="' + (it.qty || 1) + '">';
       h += '<input class="qi-desc" type="text" data-qf="desc" data-qi="' + idx + '" placeholder="Descripción" value="' + escapeAttr(it.desc || '') + '">';
       h += '<input class="qi-price" type="number" min="0" step="0.01" data-qf="price" data-qi="' + idx + '" value="' + (it.price || '') + '"' + ro + '>';
-      h += '<input class="qi-cost" type="number" min="0" step="0.01" data-qf="cost" data-qi="' + idx + '" placeholder="costo" title="Lo que te cuesta a ti. Se usa para calcular tu ganancia real." value="' + (it.cost != null ? it.cost : '') + '"' + ro + '>';
+       if (!DB.isStaffMode()) h += '<input class="qi-cost" type="number" min="0" step="0.01" data-qf="cost" data-qi="' + idx + '" placeholder="costo" title="Lo que te cuesta a ti. Se usa para calcular tu ganancia real." value="' + (it.cost != null ? it.cost : '') + '"' + ro + '>';
       h += '<span class="qi-sub" id="qi-sub-' + idx + '">' + money((it.qty || 0) * (it.price || 0)) + '</span>';
       h += '<button class="icon-btn danger qi-del" data-action="removeQuoteItem" data-id="' + idx + '">' + X_ICON + '</button>';
       h += '</div>';
@@ -749,8 +749,8 @@ let html = '<form class="card form" data-form="cliente">';
     if (t.itemsCost > 0) h += '<div class="t-row"><span>Costo de productos</span><b style="color:#ef4444">-' + money(t.itemsCost) + '</b></div>';
     h += '<div class="t-row total"><span>Total</span><b class="big">' + money(t.total) + '</b></div>';
     if (hasItems) {
-      h += '<div class="t-row"><span>Ganancia neta</span><b class="big" style="color:' + (costMissing ? '#f59e0b' : '#16a34a') + '">' + money(t.margin) + '</b></div>';
-      if (costMissing) h += '<p class="muted" style="color:#f59e0b;margin:6px 0 0"><small>' + WARNING_ICON + ' Sin costo registrado: la ganancia aparece igual al total. Escribe el <b>costo de compra</b> en cada línea para ver tu ganancia real.</small></p>';
+       if (!DB.isStaffMode()) h += '<div class="t-row"><span>Ganancia neta</span><b class="big" style="color:' + (costMissing ? '#f59e0b' : '#16a34a') + '">' + money(t.margin) + '</b></div>';
+       if (!DB.isStaffMode() && costMissing) h += '<p class="muted" style="color:#f59e0b;margin:6px 0 0"><small>' + WARNING_ICON + ' Sin costo registrado: la ganancia aparece igual al total. Escribe el <b>costo de compra</b> en cada línea para ver tu ganancia real.</small></p>';
     }
     h += '</section>';
     return h;
@@ -849,7 +849,7 @@ let html = '<form class="card form" data-form="cliente">';
     html += '<button class="btn small" data-action="duplicateJob" data-id="' + j.id + '">' + ITEM_ICON + ' Duplicar</button>';
     html += '</div></section>';
 
-    html += expensesCard(j);
+    if (!DB.isStaffMode()) html += expensesCard(j);
     html += paymentsCard(j);
 
     html += '<button class="btn block danger-ghost" data-action="deleteJob" data-id="' + j.id + '">' + TRASH_ICON + ' Eliminar trabajo</button>';
@@ -1807,8 +1807,21 @@ case 'trabajos': inner = jobsView(); break;
     deleteJob: function (el) {
       const j = DB.find('jobs', el.dataset.id);
       if (!j) return;
+      if (DB.isStaffMode() && DB.hasStaffPin()) {
+        const pin = window.prompt('PIN del administrador para eliminar el trabajo:');
+        if (pin === null) return;
+        DB.verifyStaffPin(String(pin).trim()).then(function (ok) {
+          if (!ok) { toast('PIN incorrecto', false); return; }
+          if (!confirmar('¿Eliminar la cotización ' + j.code + '?')) return;
+          try { Reminders.cancelForJob(j.id); } catch (e) {}
+          DB.remove('jobs', j.id);
+          go('#/trabajos');
+        }).catch(function () { toast('No se pudo verificar el PIN', false); });
+        return;
+      }
       if (!confirmar('¿Eliminar la cotización ' + j.code + '?')) return;
       try { Reminders.cancelForJob(j.id); } catch (e) {}
+      DB.audit('trabajo.eliminar', j.code || j.id);
       DB.remove('jobs', j.id);
       go('#/trabajos');
     },
@@ -1832,6 +1845,7 @@ case 'trabajos': inner = jobsView(); break;
         }
       }
       DB.update('jobs', el.dataset.id, { status: st });
+      DB.audit('trabajo.estado', (j.code || j.id) + ' -> ' + st);
       render();
       toast('Estado actualizado', true);
       maybeOfferConduce(j, st);
@@ -1899,6 +1913,7 @@ case 'trabajos': inner = jobsView(); break;
         if (!confirmar('Inventario insuficiente:\n' + det + '\n\n¿Generar el conduce igual (sin descontar stock)?')) return;
       }
       DB.saveConduce(c);
+      DB.audit('conduce.crear', c.code + ' · ' + (j.code || ''));
       if (!missing.length) {
         const r = DB.conduceApplyStock(c);
         if (r.applied > 0) toast('Conduce ' + c.code + ' creado. Stock actualizado.', true);
@@ -1939,9 +1954,25 @@ case 'trabajos': inner = jobsView(); break;
       if (!c) return;
       const st = el.dataset.status;
       if (st === c.status) return;
+      if (st === 'ANULADO' && DB.isStaffMode() && DB.hasStaffPin()) {
+        const pin = window.prompt('PIN del administrador para anular el conduce:');
+        if (pin === null) return;
+        DB.verifyStaffPin(String(pin).trim()).then(function (ok) {
+          if (!ok) { toast('PIN incorrecto', false); return; }
+          if (!confirmar('¿Anular ' + c.code + '?' + (c.stockApplied ? ' Se devolverá el stock al inventario.' : ''))) return;
+          DB.conduceRestoreStock(c);
+          DB.audit('conduce.anular', c.code);
+          c.status = st;
+          DB.saveConduce(c);
+          render();
+          toast('Conduce: ' + DB.conduceStatusLabel(st), true);
+        }).catch(function () { toast('No se pudo verificar el PIN', false); });
+        return;
+      }
       if (st === 'ANULADO') {
         if (!confirmar('¿Anular ' + c.code + '?' + (c.stockApplied ? ' Se devolverá el stock al inventario.' : ''))) return;
         DB.conduceRestoreStock(c);
+        DB.audit('conduce.anular', c.code);
       }
       c.status = st;
       DB.saveConduce(c);
@@ -1964,8 +1995,22 @@ case 'trabajos': inner = jobsView(); break;
     deleteConduce: function (el) {
       const c = DB.find('conduces', el.dataset.id);
       if (!c) return;
+      if (DB.isStaffMode() && DB.hasStaffPin()) {
+        const pin = window.prompt('PIN del administrador para eliminar el conduce:');
+        if (pin === null) return;
+        DB.verifyStaffPin(String(pin).trim()).then(function (ok) {
+          if (!ok) { toast('PIN incorrecto', false); return; }
+          if (!confirmar('¿Eliminar ' + c.code + '?' + (c.stockApplied ? ' Se devolverá el stock al inventario.' : ''))) return;
+          DB.conduceRestoreStock(c);
+          DB.remove('conduces', c.id);
+          toast('Conduce eliminado', true);
+          go('#/conduces');
+        }).catch(function () { toast('No se pudo verificar el PIN', false); });
+        return;
+      }
       if (!confirmar('¿Eliminar ' + c.code + '?' + (c.stockApplied ? ' Se devolverá el stock al inventario.' : ''))) return;
       DB.conduceRestoreStock(c);
+      DB.audit('conduce.eliminar', c.code);
       DB.remove('conduces', c.id);
       toast('Conduce eliminado', true);
       go('#/conduces');
@@ -1982,6 +2027,7 @@ case 'trabajos': inner = jobsView(); break;
       const cost = costStr !== '' ? Number(costStr) : null;
       const supplier = supEl ? supEl.value.trim() : '';
       const entry = DB.registerStockEntry(it.id, qty, cost, supplier);
+      if (entry) DB.audit('stock.entrada', (it.name || '') + ' +' + qty + (supplier ? ' (' + supplier + ')' : ''));
       if (!entry) { toast('No se pudo registrar la entrada', false); return; }
       const updated = DB.find('catalog', it.id);
       if (qtyEl) qtyEl.value = '';
@@ -2893,12 +2939,15 @@ document.addEventListener('DOMContentLoaded', function () {
         Backups.pullFromCloud(deviceId).then(function (restored) {
           if (restored) Util.toast('Datos restaurados desde la nube', true);
           Backups.pushToCloud(deviceId);
+          try { Backups.syncBidirectional(deviceId); } catch (e) {}
           try { Reminders.scheduleToday(); } catch (e) {}
         }).catch(function () {});
         return;
       }
       UI.init();
       Backups.pushToCloud(deviceId);
+      try { Backups.syncBidirectional(deviceId); } catch (e) {}
+      try { setInterval(function () { if (navigator.onLine) { try { Backups.syncBidirectional(deviceId); } catch (e) {} } }, 5 * 60 * 1000); } catch (e) {}
       try { Reminders.scheduleToday(); } catch (e) {}
     }
 

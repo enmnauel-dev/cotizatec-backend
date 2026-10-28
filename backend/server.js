@@ -506,7 +506,7 @@ app.get('/api/client/data', async (req, res) => {
       const t = jobTotalsWeb(j);
       return { id: j.id, code: j.code || '', number: j.number, date: j.date, clientId: j.clientId, clientName: j.clientName || '', status: j.status || 'COTIZADO', total: t.total, collected: t.collected, balance: t.balance };
     });
-    res.json({ ok: true, clients, jobs, catalog });
+    res.json({ ok: true, clients, jobs, catalog, auditLog: (st.auditLog || []).slice(0, 100) });
   } catch (e) {
     console.error('[client] data error:', e.message);
     res.status(500).json({ error: 'Error al leer los datos.' });
@@ -781,6 +781,7 @@ app.post('/api/conduces', async (req, res) => {
 app.put('/api/conduces/:id/anular', (req, res) => {
   const auth = requireClient(req, res);
   if (!auth) return;
+  if (auth.info.role !== 'owner' && auth.info.role !== 'admin') return res.status(403).json({ error: 'Solo un administrador puede anular conduces.', code: 'ADMIN_ONLY' });
   const doc = store.getDocument(String(req.params.id || '').trim());
   if (!doc || String(doc.businessId) !== String(auth.account.clientId) || doc.type !== 'conduce') {
     return res.status(404).json({ error: 'Conduce no encontrado.' });
@@ -837,6 +838,107 @@ app.post('/api/stock-entries', (req, res) => {
   };
   store.addStockEntry(entry);
   res.json({ ok: true, entry });
+});
+
+// ===== Sincronizacion bidireccional (dispositivo <-> servidor) =====
+// El dispositivo descarga las entradas de stock y conduces creados en la web
+// (u otros dispositivos) y los aplica a su estado local.
+app.get('/api/device/:deviceId/pending', (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  if (!deviceId || deviceId.length < 8 || deviceId.length > 128) {
+    return res.status(400).json({ error: 'deviceId inválido' });
+  }
+  const client = store.getClientByDeviceId(deviceId);
+  if (!client) return res.status(404).json({ error: 'Dispositivo no vinculado.' });
+  const since = Number(req.query.since) || 0;
+  const entries = store.listStockEntriesByClient(client.id).filter((e) => (e.createdAt || 0) > since);
+  const conduces = store.listDocumentsByClient(client.id).filter((d) => d.type === 'conduce' && (d.createdAt || 0) > since);
+  res.json({ ok: true, stockEntries: entries, conduces: conduces, serverTime: Date.now() });
+});
+
+// El dispositivo sube sus entradas de stock locales para que el panel web las vea.
+app.post('/api/device/:deviceId/stock-entries', (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  if (!deviceId || deviceId.length < 8 || deviceId.length > 128) {
+    return res.status(400).json({ error: 'deviceId inválido' });
+  }
+  const client = store.getClientByDeviceId(deviceId);
+  if (!client) return res.status(404).json({ error: 'Dispositivo no vinculado.' });
+  const incoming = Array.isArray(req.body.entries) ? req.body.entries : [];
+  const existing = store.listStockEntriesByClient(client.id);
+  const existingIds = new Set(existing.map((e) => String(e.id)));
+  let added = 0;
+  incoming.forEach((e) => {
+    if (!e || !e.id) return;
+    if (existingIds.has(String(e.id))) return;
+    const entry = {
+      id: String(e.id),
+      businessId: client.id,
+      catalogId: e.catalogId || null,
+      productName: String(e.productName || '').trim(),
+      qty: Number(e.qty) || 0,
+      unitCost: (e.unitCost === null || e.unitCost === undefined || e.unitCost === '') ? null : Number(e.unitCost),
+      supplier: String(e.supplier || '').trim(),
+      notes: String(e.notes || '').trim(),
+      createdAt: Number(e.createdAt) || (e.date ? new Date(e.date).getTime() : Date.now())
+    };
+    if (entry.qty <= 0) return;
+    store.addStockEntry(entry);
+    existingIds.add(String(entry.id));
+    added++;
+  });
+  res.json({ ok: true, added });
+});
+
+// El dispositivo sube sus conduces locales para que el panel web los vea.
+app.post('/api/device/:deviceId/conduces', (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  if (!deviceId || deviceId.length < 8 || deviceId.length > 128) {
+    return res.status(400).json({ error: 'deviceId inválido' });
+  }
+  const client = store.getClientByDeviceId(deviceId);
+  if (!client) return res.status(404).json({ error: 'Dispositivo no vinculado.' });
+  const incoming = Array.isArray(req.body.conduces) ? req.body.conduces : [];
+  const existing = store.listDocumentsByClient(client.id).filter((d) => d.type === 'conduce');
+  const existingIds = new Set(existing.map((d) => String(d.id)));
+  let added = 0;
+  incoming.forEach((c) => {
+    if (!c || !c.id) return;
+    if (existingIds.has(String(c.id))) return;
+    const doc = {
+      id: String(c.id),
+      number: c.code || ('COND-' + String(Date.now()).slice(-5)),
+      businessId: client.id,
+      clientId: c.clientId || null,
+      jobId: c.jobId || null,
+      jobCode: c.jobCode || '',
+      type: 'conduce',
+      status: c.status || 'emitido',
+      createdAt: c.date ? new Date(c.date).getTime() : Date.now(),
+      amount: (c.items || []).reduce((a, i) => a + (Number(i.qty) || 0) * (Number(i.price) || 0), 0),
+      collected: 0, balance: 0, paidInFull: false,
+      templateVersion: 'v1.0',
+      stockApplied: !!c.stockApplied,
+      data: {
+        businessName: (c.clientName ? '' : '') ,
+        clientName: c.clientName || '',
+        clientPhone: c.clientPhone || '',
+        debtorId: '',
+        debtorAddr: c.clientAddress || '',
+        jobCode: c.jobCode || '',
+        total: (c.items || []).reduce((a, i) => a + (Number(i.qty) || 0) * (Number(i.price) || 0), 0),
+        collected: 0, balance: 0,
+        items: c.items || [],
+        units: (c.items || []).reduce((a, i) => a + (Number(i.qty) || 0), 0),
+        subtotal: (c.items || []).reduce((a, i) => a + (Number(i.qty) || 0) * (Number(i.price) || 0), 0),
+        deliveredBy: c.deliveredBy || '', notes: c.notes || ''
+      }
+    };
+    store.addDocument(doc);
+    existingIds.add(String(doc.id));
+    added++;
+  });
+  res.json({ ok: true, added });
 });
 
 // ===== GestiÃ³n de usuarios del portal (solo el dueÃ±o del negocio) =====

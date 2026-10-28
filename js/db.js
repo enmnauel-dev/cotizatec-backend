@@ -407,6 +407,7 @@ var DB = (function () {
     if (!s.clients) s.clients = [];
     if (!s.jobs) s.jobs = [];
     if (!s.conduces) s.conduces = [];
+    if (!s.auditLog) s.auditLog = [];
     if (!s.stockEntries) s.stockEntries = [];
     if (!Array.isArray(s.settings.itemTypes)) s.settings.itemTypes = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.itemTypes));
     if (!s.settings.docTitle) s.settings.docTitle = DEFAULT_SETTINGS.docTitle;
@@ -853,6 +854,19 @@ var DB = (function () {
     state.stockEntries.unshift(entry);
     save();
     return entry;
+  }
+  function audit(action, detail) {
+    if (!state) return;
+    if (!state.auditLog) state.auditLog = [];
+    state.auditLog.unshift({
+      id: uid(),
+      ts: new Date().toISOString(),
+      role: (state.settings && state.settings.staffMode) ? 'operador' : 'admin',
+      action: String(action || ''),
+      detail: String(detail || '')
+    });
+    if (state.auditLog.length > 500) state.auditLog.length = 500;
+    save();
   }
   function buildBackup() {
     return JSON.stringify({
