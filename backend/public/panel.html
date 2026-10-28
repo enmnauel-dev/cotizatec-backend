@@ -405,6 +405,19 @@
         </div>
       </div>
 
+      <div class="mod-panel" id="mod-permisos">
+        <div class="card">
+          <div style="font-weight:700;margin-bottom:8px">🔐 Permisos del operador (modo vendedor)</div>
+          <div class="muted" style="font-size:12px;margin-bottom:12px">Configura qué puede hacer un operador en la app móvil. Se sincroniza al dispositivo.</div>
+          <div id="perms-panel-body">Cargando…</div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div style="font-weight:700;margin-bottom:8px">👥 Usuarios del negocio</div>
+          <div id="users-list">Cargando…</div>
+          <div style="margin-top:8px"><button class="btn primary" onclick="openUserModal()">+ Crear usuario</button></div>
+        </div>
+      </div>
+
       <div class="mod-panel" id="mod-gps">
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px">
@@ -743,7 +756,8 @@ const MOD_DEFS = [
   { key: 'gps', icon: '📡', label: 'GPS', render: renderGpsContent },
   { key: 'contab', icon: '📒', label: 'Contabilidad', render: renderContabContent },
   { key: 'finanzas', icon: '💰', label: 'Finanzas', render: renderFinanzasContent },
-  { key: 'garantias', icon: '🛡️', label: 'Garantías', render: renderGarantiasContent }
+  { key: 'garantias', icon: '🛡️', label: 'Garantías', render: renderGarantiasContent },
+  { key: 'permisos', icon: '🔐', label: 'Permisos', render: renderPermisosContent }
 ];
 
 function renderModTabs(modules, report) {
@@ -759,6 +773,7 @@ function renderModTabs(modules, report) {
     if (m.key === 'contab') return mods.indexOf('contabilidad') !== -1;
     if (m.key === 'finanzas') return mods.indexOf('finanzas') !== -1;
     if (m.key === 'garantias') return mods.indexOf('garantias') !== -1;
+    if (m.key === 'permisos') return myRole === 'owner';
     return false;
   });
   if (!available.length) { section.style.display = 'none'; return; }
@@ -1401,6 +1416,42 @@ async function savePerms() {
     document.getElementById('perms-msg').textContent = 'Permisos guardados.';
     setTimeout(closePermsModal, 900);
   } catch (e) { document.getElementById('perms-msg').textContent = e.message; }
+}
+async function renderPermisosContent(report) {
+  const body = document.getElementById('perms-panel-body');
+  if (body) {
+    let p = { canCreateConduce: true, canRegisterStockEntry: true, showCosts: false, showMargins: false, requireSupervisorPin: true };
+    try {
+      const j = await api('/api/client/operator-permissions');
+      if (j && j.ok && j.permissions) p = j.permissions;
+    } catch (e) {}
+    body.innerHTML =
+      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-conduce" ' + (p.canCreateConduce ? 'checked' : '') + '> Permitir crear conduces</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-stock" ' + (p.canRegisterStockEntry ? 'checked' : '') + '> Permitir registrar entradas de mercancía</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-costs" ' + (p.showCosts ? 'checked' : '') + '> Mostrar costos de compra</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-margins" ' + (p.showMargins ? 'checked' : '') + '> Mostrar márgenes de ganancia</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-pin" ' + (p.requireSupervisorPin ? 'checked' : '') + '> Requerir PIN de supervisor para anular/modificar precios</label>' +
+      '<div style="margin-top:10px"><button class="btn primary" onclick="savePermsPanel()">Guardar permisos</button></div>' +
+      '<div class="msg" id="pp-msg"></div>';
+  }
+  try { await loadUsers(); } catch (e) {}
+}
+
+async function savePermsPanel() {
+  const perms = {
+    canCreateConduce: document.getElementById('pp-conduce').checked,
+    canRegisterStockEntry: document.getElementById('pp-stock').checked,
+    showCosts: document.getElementById('pp-costs').checked,
+    showMargins: document.getElementById('pp-margins').checked,
+    requireSupervisorPin: document.getElementById('pp-pin').checked
+  };
+  try {
+    const j = await api('/api/client/operator-permissions', { method: 'PUT', body: JSON.stringify({ permissions: perms }) });
+    const msg = document.getElementById('pp-msg');
+    if (!j || !j.ok) { if (msg) msg.textContent = (j && j.error) || 'Error'; return; }
+    if (msg) msg.textContent = 'Permisos guardados. Se sincronizarán a la app.';
+    setTimeout(function () { if (msg) msg.textContent = ''; }, 2000);
+  } catch (e) { const msg = document.getElementById('pp-msg'); if (msg) msg.textContent = e.message; }
 }
 async function loadUsers() {
   const j = await api('/api/client/users');
