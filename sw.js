@@ -1,4 +1,4 @@
-const CACHE = 'cotizatec-v17';
+const CACHE = 'cotizatec-v18';
 const ASSETS = [
   './',
   './index.html',

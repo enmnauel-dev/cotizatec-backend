@@ -1290,6 +1290,7 @@ var DB = (function () {
      needsUnlock, isEncrypted, isProtected, hasBackupPassword, hasFingerprint, canUnlockByPassword, bioAvailable, mkKeystoreExists,
      unlock, unlockFingerprint, setEncryption, removePassword, disableEncryption, relock, boot, blankState,
      isStaffMode, hasStaffPin, setStaffPin, verifyStaffPin, setStaffMode, clearStaffPin,
+     showCosts, showMargins, canCreateConduce, canRegisterStockEntry, requireSupervisorPin,
      onSave
   });
   return api;
