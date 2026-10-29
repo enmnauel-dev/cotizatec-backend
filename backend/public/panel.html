@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CotizaTec â€” Panel del cliente</title>
+<title>CotizaTec — Panel del cliente</title>
 <style>
 :root {
     --ink: #e8eefc; --muted: #9db0c9; --line: rgba(157,176,201,.22);
@@ -146,7 +146,7 @@
   #view-banner { background: linear-gradient(135deg, #1e1b4b, #312e81) !important; border: 1px solid rgba(109,95,245,.65) !important; color: #c7d2fe !important; border-radius: 12px !important; }
   .print-header { display: none; }
 
-  /* MÃ³dulos â€” tabs */
+  /* Módulos — tabs */
   #mods-section { display: none; }
   .mod-tabs { display: flex; gap: 4px; background: rgba(148,163,184,.08); border-radius: 14px; padding: 4px; margin-bottom: 0; overflow-x: auto; }
   .mod-tab {
@@ -249,11 +249,11 @@
             </div>
           </div>
           <div class="input-group">
-            <label>ContraseÃ±a</label>
+            <label>Contraseña</label>
             <div class="input-icon-wrap">
-              <input type="password" id="login-pass" autocomplete="current-password" placeholder="Escribe tu contraseÃ±a">
+              <input type="password" id="login-pass" autocomplete="current-password" placeholder="Escribe tu contraseña">
               <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              <button type="button" class="pwd-toggle" onclick="toggleLoginPwd()" aria-label="Mostrar contraseÃ±a">
+              <button type="button" class="pwd-toggle" onclick="toggleLoginPwd()" aria-label="Mostrar contraseña">
                 <svg id="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 <svg id="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
               </button>
@@ -265,7 +265,7 @@
       </div>
       <div class="login-footer">
         <b>Tu cuenta fue creada por el administrador.</b><br>
-        Si aÃºn no tienes usuario y contraseÃ±a, contacta a tu administrador.
+        Si aún no tienes usuario y contraseña, contacta a tu administrador.
       </div>
     </div>
   </div>
@@ -273,7 +273,7 @@
   <!-- DASHBOARD -->
   <div id="dash-view" style="display:none">
     <div id="view-banner" style="display:none;background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid rgba(109,95,245,.65);color:#c7d2fe;padding:8px 12px;border-radius:12px;font-size:13px;margin-bottom:10px">
-      ðŸ‘ï¸ Vista administrativa â€” Solo lectura. No guarda sesiÃ³n.
+      👁️ Vista administrativa — Solo lectura. No guarda sesión.
     </div>
     <div class="top no-print">
       <div><h1>Hola, <span id="dash-name">CotizaTec</span></h1><small id="dash-sub">Resumen de tu negocio</small></div>
@@ -285,28 +285,28 @@
     </div>
     <div class="print-header"><h1><span id="ph-name">Reporte de ventas</span></h1><div class="sub" id="ph-date"></div></div>
     <div id="change-pass-card" class="card no-print" style="display:none">
-      <div style="font-weight:700; margin-bottom:8px">Cambiar contraseÃ±a</div>
-      <label>ContraseÃ±a actual</label>
+      <div style="font-weight:700; margin-bottom:8px">Cambiar contraseña</div>
+      <label>Contraseña actual</label>
       <input type="password" id="cp-current" autocomplete="current-password">
-      <label>Nueva contraseÃ±a</label>
+      <label>Nueva contraseña</label>
       <input type="password" id="cp-new" autocomplete="new-password">
       <div style="height:10px"></div>
-      <button class="btn primary" onclick="doChangePass()">Guardar nueva contraseÃ±a</button>
+      <button class="btn primary" onclick="doChangePass()">Guardar nueva contraseña</button>
       <div class="msg" id="cp-msg"></div>
     </div>
     <div id="dash-empty" class="card empty" style="display:none"></div>
     <div id="dash-content" style="display:none">
 
-      <!-- Comparativa mes actual vs. mismo perÃ­odo del mes anterior -->
+      <!-- Comparativa mes actual vs. mismo período del mes anterior -->
       <div class="card" id="cmp-card" style="display:none">
         <div class="cmp">
-          <div class="arrow" id="cmp-arrow">â–²</div>
+          <div class="arrow" id="cmp-arrow">▲</div>
           <div style="flex:1">
             <div class="lb" id="cmp-title">Este mes</div>
             <div class="big" id="cmp-current">RD$ 0</div>
           </div>
           <div style="flex:1;text-align:right">
-            <div class="lb">Mismo perÃ­odo mes anterior</div>
+            <div class="lb">Mismo período mes anterior</div>
             <div class="big" id="cmp-prev">RD$ 0</div>
           </div>
         </div>
@@ -330,7 +330,7 @@
       </div>
 
       <div class="card">
-        <div style="font-weight:700; margin-bottom:8px">Actividad (Ãºltimos 12 meses)</div>
+        <div style="font-weight:700; margin-bottom:8px">Actividad (últimos 12 meses)</div>
         <canvas id="chart"></canvas>
         <div class="chart-legend">Facturado por mes (RD$)</div>
       </div>
@@ -365,14 +365,14 @@
       </div>
     </div>
 
-    <!-- MÃ³dulos: siempre visible dentro de dash-view -->
+    <!-- Módulos: siempre visible dentro de dash-view -->
     <div id="mods-section">
       <div class="mod-tabs" id="mod-tabs"></div>
 
       <div class="mod-panel" id="mod-clientes">
         <div class="card">
-          <div style="font-weight:700;margin-bottom:4px">ðŸ‘¥ Clientes / Cuentas por cobrar</div>
-          <div class="muted" style="font-size:12px;margin-bottom:10px">Saldos pendientes y antigÃ¼edad por cliente. RecuÃ©rdale el pago por WhatsApp.</div>
+          <div style="font-weight:700;margin-bottom:4px">👥 Clientes / Cuentas por cobrar</div>
+          <div class="muted" style="font-size:12px;margin-bottom:10px">Saldos pendientes y antigüedad por cliente. Recuérdale el pago por WhatsApp.</div>
           <div class="grid2">
             <div class="stat c-blue"><div class="l">Clientes</div><div class="v" id="cl-count">0</div></div>
             <div class="stat c-red"><div class="l">Con saldo</div><div class="v" id="cl-deudores">0</div></div>
@@ -381,15 +381,15 @@
           </div>
         </div>
         <div class="card">
-          <input type="text" id="clientes-search" placeholder="Buscar por nombre o telÃ©fonoâ€¦" oninput="renderClientesList(clData)" style="width:100%;margin-bottom:10px">
+          <input type="text" id="clientes-search" placeholder="Buscar por nombre o teléfono…" oninput="renderClientesList(clData)" style="width:100%;margin-bottom:10px">
           <div id="clientes-list"></div>
         </div>
       </div>
 
       <div class="mod-panel" id="mod-docs">
         <div class="card">
-          <div style="font-weight:700;margin-bottom:4px">ðŸ“„ Documentos</div>
-          <div class="muted" style="font-size:12px;margin-bottom:10px">GestiÃ³n de documentos del negocio. Se generan con los datos de tus clientes y trabajos.</div>
+          <div style="font-weight:700;margin-bottom:4px">📄 Documentos</div>
+          <div class="muted" style="font-size:12px;margin-bottom:10px">Gestión de documentos del negocio. Se generan con los datos de tus clientes y trabajos.</div>
           <div id="docs-list"></div>
         </div>
       </div>
@@ -397,35 +397,35 @@
       <div class="mod-panel" id="mod-conduce">
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
-            <div style="font-weight:700">ðŸ“¦ Conduces de entrega</div>
+            <div style="font-weight:700">📦 Conduces de entrega</div>
             <button class="btn primary" onclick="openDocModal('conduce')">+ Generar conduce</button>
           </div>
-          <div class="muted" style="font-size:12px;margin-bottom:10px">Constancia de entrega de mercancÃ­a: detalle de productos, cantidades y firma de recibido.</div>
-          <div id="conduces-list">Cargandoâ€¦</div>
+          <div class="muted" style="font-size:12px;margin-bottom:10px">Constancia de entrega de mercancía: detalle de productos, cantidades y firma de recibido.</div>
+          <div id="conduces-list">Cargando…</div>
         </div>
       </div>
 
       <div class="mod-panel" id="mod-inventario">
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
-            <div style="font-weight:700">ðŸ“Š Inventario â€” Entradas de mercancÃ­a</div>
+            <div style="font-weight:700">📊 Inventario — Entradas de mercancía</div>
             <button class="btn primary" onclick="openStockEntryModal()">+ Registrar entrada</button>
           </div>
-          <div class="muted" style="font-size:12px;margin-bottom:10px">Stock actual y registro de compras a proveedores. Suma al inventario del catÃ¡logo.</div>
-          <div id="inventario-list">Cargandoâ€¦</div>
+          <div class="muted" style="font-size:12px;margin-bottom:10px">Stock actual y registro de compras a proveedores. Suma al inventario del catálogo.</div>
+          <div id="inventario-list">Cargando…</div>
           <div id="stock-entry-form" style="display:none;margin-top:10px;padding:10px;border:1px dashed #cbd5e1;border-radius:8px"></div>
         </div>
       </div>
 
       <div class="mod-panel" id="mod-permisos">
         <div class="card">
-          <div style="font-weight:700;margin-bottom:8px">ðŸ” Permisos del operador (modo vendedor)</div>
-          <div class="muted" style="font-size:12px;margin-bottom:12px">Configura quÃ© puede hacer un operador en la app mÃ³vil. Se sincroniza al dispositivo.</div>
-          <div id="perms-panel-body">Cargandoâ€¦</div>
+          <div style="font-weight:700;margin-bottom:8px">🔐 Permisos del operador (modo vendedor)</div>
+          <div class="muted" style="font-size:12px;margin-bottom:12px">Configura qué puede hacer un operador en la app móvil. Se sincroniza al dispositivo.</div>
+          <div id="perms-panel-body">Cargando…</div>
         </div>
         <div class="card" style="margin-top:12px">
-          <div style="font-weight:700;margin-bottom:8px">ðŸ‘¥ Usuarios del negocio</div>
-          <div id="users-list">Cargandoâ€¦</div>
+          <div style="font-weight:700;margin-bottom:8px">👥 Usuarios del negocio</div>
+          <div id="users-list">Cargando…</div>
           <div style="margin-top:8px"><button class="btn primary" onclick="openUserModal()">+ Crear usuario</button></div>
         </div>
       </div>
@@ -433,17 +433,17 @@
       <div class="mod-panel" id="mod-gps">
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px">
-            <div style="font-weight:700">ðŸ“¡ GPS â€” Flota</div>
+            <div style="font-weight:700">📡 GPS — Flota</div>
             <button class="doc-soon go" onclick="refreshGps()">Actualizar</button>
           </div>
-          <div class="muted" style="font-size:12px;margin-bottom:10px">UbicaciÃ³n en tiempo real de los operadores. Se actualiza cada 30 segundos.</div>
+          <div class="muted" style="font-size:12px;margin-bottom:10px">Ubicación en tiempo real de los operadores. Se actualiza cada 30 segundos.</div>
           <div id="gps-list"></div>
         </div>
       </div>
 
       <div class="mod-panel" id="mod-contab">
         <div class="card">
-          <div style="font-weight:700;margin-bottom:4px">ðŸ“’ Contabilidad</div>
+          <div style="font-weight:700;margin-bottom:4px">📒 Contabilidad</div>
           <div class="muted" style="font-size:12px;margin-bottom:10px">Resumen financiero de tu negocio.</div>
           <div class="grid2">
             <div class="stat c-green"><div class="l">Ingresos totales</div><div class="v" id="c-ingresos">RD$ 0</div></div>
@@ -462,8 +462,8 @@
 
       <div class="mod-panel" id="mod-finanzas">
         <div class="card">
-          <div style="font-weight:700;margin-bottom:4px">ðŸ’° Finanzas</div>
-          <div class="muted" style="font-size:12px;margin-bottom:10px">Vista financiera de tu negocio con detalle por operaciÃ³n.</div>
+          <div style="font-weight:700;margin-bottom:4px">💰 Finanzas</div>
+          <div class="muted" style="font-size:12px;margin-bottom:10px">Vista financiera de tu negocio con detalle por operación.</div>
           <div class="grid2">
             <div class="stat c-green"><div class="l">Ventas</div><div class="v" id="f-ventas">0</div></div>
             <div class="stat c-blue"><div class="l">Cotizaciones</div><div class="v" id="f-cotizaciones">0</div></div>
@@ -480,22 +480,22 @@
           <div id="f-sincosto" style="display:none;margin-top:10px;font-size:12px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px"></div>
         </div>
         <div class="card">
-          <div style="font-weight:700;margin-bottom:8px">Ãšltimas operaciones</div>
+          <div style="font-weight:700;margin-bottom:8px">Últimas operaciones</div>
           <div id="f-rec"></div>
         </div>
       </div>
 
       <div class="mod-panel" id="mod-garantias">
         <div class="card">
-          <div style="font-weight:700;margin-bottom:4px">ðŸ›¡ï¸ GarantÃ­as</div>
-          <div class="muted" style="font-size:12px;margin-bottom:10px">Operaciones con saldo pendiente que cuentan con garantÃ­a respaldatoria.</div>
+          <div style="font-weight:700;margin-bottom:4px">🛡️ Garantías</div>
+          <div class="muted" style="font-size:12px;margin-bottom:10px">Operaciones con saldo pendiente que cuentan con garantía respaldatoria.</div>
           <div class="grid2">
             <div class="stat c-amber"><div class="l">Con saldo</div><div class="v" id="g-count">0</div></div>
             <div class="stat c-red"><div class="l">Total pendiente</div><div class="v" id="g-monto">RD$ 0</div></div>
           </div>
         </div>
         <div class="card">
-          <div style="font-weight:700;margin-bottom:8px">Operaciones con garantÃ­a</div>
+          <div style="font-weight:700;margin-bottom:8px">Operaciones con garantía</div>
           <div id="g-list"></div>
         </div>
       </div>
@@ -507,7 +507,7 @@
     <div class="modal-box">
       <div style="font-weight:700; margin-bottom:6px" id="doc-modal-title">Generar documento</div>
       <div id="doc-fields"></div>
-      <input type="text" id="doc-search" placeholder="Buscar cliente o operaciÃ³nâ€¦" style="width:100%;margin-bottom:8px">
+      <input type="text" id="doc-search" placeholder="Buscar cliente o operación…" style="width:100%;margin-bottom:8px">
       <div id="doc-jobs" style="max-height:220px;overflow:auto;margin-bottom:10px"></div>
       <div class="msg err" id="doc-err" style="display:none;margin-bottom:8px"></div>
       <div style="display:flex;gap:8px">
@@ -523,13 +523,13 @@
       <div style="font-weight:700;margin-bottom:12px" id="user-modal-title">Crear usuario</div>
       <div id="user-form">
         <label>Nombre</label>
-        <input type="text" id="u-name" placeholder="Ej. Pedro LÃ³pez">
+        <input type="text" id="u-name" placeholder="Ej. Pedro López">
         <label>Usuario (para entrar al portal)</label>
         <input type="text" id="u-username" placeholder="Ej. pedro" autocomplete="off">
         <label>Rol</label>
         <select id="u-role" style="width:100%;padding:12px;border:1px solid rgba(157,176,201,.3);border-radius:12px;font-size:16px;background:rgba(8,12,24,.72);color:var(--ink)">
           <option value="empleado">Empleado</option>
-          <option value="owner">DueÃ±o (mismo acceso total)</option>
+          <option value="owner">Dueño (mismo acceso total)</option>
         </select>
         <div style="height:12px"></div>
         <button class="btn primary" onclick="createUser()">Crear usuario</button>
@@ -538,12 +538,12 @@
       <div id="user-result" style="display:none">
         <div class="msg ok" style="text-align:left">Usuario creado. Guarda estas credenciales: se muestran una sola vez.</div>
         <div style="background:rgba(255,255,255,.04);border:1px solid rgba(157,176,201,.22);border-radius:12px;padding:14px;margin:12px 0">
-          <div class="t-row"><span>Usuario</span><b id="res-username">â€”</b></div>
-          <div class="t-row"><span>ContraseÃ±a</span><b id="res-password">â€”</b></div>
+          <div class="t-row"><span>Usuario</span><b id="res-username">—</b></div>
+          <div class="t-row"><span>Contraseña</span><b id="res-password">—</b></div>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn primary" style="flex:1" onclick="copyCreds()">ðŸ“‹ Copiar</button>
-          <button class="btn primary" style="flex:1;background:#25D366" onclick="shareWhatsApp()">ðŸ’¬ WhatsApp</button>
+          <button class="btn primary" style="flex:1" onclick="copyCreds()">📋 Copiar</button>
+          <button class="btn primary" style="flex:1;background:#25D366" onclick="shareWhatsApp()">💬 WhatsApp</button>
         </div>
         <div class="msg" id="res-copy"></div>
         <button class="btn" style="margin-top:10px;background:var(--line);color:var(--ink)" onclick="closeUserModal()">Cerrar</button>
@@ -836,7 +836,7 @@ function fmtWhen(iso) {
 function doPrint() {
   const ph = document.getElementById('ph-name'), pd = document.getElementById('ph-date');
   const biz = document.getElementById('dash-name').textContent;
-  ph.textContent = biz === 'CotizaTec' ? 'Reporte de ventas' : 'Reporte de ventas â€” ' + biz;
+  ph.textContent = biz === 'CotizaTec' ? 'Reporte de ventas' : 'Reporte de ventas — ' + biz;
   pd.textContent = new Date().toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' });
   window.print();
 }
@@ -851,7 +851,7 @@ function setLoginLoading(on) {
   const btn = document.getElementById('login-btn');
   if (!btn) return;
   btn.disabled = on;
-  btn.textContent = on ? 'Entrandoâ€¦' : 'Entrar';
+  btn.textContent = on ? 'Entrando…' : 'Entrar';
 }
 function drawChart(series) {
   const cv = document.getElementById('chart');
@@ -957,28 +957,28 @@ async function doChangePass() {
   const j = await api('/api/client/change-password', { method: 'POST', body: JSON.stringify({ currentPassword: cur, newPassword: next }) });
   if (!j || !j.ok) {
     msg.className = 'msg err';
-    msg.textContent = (j && j.error) || 'No se pudo cambiar la contraseÃ±a.';
+    msg.textContent = (j && j.error) || 'No se pudo cambiar la contraseña.';
     return;
   }
   msg.className = 'msg ok';
-  msg.textContent = 'Â¡ContraseÃ±a actualizada!';
+  msg.textContent = '¡Contraseña actualizada!';
   document.getElementById('cp-current').value = '';
   document.getElementById('cp-new').value = '';
 }
 
-// ===== CatÃ¡logo de documentos del portal (mÃ³dulo 'documentos') =====
-// La generaciÃ³n de cada documento se hace en la web con los datos del negocio
-// (cliente, trabajo, montos, saldo). 'Carta de Saldo' y 'Debo y PagarÃ©' ya
-// se pueden generar; los demÃ¡s llegan como prÃ³ximamente.
+// ===== Catálogo de documentos del portal (módulo 'documentos') =====
+// La generación de cada documento se hace en la web con los datos del negocio
+// (cliente, trabajo, montos, saldo). 'Carta de Saldo' y 'Debo y Pagaré' ya
+// se pueden generar; los demás llegan como próximamente.
 const DOC_TYPES = [
-  { key: 'testigos', icon: 'ðŸªª', name: 'Testigos', desc: 'Registrar nombres, documentos de identidad y firmas de los testigos que validan un contrato o pagarÃ©.', enabled: true, needs: 'testigos' },
-  { key: 'pagare-notarial', icon: 'ðŸ›ï¸', name: 'PagarÃ© Notarial', desc: 'Deuda formalizada ante notario con fuerza ejecutiva para cobro judicial.', enabled: true, needs: 'fecha' },
-  { key: 'pagare-garantia', icon: 'ðŸ›¡ï¸', name: 'PagarÃ© con GarantÃ­a', desc: 'Compromiso de pago respaldado por un bien (vehÃ­culo, propiedad, electrodomÃ©stico).', enabled: true, needs: 'bien' },
-  { key: 'entrega-voluntaria', icon: 'ðŸ¤', name: 'Entrega Voluntaria', desc: 'Acuerdo de entrega voluntaria del bien para saldar la deuda sin juicio.', enabled: true, needs: 'bien' },
-  { key: 'debo-pagare', icon: 'ðŸ“', name: 'Debo y PagarÃ©', desc: 'Promesa simple y formal de pago con monto y fecha de cumplimiento.', enabled: true, needs: 'fecha' },
-  { key: 'debo-pagare-garantia', icon: 'ðŸ”', name: 'Debo y PagarÃ© con GarantÃ­a', desc: 'Compromiso de pago incluyendo una prenda o bien como aval.', enabled: true, needs: 'bienfecha' },
-  { key: 'intimacion', icon: 'ðŸ“©', name: 'IntimaciÃ³n de Pago', desc: 'NotificaciÃ³n legal de cobro por cuotas vencidas antes de una demanda.', enabled: true },
-  { key: 'carta-saldo', icon: 'âœ…', name: 'Carta de Saldo', desc: 'CertificaciÃ³n de finiquito: el cliente pagÃ³ la totalidad y queda libre.', enabled: true }
+  { key: 'testigos', icon: '🪪', name: 'Testigos', desc: 'Registrar nombres, documentos de identidad y firmas de los testigos que validan un contrato o pagaré.', enabled: true, needs: 'testigos' },
+  { key: 'pagare-notarial', icon: '🏛️', name: 'Pagaré Notarial', desc: 'Deuda formalizada ante notario con fuerza ejecutiva para cobro judicial.', enabled: true, needs: 'fecha' },
+  { key: 'pagare-garantia', icon: '🛡️', name: 'Pagaré con Garantía', desc: 'Compromiso de pago respaldado por un bien (vehículo, propiedad, electrodoméstico).', enabled: true, needs: 'bien' },
+  { key: 'entrega-voluntaria', icon: '🤝', name: 'Entrega Voluntaria', desc: 'Acuerdo de entrega voluntaria del bien para saldar la deuda sin juicio.', enabled: true, needs: 'bien' },
+  { key: 'debo-pagare', icon: '📝', name: 'Debo y Pagaré', desc: 'Promesa simple y formal de pago con monto y fecha de cumplimiento.', enabled: true, needs: 'fecha' },
+  { key: 'debo-pagare-garantia', icon: '🔐', name: 'Debo y Pagaré con Garantía', desc: 'Compromiso de pago incluyendo una prenda o bien como aval.', enabled: true, needs: 'bienfecha' },
+  { key: 'intimacion', icon: '📩', name: 'Intimación de Pago', desc: 'Notificación legal de cobro por cuotas vencidas antes de una demanda.', enabled: true },
+  { key: 'carta-saldo', icon: '✅', name: 'Carta de Saldo', desc: 'Certificación de finiquito: el cliente pagó la totalidad y queda libre.', enabled: true }
 ];
 const DOC_ICON = {
   'testigos': ['<path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/>', 'rgba(59,130,246,.16)', '#93c5fd'],
@@ -998,11 +998,11 @@ function docFieldsHTML(type) {
   let h = '<label class="doc-lbl" for="doc-ciudad">Lugar donde se firma y sella</label>' +
     '<input type="text" id="doc-ciudad" placeholder="Ej. Santiago de los Caballeros" style="width:100%;margin-bottom:8px">';
   if (BIEN_TYPES[type]) {
-    h += '<label class="doc-lbl" for="doc-bien">Bien en garantÃ­a</label>' +
-      '<textarea id="doc-bien" rows="2" placeholder="Ej.: VehÃ­culo Toyota Corolla 2018, chasis No. ________" style="width:100%;margin-bottom:8px"></textarea>';
+    h += '<label class="doc-lbl" for="doc-bien">Bien en garantía</label>' +
+      '<textarea id="doc-bien" rows="2" placeholder="Ej.: Vehículo Toyota Corolla 2018, chasis No. ________" style="width:100%;margin-bottom:8px"></textarea>';
   }
   if (FECHA_TYPES[type]) {
-    h += '<label class="doc-lbl" for="doc-fecha">Fecha lÃ­mite de pago (opcional)</label>' +
+    h += '<label class="doc-lbl" for="doc-fecha">Fecha límite de pago (opcional)</label>' +
       '<input type="date" id="doc-fecha" style="width:100%;margin-bottom:8px">';
   }
   if (type === 'testigos') {
@@ -1010,26 +1010,26 @@ function docFieldsHTML(type) {
     for (let i = 1; i <= 5; i++) {
       h += '<div style="display:flex;gap:6px;margin-bottom:4px">' +
         '<input type="text" id="doc-tw' + i + '" placeholder="Nombre del testigo ' + i + '" style="flex:1;min-width:0">' +
-        '<input type="text" id="doc-td' + i + '" placeholder="CÃ©dula" style="width:130px">' +
+        '<input type="text" id="doc-td' + i + '" placeholder="Cédula" style="width:130px">' +
       '</div>';
     }
   }
   return h;
 }
 
-// ===== MÃ³dulos â€” tabs =====
+// ===== Módulos — tabs =====
 let activeMod = null;
 let gpsTimer = null;
 const MOD_DEFS = [
-  { key: 'clientes', icon: 'ðŸ‘¥', label: 'Clientes', render: renderClientesContent },
-  { key: 'docs', icon: 'ðŸ“„', label: 'Documentos', render: renderDocsContent },
-  { key: 'conduce', icon: 'ðŸ“¦', label: 'Conduces', render: renderConducesContent },
-  { key: 'inventario', icon: 'ðŸ“Š', label: 'Inventario', render: renderInventarioContent },
-  { key: 'gps', icon: 'ðŸ“¡', label: 'GPS', render: renderGpsContent },
-  { key: 'contab', icon: 'ðŸ“’', label: 'Contabilidad', render: renderContabContent },
-  { key: 'finanzas', icon: 'ðŸ’°', label: 'Finanzas', render: renderFinanzasContent },
-  { key: 'garantias', icon: 'ðŸ›¡ï¸', label: 'GarantÃ­as', render: renderGarantiasContent },
-  { key: 'permisos', icon: 'ðŸ”', label: 'Permisos', render: renderPermisosContent }
+  { key: 'clientes', icon: '👥', label: 'Clientes', render: renderClientesContent },
+  { key: 'docs', icon: '📄', label: 'Documentos', render: renderDocsContent },
+  { key: 'conduce', icon: '📦', label: 'Conduces', render: renderConducesContent },
+  { key: 'inventario', icon: '📊', label: 'Inventario', render: renderInventarioContent },
+  { key: 'gps', icon: '📡', label: 'GPS', render: renderGpsContent },
+  { key: 'contab', icon: '📒', label: 'Contabilidad', render: renderContabContent },
+  { key: 'finanzas', icon: '💰', label: 'Finanzas', render: renderFinanzasContent },
+  { key: 'garantias', icon: '🛡️', label: 'Garantías', render: renderGarantiasContent },
+  { key: 'permisos', icon: '🔐', label: 'Permisos', render: renderPermisosContent }
 ];
 
 function renderModTabs(modules, report) {
@@ -1074,8 +1074,8 @@ function renderDocsContent(report) {
   if (!el) return;
   const items = DOC_TYPES.map(function (d) {
     const badge = d.enabled
-      ? '<button class="doc-soon go" onclick="openDocModal(\'' + d.key + '\')">Generar â€º</button>'
-      : '<div class="doc-soon">ðŸ”’ PrÃ³ximamente</div>';
+      ? '<button class="doc-soon go" onclick="openDocModal(\'' + d.key + '\')">Generar ›</button>'
+      : '<div class="doc-soon">🔒 Próximamente</div>';
     const ic = DOC_ICON[d.key] || ['', 'rgba(148,163,184,.15)', '#cbd5e1'];
     return '<div class="doc-item' + (d.enabled ? ' doc-live' : '') + '">' +
       '<div class="doc-icon" style="background:' + ic[1] + ';color:' + ic[2] + '">' +
@@ -1085,7 +1085,7 @@ function renderDocsContent(report) {
         '<div style="font-weight:600;font-size:14px">' + d.name + '</div>' +
         '<div class="muted" style="font-size:12px">' + d.desc + '</div>' +
       '</div>' +
-      '<div class="doc-chev">â†’</div>' +
+      '<div class="doc-chev">→</div>' +
       badge +
     '</div>';
   }).join('');
@@ -1101,10 +1101,10 @@ async function renderConducesContent(report) {
     if (j && j.ok) conduces = j.conduces || [];
   } catch (e) { conduces = []; }
   if (!conduces.length) {
-    el.innerHTML = '<div class="muted" style="padding:12px 0">AÃºn no hay conduces. Genera uno con el botÃ³n de arriba.</div>';
+    el.innerHTML = '<div class="muted" style="padding:12px 0">Aún no hay conduces. Genera uno con el botón de arriba.</div>';
     return;
   }
-  el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>NÂº</th><th>Cliente</th><th>Fecha</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
+  el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Nº</th><th>Cliente</th><th>Fecha</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
     conduces.map(function (d) {
       const st = d.status || 'emitido';
       const color = st === 'anulado' ? '#ef4444' : (st === 'emitido' ? '#10b981' : '#6b7280');
@@ -1129,7 +1129,7 @@ async function viewConduce(id) {
 }
 
 async function anularConduce(id) {
-  if (!confirm('Â¿Anular este conduce?')) return;
+  if (!confirm('¿Anular este conduce?')) return;
   try {
     const j = await api('/api/conduces/' + encodeURIComponent(id) + '/anular', { method: 'PUT' });
     if (!j || !j.ok) { alert((j && j.error) || 'No se pudo anular.'); return; }
@@ -1145,12 +1145,12 @@ async function renderInventarioContent(report) {
     if (d && d.ok) catalog = d.catalog || [];
   } catch (e) { catalog = []; }
   if (!catalog.length) {
-    el.innerHTML = '<div class="muted" style="padding:12px 0">Sin productos sincronizados. Abre la app para sincronizar el catÃ¡logo.</div>';
+    el.innerHTML = '<div class="muted" style="padding:12px 0">Sin productos sincronizados. Abre la app para sincronizar el catálogo.</div>';
     return;
   }
   el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>Producto</th><th style="text-align:right">Stock</th><th style="text-align:right">Entrada</th></tr></thead><tbody>' +
     catalog.map(function (p) {
-      const stock = (p.stock == null ? 'â€”' : p.stock);
+      const stock = (p.stock == null ? '—' : p.stock);
       return '<tr>' +
         '<td style="padding:4px 2px">' + esc(p.name || '-') + '</td>' +
         '<td style="padding:4px 2px;text-align:right;font-weight:600">' + stock + '</td>' +
@@ -1201,7 +1201,7 @@ function filterStockProducts() {
   let html = '';
   matches.forEach(function (p) {
     html += '<div style="padding:6px 8px;cursor:pointer;border-bottom:1px solid rgba(157,176,201,.1)" onclick="selectStockProduct(\'' + esc(p.id) + '\',\'' + esc(p.name || '') + '\',' + (p.stock == null ? 'null' : p.stock) + ')">' +
-      esc(p.name || '-') + ' <span style="color:var(--muted);font-size:11px">(stock: ' + (p.stock == null ? 'â€”' : p.stock) + ')</span></div>';
+      esc(p.name || '-') + ' <span style="color:var(--muted);font-size:11px">(stock: ' + (p.stock == null ? '—' : p.stock) + ')</span></div>';
   });
   // option to create new
   const exactMatch = _seCatalog.some(function (p) { return (p.name || '').toLowerCase() === q; });
@@ -1263,9 +1263,9 @@ function openPermsModal(userId) {
     const body = document.getElementById('perms-body');
     body.innerHTML =
       '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-conduce" ' + (p.canCreateConduce ? 'checked' : '') + '> Permitir crear conduces</label>' +
-      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-stock" ' + (p.canRegisterStockEntry ? 'checked' : '') + '> Permitir registrar entradas de mercancÃ­a</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-stock" ' + (p.canRegisterStockEntry ? 'checked' : '') + '> Permitir registrar entradas de mercancía</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-costs" ' + (p.showCosts ? 'checked' : '') + '> Mostrar costos de compra</label>' +
-      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-margins" ' + (p.showMargins ? 'checked' : '') + '> Mostrar mÃ¡rgenes de ganancia</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-margins" ' + (p.showMargins ? 'checked' : '') + '> Mostrar márgenes de ganancia</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-pin" ' + (p.requireSupervisorPin ? 'checked' : '') + '> Requerir PIN de supervisor para anular/modificar precios</label>';
   }).catch(function (e) { document.getElementById('perms-msg').textContent = e.message; });
 }
@@ -1295,9 +1295,9 @@ async function renderPermisosContent(report) {
     } catch (e) {}
     body.innerHTML =
       '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-conduce" ' + (p.canCreateConduce ? 'checked' : '') + '> Permitir crear conduces</label>' +
-      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-stock" ' + (p.canRegisterStockEntry ? 'checked' : '') + '> Permitir registrar entradas de mercancÃ­a</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-stock" ' + (p.canRegisterStockEntry ? 'checked' : '') + '> Permitir registrar entradas de mercancía</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-costs" ' + (p.showCosts ? 'checked' : '') + '> Mostrar costos de compra</label>' +
-      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-margins" ' + (p.showMargins ? 'checked' : '') + '> Mostrar mÃ¡rgenes de ganancia</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-margins" ' + (p.showMargins ? 'checked' : '') + '> Mostrar márgenes de ganancia</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-pin" ' + (p.requireSupervisorPin ? 'checked' : '') + '> Requerir PIN de supervisor para anular/modificar precios</label>' +
       '<div style="margin-top:10px"><button class="btn primary" onclick="savePermsPanel()">Guardar permisos</button></div>' +
       '<div class="msg" id="pp-msg"></div>';
@@ -1317,7 +1317,7 @@ async function savePermsPanel() {
     const j = await api('/api/client/operator-permissions', { method: 'PUT', body: JSON.stringify({ permissions: perms }) });
     const msg = document.getElementById('pp-msg');
     if (!j || !j.ok) { if (msg) msg.textContent = (j && j.error) || 'Error'; return; }
-    if (msg) msg.textContent = 'Permisos guardados. Se sincronizarÃ¡n a la app.';
+    if (msg) msg.textContent = 'Permisos guardados. Se sincronizarán a la app.';
     setTimeout(function () { if (msg) msg.textContent = ''; }, 2000);
   } catch (e) { const msg = document.getElementById('pp-msg'); if (msg) msg.textContent = e.message; }
 }
@@ -1367,29 +1367,29 @@ async function toggleUser(userId) {
 }
 
 async function resetUserPass(userId) {
-  if (!confirm('Â¿Resetear la contraseÃ±a de este usuario?')) return;
+  if (!confirm('¿Resetear la contraseña de este usuario?')) return;
   const j = await api('/api/client/users/' + encodeURIComponent(userId) + '/reset-password', { method: 'POST' });
   if (!j || !j.ok) { alert((j && j.error) || 'No se pudo resetear la clave.'); return; }
   myCreds = { username: '', password: j.resetPassword };
   document.getElementById('user-modal-title').textContent = 'Clave reseteada';
-  document.getElementById('res-username').textContent = 'â€”';
+  document.getElementById('res-username').textContent = '—';
   document.getElementById('res-password').textContent = j.resetPassword;
   document.getElementById('user-form').style.display = 'none';
   document.getElementById('user-result').style.display = 'block';
 }
 
 function copyCreds() {
-  const txt = 'Tu acceso al panel CotizaTec\nUsuario: ' + myCreds.username + '\nContraseÃ±a: ' + myCreds.password;
+  const txt = 'Tu acceso al panel CotizaTec\nUsuario: ' + myCreds.username + '\nContraseña: ' + myCreds.password;
   const el = document.createElement('textarea'); el.value = txt; document.body.appendChild(el); el.select();
   try { document.execCommand('copy'); } catch (e) {}
   document.body.removeChild(el);
   if (navigator.clipboard) { navigator.clipboard.writeText(txt).catch(function(){}); }
-  document.getElementById('res-copy').textContent = 'Â¡Copiado!';
+  document.getElementById('res-copy').textContent = '¡Copiado!';
   document.getElementById('res-copy').className = 'msg ok';
 }
 
 function shareWhatsApp() {
-  const txt = encodeURIComponent('Tu acceso al panel de CotizaTec\nUsuario: ' + myCreds.username + '\nContraseÃ±a: ' + myCreds.password + '\nEntra en: /panel');
+  const txt = encodeURIComponent('Tu acceso al panel de CotizaTec\nUsuario: ' + myCreds.username + '\nContraseña: ' + myCreds.password + '\nEntra en: /panel');
   window.open('https://wa.me/?text=' + txt, '_blank');
 }
 
@@ -1408,7 +1408,7 @@ function doLogout() {
   showAuth();
 }
 
-// Iniciar automÃ¡ticamente si ya hay sesiÃ³n, o en modo VISTA administrativa (#view=)
+// Iniciar automáticamente si ya hay sesión, o en modo VISTA administrativa (#view=)
 window.addEventListener('DOMContentLoaded', function () {
   var loginUser = document.getElementById('login-user');
   var loginPass = document.getElementById('login-pass');
@@ -1417,7 +1417,7 @@ window.addEventListener('DOMContentLoaded', function () {
 
   const vp = new URLSearchParams(location.hash.replace(/^#/, '')).get('view');
   if (vp) {
-    // Vista como cliente (administrador): solo lectura, no persiste sesiÃ³n
+    // Vista como cliente (administrador): solo lectura, no persiste sesión
     token = vp;
     isView = true;
     document.getElementById('view-banner').style.display = 'block';
@@ -1432,7 +1432,7 @@ window.addEventListener('DOMContentLoaded', function () {
     return;
   }
   if (token) {
-    // probar sesiÃ³n cargando el reporte
+    // probar sesión cargando el reporte
     (async function () {
       const j = await api('/api/client/report');
       if (j && j.ok) { showDash(); initUsers(); loadReport(); }
@@ -1454,7 +1454,7 @@ window.addEventListener('DOMContentLoaded', function () {
   </div>
   <div id="stock-entry-modal" style="display:none;position:fixed;inset:0;background:rgba(3,6,12,.75);z-index:50;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px)">
     <div style="background:rgba(19,27,50,.97);border:1px solid rgba(0,240,255,.3);border-radius:18px;padding:20px;max-width:460px;width:100%;box-shadow:0 22px 60px rgba(0,0,0,.55);color:var(--ink);max-height:90vh;overflow:auto">
-      <div style="font-weight:700;margin-bottom:12px" id="se-title">Registrar entrada de mercancÃ­a</div>
+      <div style="font-weight:700;margin-bottom:12px" id="se-title">Registrar entrada de mercancía</div>
       <label class="doc-lbl">Producto</label>
       <select id="se-product" style="width:100%;padding:10px;border:1px solid rgba(157,176,201,.3);border-radius:10px;background:rgba(8,12,24,.72);color:var(--ink);margin-bottom:8px"></select>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
@@ -1462,7 +1462,7 @@ window.addEventListener('DOMContentLoaded', function () {
         <div><label class="doc-lbl">Costo unitario (opcional)</label><input type="number" step="0.01" min="0" id="se-cost" style="width:100%"></div>
       </div>
       <div style="margin-bottom:8px"><label class="doc-lbl">Proveedor (opcional)</label><input type="text" id="se-supplier" style="width:100%"></div>
-      <div style="margin-bottom:12px"><label class="doc-lbl">Nota / observaciÃ³n (opcional)</label><input type="text" id="se-notes" style="width:100%"></div>
+      <div style="margin-bottom:12px"><label class="doc-lbl">Nota / observación (opcional)</label><input type="text" id="se-notes" style="width:100%"></div>
       <div style="display:flex;gap:8px">
         <button class="btn primary" style="flex:1" onclick="submitStockEntryModal()">Guardar entrada</button>
         <button class="btn" style="flex:1;background:var(--line);color:var(--ink)" onclick="closeStockEntryModal()">Cancelar</button>
