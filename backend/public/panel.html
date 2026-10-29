@@ -1042,6 +1042,11 @@ async function renderInventarioContent(report) {
 }
 
 let _seCatalog = [];
+function closeStockEntryModal() {
+  const m = document.getElementById("stock-entry-modal");
+  if (m) m.style.display = "none";
+}
+
 async function openStockEntryModal(preselectId) {
   const modal = document.getElementById('stock-entry-modal');
   if (!modal) return;
@@ -1341,7 +1346,9 @@ window.addEventListener('DOMContentLoaded', function () {
     <div style="background:rgba(19,27,50,.97);border:1px solid rgba(0,240,255,.3);border-radius:18px;padding:20px;max-width:460px;width:100%;box-shadow:0 22px 60px rgba(0,0,0,.55);color:var(--ink);max-height:90vh;overflow:auto">
       <div style="font-weight:700;margin-bottom:12px" id="se-title">Registrar entrada de mercancía</div>
       <label class="doc-lbl">Producto</label>
-      <select id="se-product" style="width:100%;padding:10px;border:1px solid rgba(157,176,201,.3);border-radius:10px;background:rgba(8,12,24,.72);color:var(--ink);margin-bottom:8px"></select>
+      <input type="text" id="se-product-search" autocomplete="off" placeholder="Busca o escribe el nombre del artículo" onkeyup="filterStockProducts()" style="width:100%;padding:10px;border:1px solid rgba(157,176,201,.3);border-radius:10px;background:rgba(8,12,24,.72);color:var(--ink);margin-bottom:4px">
+      <input type="hidden" id="se-product-id">
+      <div id="se-product-list" style="display:none;border:1px solid rgba(157,176,201,.25);border-radius:10px;background:rgba(8,12,24,.85);margin-bottom:8px;max-height:180px;overflow:auto"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div><label class="doc-lbl">Cantidad a ingresar *</label><input type="number" step="1" min="1" id="se-qty" style="width:100%"></div>
         <div><label class="doc-lbl">Costo unitario (opcional)</label><input type="number" step="0.01" min="0" id="se-cost" style="width:100%"></div>
