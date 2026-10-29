@@ -732,30 +732,49 @@ function setLoginLoading(on) {
   btn.disabled = on;
   btn.textContent = on ? 'Entrando…' : 'Entrar';
 }
+let _lastChartSeries = null;
+let _chartResizeBound = false;
 function drawChart(series) {
   const cv = document.getElementById('chart');
   if (!cv || !series || !series.length) return;
+  _lastChartSeries = series;
+  if (!_chartResizeBound) {
+    _chartResizeBound = true;
+    window.addEventListener('resize', function () {
+      if (_lastChartSeries) drawChart(_lastChartSeries);
+    });
+  }
+  const w = Math.round(cv.clientWidth || 0);
+  if (!w) {
+    // el contenedor aun esta oculto; reintento cuando pinte
+    setTimeout(function () { if (_lastChartSeries) drawChart(_lastChartSeries); }, 150);
+    return;
+  }
   const dpr = window.devicePixelRatio || 1;
-  const w = cv.clientWidth || 300, h = 180;
-  cv.width = w * dpr; cv.height = h * dpr;
+  const h = 180;
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
   const ctx = cv.getContext('2d');
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
-  const max = Math.max.apply(null, series.map(s => s.facturado).concat([1]));
+  const max = Math.max.apply(null, series.map(function (t) { return t.facturado; }).concat([1]));
   const padL = 8, padR = 8, padT = 10, padB = 20;
   const cw = (w - padL - padR) / series.length;
-  series.forEach((s, i) => {
-    const bh = Math.max(2, (s.facturado / max) * (h - padT - padB));
-    const x = padL + i * cw + cw * 0.18;
-    const bw = cw * 0.64;
+  series.forEach(function (t, i) {
+    const bh = Math.max(2, Math.round((t.facturado / max) * (h - padT - padB)));
+    const x = Math.round(padL + i * cw + cw * 0.18);
+    const bw = Math.max(2, Math.round(cw * 0.64));
     const y = h - padB - bh;
     const isCur = i === series.length - 1;
     ctx.fillStyle = isCur ? '#6366f1' : '#c7d2fe';
     ctx.fillRect(x, y, bw, bh);
-    ctx.fillStyle = '#a8b8cd'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(s.label, padL + i * cw + cw / 2, h - 6);
+    ctx.fillStyle = '#a8b8cd';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(t.label || ''), Math.round(padL + i * cw + cw / 2), h - 6);
   });
 }
+
 function statusPill(s) {
   s = s || 'COTIZADO';
   const cls = s === 'CANCELADO' ? 'red' : s === 'COBRADO' ? 'green' : s === 'TRABAJANDO' ? 'amber' : 'gray';
