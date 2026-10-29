@@ -680,8 +680,190 @@ function renderClientesContent(report) {
 }
 
 function renderGpsContent(report) { /* placeholder */ }
-function renderContabContent(report) { /* placeholder */ }
-function renderFinanzasContent(report) { /* placeholder */ }
+let _contabMonthly = [];
+let _contabShowCosts = false;
+let _contabShowMargins = false;
+let _portalPerms = null;
+
+async function getPortalPerms() {
+  if (_portalPerms) return _portalPerms;
+  let p = { showCosts: false, showMargins: false };
+  try {
+    const j = await api('/api/client/operator-permissions');
+    if (j && j.ok && j.permissions) p = j.permissions;
+  } catch (e) { }
+  _portalPerms = p;
+  return p;
+}
+
+async function renderContabContent(report) {
+  const r = report || {};
+  const t = r.totals || {};
+  const perms = await getPortalPerms();
+  _contabShowCosts = (myRole === 'owner') || isView || !!perms.showCosts;
+  _contabShowMargins = (myRole === 'owner') || isView || !!perms.showMargins;
+  const set = function (id, val) { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('c-facturado', money(t.facturado || 0));
+  set('c-ingresos', money(t.facturado || 0));
+  set('c-cobrado', money(t.cobrado || 0));
+  set('c-porcobrar', money(t.porCobrar || 0));
+  set('c-gastos', _contabShowCosts ? money(t.gastado || 0) : '\u2014');
+  set('c-ganancia', (_contabShowCosts && _contabShowMargins) ? money(t.ganancia || 0) : '\u2014');
+  const margen = (t.facturado > 0) ? Math.round(((t.ganancia || 0) / t.facturado) * 100) : 0;
+  set('c-margen', _contabShowMargins ? (margen + '%') : '\u2014');
+  const sc = document.getElementById('c-sincosto');
+  if (sc) {
+    if (_contabShowCosts && t.sinCosto > 0) { sc.style.display = 'block'; sc.textContent = t.sinCosto + ' trabajo(s) sin costo asignado.'; }
+    else { sc.style.display = 'none'; }
+  }
+  renderContabMonthly(r.monthly || []);
+}
+
+function renderContabMonthly(monthly) {
+  _contabMonthly = monthly || [];
+  const section = document.getElementById('mod-contab');
+  if (!section) return;
+  if (!document.getElementById('c-monthly-card')) {
+    const box = document.createElement('div');
+    box.className = 'card';
+    box.id = 'c-monthly-card';
+    box.style.marginTop = '12px';
+    box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">' +
+      '<div style="font-weight:700">Estado de resultados mensual</div>' +
+      '<button class="btn small ghost" onclick="exportContabCSV()">Exportar CSV</button></div>' +
+      '<div id="c-monthly-body"></div>';
+    section.appendChild(box);
+  }
+  const el = document.getElementById('c-monthly-body');
+  if (!el) return;
+  if (!monthly.length) { el.innerHTML = '<div class="muted">Todavia sin datos mensuales.</div>'; return; }
+  const showCosts = _contabShowCosts, showMargins = _contabShowMargins;
+  let head = '<tr><th>Mes</th><th style="text-align:right">Facturado</th><th style="text-align:right">Cobrado</th>';
+  if (showCosts) head += '<th style="text-align:right">Gastado</th>';
+  if (showCosts && showMargins) head += '<th style="text-align:right">Ganancia</th>';
+  if (showMargins) head += '<th style="text-align:right">Margen</th>';
+  head += '<th style="text-align:right">Trab.</th></tr>';
+  const rows = monthly.slice(0, 14).map(function (m) {
+    const parts = String(m.month).split('-');
+    const label = MONTHS[Number(parts[1]) - 1] + ' ' + parts[0];
+    let html = '<tr><td style="padding:4px 2px;font-weight:600">' + label + '</td>' +
+      '<td style="padding:4px 2px;text-align:right">' + money(m.facturado) + '</td>' +
+      '<td style="padding:4px 2px;text-align:right">' + money(m.cobrado) + '</td>';
+    if (showCosts) html += '<td style="padding:4px 2px;text-align:right">' + money(m.gastado) + '</td>';
+    if (showCosts && showMargins) html += '<td style="padding:4px 2px;text-align:right">' + money(m.ganancia) + '</td>';
+    if (showMargins) {
+      const mg = m.facturado > 0 ? Math.round(((m.ganancia || 0) / m.facturado) * 100) : 0;
+      html += '<td style="padding:4px 2px;text-align:right">' + mg + '%</td>';
+    }
+    html += '<td style="padding:4px 2px;text-align:right">' + (m.trabajos || 0) + '</td></tr>';
+    return html;
+  }).join('');
+  el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table>';
+}
+
+function exportContabCSV() {
+  if (!_contabMonthly.length) { alert('No hay datos para exportar.'); return; }
+  const showCosts = _contabShowCosts, showMargins = _contabShowMargins;
+  let cols = ['Mes', 'Facturado', 'Cobrado'];
+  if (showCosts) cols.push('Gastado');
+  if (showCosts && showMargins) cols.push('Ganancia');
+  cols.push('Trabajos');
+  let csv = cols.join(',') + '\n';
+  _contabMonthly.forEach(function (m) {
+    const row = [m.month, m.facturado, m.cobrado];
+    if (showCosts) row.push(m.gastado);
+    if (showCosts && showMargins) row.push(m.ganancia);
+    row.push(m.trabajos);
+    csv += row.join(',') + '\n';
+  });
+  try {
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'contabilidad-cotizatec.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch (e) { alert('No se pudo exportar: ' + e.message); }
+}
+async function renderFinanzasContent(report) {
+  const r = report || {};
+  const t = r.totals || {};
+  const perms = await getPortalPerms();
+  const showCosts = (myRole === 'owner') || isView || !!perms.showCosts;
+  const showMargins = (myRole === 'owner') || isView || !!perms.showMargins;
+  const set = function (id, val) { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('f-ventas', t.ventas || 0);
+  set('f-cotizaciones', t.cotizaciones || 0);
+  set('f-cobrado', money(t.cobrado || 0));
+  set('f-porcobrar', money(t.porCobrar || 0));
+  set('f-ganancia', (showCosts && showMargins) ? money(t.ganancia || 0) : '\u2014');
+  set('f-gastado', showCosts ? money(t.gastado || 0) : '\u2014');
+  set('f-facturado', money(t.facturado || 0));
+  set('f-trabajos', t.trabajos || 0);
+  set('f-pendientes', t.pendientes || 0);
+  const sc = document.getElementById('f-sincosto');
+  if (sc) {
+    if (showCosts && t.sinCosto > 0) { sc.style.display = 'block'; sc.textContent = t.sinCosto + ' trabajo(s) sin costo asignado.'; }
+    else { sc.style.display = 'none'; }
+  }
+  const rec = document.getElementById('f-rec');
+  if (rec) {
+    const items = (r.recent || []).slice(0, 10);
+    if (!items.length) {
+      rec.innerHTML = '<div class="muted" style="padding:8px 0">Sin operaciones recientes.</div>';
+    } else {
+      let head = '<tr><th>Operacion</th><th>Fecha</th><th>Estado</th><th style="text-align:right">Total</th><th style="text-align:right">Saldo</th>';
+      if (showMargins) head += '<th style="text-align:right">Margen</th>';
+      head += '</tr>';
+      rec.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead>' + head + '</thead><tbody>' +
+        items.map(function (jx) {
+          let html = '<tr><td style="padding:4px 2px"><div style="font-weight:600">' + esc(jx.code || '') + '</div><div class="muted" style="font-size:11px">' + esc(jx.client || '') + '</div></td>' +
+            '<td style="padding:4px 2px">' + (jx.date ? new Date(jx.date).toLocaleDateString('es-DO') : '\u2014') + '</td>' +
+            '<td style="padding:4px 2px">' + statusPill(jx.status) + '</td>' +
+            '<td style="padding:4px 2px;text-align:right;font-weight:600">' + money(jx.total || 0) + '</td>' +
+            '<td style="padding:4px 2px;text-align:right">' + (Number(jx.balance) > 0 ? '<span style="color:#b91c1c">' + money(jx.balance) + '</span>' : money(0)) + '</td>';
+          if (showMargins) html += '<td style="padding:4px 2px;text-align:right">' + money(jx.margin || 0) + '</td>';
+          html += '</tr>';
+          return html;
+        }).join('') + '</tbody></table>';
+    }
+  }
+  renderCartera();
+}
+
+async function renderCartera() {
+  const section = document.getElementById('mod-finanzas');
+  if (!section) return;
+  if (!document.getElementById('f-cartera-card')) {
+    const box = document.createElement('div');
+    box.className = 'card';
+    box.id = 'f-cartera-card';
+    box.style.marginTop = '12px';
+    box.innerHTML = '<div style="font-weight:700;margin-bottom:8px">Cartera \u2014 quien debe</div><div id="f-cartera-body"><div class="muted">Cargando...</div></div>';
+    section.appendChild(box);
+  }
+  const el = document.getElementById('f-cartera-body');
+  if (!el) return;
+  let j = null;
+  try { j = await api('/api/client/clients'); } catch (e) { }
+  if (!j || !j.ok) { el.innerHTML = '<div class="muted">Cartera no disponible: ' + esc((j && j.error) || 'modulo de Clientes no contratado') + '.</div>'; return; }
+  const deudores = (j.clients || []).filter(function (c) { return (Number(c.balance) || 0) > 0; })
+    .sort(function (a, b) { return ((Number(b.balance) || 0) - (Number(a.balance) || 0)) || ((Number(b.daysOverdue) || 0) - (Number(a.daysOverdue) || 0)); })
+    .slice(0, 10);
+  if (!deudores.length) { el.innerHTML = '<div class="muted" style="color:#059669;font-weight:600">Al dia: nadie tiene saldo pendiente.</div>'; return; }
+  const biz = (document.getElementById('dash-name') || {}).textContent || 'CotizaTec';
+  el.innerHTML = deudores.map(function (c) {
+    const tel = String(c.phone || '').replace(/[^0-9]/g, '');
+    const txt = encodeURIComponent('Hola ' + c.name + ', le escribe ' + biz + '. Su saldo pendiente es ' + money(c.balance) + '. Podemos coordinar el pago? Gracias.');
+    const wa = tel ? '<a class="btn small ghost" style="margin-top:4px" target="_blank" rel="noopener" href="https://wa.me/' + tel + '?text=' + txt + '">Recordar</a>' : '<div class="muted" style="font-size:11px">sin telefono</div>';
+    const atraso = (Number(c.daysOverdue) || 0) > 0 ? ('<span style="color:#b91c1c;font-weight:600">' + c.daysOverdue + ' dias de atraso</span>') : '<span style="color:#059669">sin atraso</span>';
+    return '<div class="doc-row" style="justify-content:space-between;gap:8px">' +
+      '<div style="min-width:0"><div style="font-weight:600">' + esc(c.name || 'Cliente') + '</div>' +
+      '<div class="muted" style="font-size:12px">' + atraso + ' - ' + (c.jobs || 0) + ' operacion(es)</div></div>' +
+      '<div style="text-align:right;flex-shrink:0"><div style="font-weight:700;color:#b91c1c">' + money(c.balance) + '</div>' + wa + '</div></div>';
+  }).join('');
+}
 function renderGarantiasContent(report) { /* placeholder */ }
 const API = ''; // relativo: mismo origen (el panel vive en la misma URL del backend)
 
