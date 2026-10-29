@@ -556,7 +556,7 @@
 // ---- loadReport: carga el reporte del negocio y renderiza dashboard + modulos ----
 async function loadReport() {
   try {
-    const j = await api('/api/client/report');
+    const j = await api(isView ? viewReportPath() : '/api/client/report');
     if (!j || !j.ok) {
       console.error('[loadReport] respuesta invalida:', j);
       showAuth();
