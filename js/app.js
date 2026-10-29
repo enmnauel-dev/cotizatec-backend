@@ -706,7 +706,7 @@ let html = '<form class="card form" data-form="cliente">';
 
     html += '<section class="card form">';
     html += '<label>Descuento (RD$)' + (DB.isStaffMode() ? ' <small class="muted">(solo el dueño)</small>' : '') + '</label><input type="number" step="0.01" min="0" id="qc-disc" value="' + (j.discount || 0) + '"' + (DB.isStaffMode() ? ' readonly' : '') + '>';
-    html += '<label>ITBIS %</label><input type="number" step="1" min="0" id="qc-itbis" value="' + (j.itbis || 0) + '">';
+    html += '<label>ITBIS %' + (DB.isStaffMode() ? ' <small class="muted">(solo el due\u00F1o)</small>' : '') + '</label><input type="number" step="1" min="0" id="qc-itbis" value="' + (j.itbis || 0) + '"' + (DB.isStaffMode() ? ' readonly' : '') + '>';
     html += '<label>Notas</label><textarea id="qc-notes" rows="2" placeholder="Garantía, forma de pago, tiempo de entrega...">' + escapeAttr(j.notes || '') + '</textarea>';
     html += '</section>';
 
@@ -1770,10 +1770,27 @@ case 'trabajos': inner = jobsView(); break;
 
     removeQuoteItem: function (el) {
       if (!draft || !draft.items) return;
-      draft.items.splice(Number(el.dataset.id), 1);
-      const lst = document.getElementById('item-list');
-      if (lst) lst.innerHTML = itemsListHtml(draft);
-      refreshTotals();
+      var idx = Number(el.dataset.id);
+      var aplicar = function () {
+        draft.items.splice(idx, 1);
+        const lst = document.getElementById('item-list');
+        if (lst) lst.innerHTML = itemsListHtml(draft);
+        refreshTotals();
+      };
+      if (DB.isStaffMode() && draft.id) {
+        if (DB.hasStaffPin() && DB.requireSupervisorPin()) {
+          const pin = window.prompt('PIN del due\u00F1o para quitar un concepto de este trabajo:');
+          if (pin === null) return;
+          DB.verifyStaffPin(String(pin).trim()).then(function (ok) {
+            if (!ok) { toast('PIN incorrecto', false); return; }
+            aplicar();
+          }).catch(function () { toast('No se pudo verificar el PIN', false); });
+          return;
+        }
+        toast('Solo el due\u00F1o puede quitar conceptos de un trabajo guardado.', false);
+        return;
+      }
+      aplicar();
     },
 
     quoteSave: function () {
