@@ -502,6 +502,17 @@ app.get('/api/client/data', async (req, res) => {
     const st = data.state;
     const clients = (st.clients || []).map((c) => ({ id: c.id, name: c.name, phone: c.phone || '' }));
     const catalog = (st.catalog || []).map((c) => ({ id: c.id, name: c.name, price: c.price || 0, cost: c.cost || 0, stock: (c.stock == null ? null : c.stock), unit: c.unit || '', type: c.type || '' }));
+    // Productos creados desde el portal (id 'web-...') que aun no estan en el
+    // respaldo del dispositivo: se muestran con su stock acumulado de entradas.
+    const _catIds = new Set(catalog.map(function (c) { return String(c.id); }));
+    const _seList = store.listStockEntriesByClient(account.clientId);
+    _seList.forEach(function (e) {
+      const id = String(e.catalogId || '');
+      if (id.indexOf('web-') !== 0 || _catIds.has(id)) return;
+      _catIds.add(id);
+      const stockSum = _seList.reduce(function (acc, x) { return String(x.catalogId) === id ? acc + (Number(x.qty) || 0) : acc; }, 0);
+      catalog.push({ id: id, name: e.productName || 'Producto nuevo', price: 0, cost: Number(e.unitCost) || 0, stock: stockSum, unit: '', type: 'web' });
+    });
     const jobs = (st.jobs || []).map((j) => {
       const t = jobTotalsWeb(j);
       return { id: j.id, code: j.code || '', number: j.number, date: j.date, clientId: j.clientId, clientName: j.clientName || '', status: j.status || 'COTIZADO', total: t.total, collected: t.collected, balance: t.balance };
@@ -809,7 +820,7 @@ app.get('/api/stock-entries', (req, res) => {
   res.json({ ok: true, entries: store.listStockEntriesByClient(auth.account.clientId) });
 });
 
-app.post('/api/stock-entries', (req, res) => {
+app.post('/api/stock-entries', async (req, res) => {
   const auth = requireClient(req, res);
   if (!auth) return;
   const account = auth.account;
@@ -818,8 +829,21 @@ app.post('/api/stock-entries', (req, res) => {
   if (modules.indexOf('conduce') === -1 && modules.indexOf('documentos') === -1) {
     return res.status(403).json({ error: 'Tu negocio no tiene contratado el módulo de Inventario/Conduces.' });
   }
-  const catalogId = String(req.body.catalogId || '').trim();
   const qty = Number(req.body.qty) || 0;
+  const createIfMissing = !!req.body.createIfMissing;
+  const productNameIn = String(req.body.productName || '').trim();
+  let catalogId = String(req.body.catalogId || '').trim();
+  if (!catalogId && createIfMissing && productNameIn) {
+    let newId = '';
+    try {
+      const d2 = await readClientData(account.clientId);
+      const st2 = (d2 && d2.state) || {};
+      const found = (st2.catalog || []).find(function (c) { return String(c.name || '').trim().toLowerCase() === productNameIn.toLowerCase(); });
+      if (found) newId = String(found.id);
+    } catch (e2) { /* fallback: id sintetico */ }
+    if (!newId) newId = 'web-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    catalogId = newId;
+  }
   if (!catalogId) return res.status(400).json({ error: 'Selecciona un producto.' });
   if (qty <= 0) return res.status(400).json({ error: 'La cantidad debe ser mayor a 0.' });
   const unitCost = (req.body.unitCost === null || req.body.unitCost === undefined || req.body.unitCost === '') ? null : Number(req.body.unitCost);
