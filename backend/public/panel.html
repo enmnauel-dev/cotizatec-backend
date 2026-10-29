@@ -667,16 +667,60 @@ function renderUsers(j) {
 }
 
 // ---- Renderers minimos para modulos que faltaban ----
-function renderClientesContent(report) {
+// ---- Clientes / Cuentas por cobrar (completo) ----
+let clData = { clients: [], totals: {} };
+
+async function renderClientesContent(report) {
   const el = document.getElementById('clientes-list');
   if (!el) return;
-  api('/api/client/clients').then(function (j) {
-    if (!j || !j.ok) { el.innerHTML = '<div class="muted" style="padding:12px 0">Sin datos de clientes.</div>'; return; }
-    const clients = j.clients || [];
-    if (!clients.length) { el.innerHTML = '<div class="muted" style="padding:12px 0">Sin clientes registrados.</div>'; return; }
-    el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Cliente</th><th>Telefono</th></tr></thead><tbody>' +
-      clients.map(function (c) { return '<tr><td style="padding:4px 2px">' + esc(c.name || '-') + '</td><td style="padding:4px 2px">' + esc(c.phone || '-') + '</td></tr>'; }).join('') + '</tbody></table>';
-  }).catch(function (e) { el.innerHTML = '<div class="muted" style="padding:12px 0">Error al cargar clientes.</div>'; });
+  el.innerHTML = '<div class="muted" style="padding:12px 0">Cargando...</div>';
+  let j = null;
+  try { j = await api('/api/client/clients'); } catch (e) { }
+  if (!j || !j.ok) {
+    clData = { clients: [], totals: {} };
+    el.innerHTML = '<div class="muted" style="padding:12px 0">' + esc((j && j.error) || 'Sin datos de clientes.') + '</div>';
+    return;
+  }
+  clData = { clients: j.clients || [], totals: j.totals || {} };
+  const set = function (id, val) { const k = document.getElementById(id); if (k) k.textContent = val; };
+  set('cl-count', clData.totals.clientes != null ? clData.totals.clientes : clData.clients.length);
+  set('cl-deudores', clData.totals.deudores != null ? clData.totals.deudores : clData.clients.filter(function (c) { return (Number(c.balance) || 0) > 0; }).length);
+  set('cl-porcobrar', money(clData.totals.porCobrar || 0));
+  set('cl-facturado', money(clData.totals.facturado || 0));
+  renderClientesList(clData);
+}
+
+function renderClientesList(data) {
+  const el = document.getElementById('clientes-list');
+  if (!el) return;
+  const clients = (data && data.clients) || [];
+  if (!clients.length) { el.innerHTML = '<div class="muted" style="padding:12px 0">Sin clientes registrados.</div>'; return; }
+  const box = document.getElementById('clientes-search');
+  const q = ((box && box.value) || '').trim().toLowerCase();
+  const filtrados = q ? clients.filter(function (c) {
+    return (String(c.name || '') + ' ' + String(c.phone || '')).toLowerCase().indexOf(q) !== -1;
+  }) : clients;
+  if (!filtrados.length) { el.innerHTML = '<div class="muted" style="padding:12px 0">Sin coincidencias para "' + esc(q) + '".</div>'; return; }
+  const ordenados = filtrados.slice().sort(function (x, y) {
+    return ((Number(y.balance) || 0) - (Number(x.balance) || 0)) || ((Number(y.daysOverdue) || 0) - (Number(x.daysOverdue) || 0));
+  });
+  const biz = (document.getElementById('dash-name') || {}).textContent || 'CotizaTec';
+  el.innerHTML = ordenados.map(function (c) {
+    const balance = Number(c.balance) || 0;
+    const tel = String(c.phone || '').replace(/[^0-9]/g, '');
+    const txt = encodeURIComponent('Hola ' + c.name + ', le escribe ' + biz + '. Su saldo pendiente es ' + money(balance) + '. Podemos coordinar el pago? Gracias.');
+    const wa = (tel && balance > 0) ? '<a class="btn small ghost" style="margin-top:4px" target="_blank" rel="noopener" href="https://wa.me/' + tel + '?text=' + txt + '">Recordar</a>' : '';
+    let estado;
+    if (balance <= 0) estado = '<div style="color:#059669;font-size:11px;font-weight:600">pagado</div>';
+    else if ((Number(c.daysOverdue) || 0) > 0) estado = '<div style="color:#b91c1c;font-size:11px;font-weight:600">' + c.daysOverdue + ' dias de atraso</div>';
+    else estado = '<div class="muted" style="font-size:11px">sin atraso</div>';
+    return '<div class="doc-row" style="justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid rgba(157,176,201,.12)">' +
+      '<div style="min-width:0"><div style="font-weight:600">' + esc(c.name || 'Cliente') + '</div>' +
+      '<div class="muted" style="font-size:12px">' + (c.phone ? esc(c.phone) + ' - ' : '') + (c.jobs || 0) + ' operacion(es)</div>' + estado + '</div>' +
+      '<div style="text-align:right;flex-shrink:0">' +
+      '<div style="font-weight:700;color:' + (balance > 0 ? '#b91c1c' : '#059669') + '">' + money(balance) + '</div>' +
+      '<div class="muted" style="font-size:11px">facturado ' + money(c.total || 0) + '</div>' + wa + '</div></div>';
+  }).join('');
 }
 
 function renderGpsContent(report) { /* placeholder */ }
