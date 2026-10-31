@@ -485,6 +485,51 @@
         </div>
       </div>
 
+      <div class="mod-panel" id="mod-mov">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+            <div style="font-weight:700">&#128203; Movimientos — Cuadre</div>
+            <div style="display:flex;gap:8px">
+              <button class="btn small ghost" onclick="printMovimientos()">Imprimir</button>
+              <button class="btn small ghost" onclick="csvMovimientos()">CSV</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+            <button class="btn small ghost" onclick="mvPreset('day')">Hoy</button>
+            <button class="btn small ghost" onclick="mvPreset('week')">Esta semana</button>
+            <button class="btn small ghost" onclick="mvPreset('month')">Este mes</button>
+            <button class="btn small ghost" onclick="mvPreset('all')">Todo</button>
+            <span style="width:8px"></span>
+            <label class="muted" style="font-size:12px">Del</label><input type="date" id="mv-from" style="padding:6px">
+            <label class="muted" style="font-size:12px">Al</label><input type="date" id="mv-to" style="padding:6px">
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+            <select id="mv-mode" style="padding:6px" onchange="loadMovimientos(0)">
+              <option value="date">Por fecha del trabajo</option>
+              <option value="payment">Por fecha de cobro</option>
+            </select>
+            <select id="mv-status" style="padding:6px" onchange="loadMovimientos(0)">
+              <option value="">Todos los estados</option>
+              <option value="COTIZADO">Cotizado</option>
+              <option value="APROBADO">Aprobado</option>
+              <option value="EN_PROCESO">En proceso</option>
+              <option value="COMPLETADO">Completado</option>
+              <option value="COBRADO">Cobrado</option>
+              <option value="CANCELADO">Cancelado</option>
+            </select>
+            <input type="text" id="mv-q" placeholder="Codigo o cliente..." style="padding:6px;flex:1;min-width:120px" oninput="loadMovimientos(0)">
+            <select id="mv-limit" style="padding:6px" onchange="_mvLimit=Number(this.value)||25;loadMovimientos(0)">
+              <option value="25">25 por pagina</option>
+              <option value="50">50 por pagina</option>
+              <option value="100">100 por pagina</option>
+            </select>
+            <button class="btn small primary" onclick="loadMovimientos(0)">Buscar</button>
+          </div>
+          <div id="mv-body"></div>
+          <div id="mv-pager" style="margin-top:10px;display:flex;gap:10px;align-items:center"></div>
+        </div>
+      </div>
+
       <div class="mod-panel" id="mod-garantias">
         <div class="card">
           <div style="font-weight:700;margin-bottom:4px">🛡️ Garantías</div>
@@ -724,6 +769,148 @@ function renderClientesList(data) {
 }
 
 function renderGpsContent(report) { /* placeholder */ }
+// ---- Movimientos / Cuadre ----
+let _mvOffset = 0;
+let _mvLimit = 25;
+
+function _mvIso(dt) {
+  return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+}
+
+function mvSetRange(p) {
+  const f = document.getElementById('mv-from');
+  const t = document.getElementById('mv-to');
+  if (!f || !t) return;
+  const d = new Date();
+  if (p === 'day') { f.value = _mvIso(d); t.value = _mvIso(d); }
+  else if (p === 'week') {
+    const dow = (d.getDay() + 6) % 7;
+    const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow);
+    f.value = _mvIso(mon); t.value = _mvIso(d);
+  }
+  else if (p === 'month') {
+    f.value = _mvIso(new Date(d.getFullYear(), d.getMonth(), 1));
+    t.value = _mvIso(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+  }
+  else if (p === 'all') { f.value = ''; t.value = ''; }
+}
+
+function mvPreset(p) { mvSetRange(p); loadMovimientos(0); }
+
+function mvParams(extra) {
+  const mode = (document.getElementById('mv-mode') || {}).value || 'date';
+  const status = (document.getElementById('mv-status') || {}).value || '';
+  const q = ((document.getElementById('mv-q') || {}).value || '').trim();
+  const from = ((document.getElementById('mv-from') || {}).value || '').trim();
+  const to = ((document.getElementById('mv-to') || {}).value || '').trim();
+  return 'from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + '&mode=' + encodeURIComponent(mode) + '&status=' + encodeURIComponent(status) + '&q=' + encodeURIComponent(q) + '&' + extra;
+}
+
+function loadMovimientos(offset) {
+  _mvOffset = offset || 0;
+  const el = document.getElementById('mv-body');
+  if (!el) return;
+  el.innerHTML = '<div class="muted" style="padding:12px 0">Cargando...</div>';
+  api('/api/client/jobs?' + mvParams('limit=' + _mvLimit + '&offset=' + _mvOffset)).then(function (j) {
+    if (!j || !j.ok) { el.innerHTML = '<div class="muted" style="padding:12px 0">' + esc((j && j.error) || 'No se pudo cargar.') + '</div>'; return; }
+    renderMovTable(j);
+  }).catch(function () { el.innerHTML = '<div class="muted" style="padding:12px 0">Error de red al cargar movimientos.</div>'; });
+}
+
+function renderMovTable(j) {
+  const el = document.getElementById('mv-body');
+  const pag = document.getElementById('mv-pager');
+  const rows = j.jobs || [];
+  const sum = j.totals || {};
+  const count = j.count || 0;
+  const pages = Math.max(1, Math.ceil(count / j.limit));
+  const curPage = Math.floor(j.offset / j.limit) + 1;
+  const fromIdx = count ? (j.offset + 1) : 0;
+  const toIdx = Math.min(j.offset + j.limit, count);
+  if (pag) {
+    pag.innerHTML =
+      '<button class="btn small ghost" ' + (j.offset <= 0 ? 'disabled' : '') + ' onclick="loadMovimientos(' + Math.max(0, j.offset - j.limit) + ')">&#8249; Anteriores</button>' +
+      '<span class="muted" style="font-size:12px">' + fromIdx + '-' + toIdx + ' de ' + count + ' &#183; p&#225;gina ' + curPage + '/' + pages + '</span>' +
+      '<button class="btn small ghost" ' + (toIdx >= count ? 'disabled' : '') + ' onclick="loadMovimientos(' + (j.offset + j.limit) + ')">Siguientes &#8250;</button>';
+  }
+  if (!rows.length) { el.innerHTML = '<div class="muted" style="padding:12px 0">Sin movimientos en este filtro.</div>'; return; }
+  let head = '<tr><th>Fecha</th><th>Codigo</th><th>Cliente</th><th>Estado</th><th style="text-align:right">Total</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Saldo</th></tr>';
+  const trs = rows.map(function (x) {
+    const pays = (x.paymentsInRange || []).map(function (p) { return money(p.amount); }).join(' + ');
+    return '<tr>' +
+      '<td style="padding:4px 2px">' + fmtDate(x.date) + '</td>' +
+      '<td style="padding:4px 2px;font-weight:600">' + esc(x.code || '') + '</td>' +
+      '<td style="padding:4px 2px">' + esc(x.clientName || '-') + '</td>' +
+      '<td style="padding:4px 2px">' + statusPill(x.status) + '</td>' +
+      '<td style="padding:4px 2px;text-align:right">' + money(x.total) + '</td>' +
+      '<td style="padding:4px 2px;text-align:right">' + (pays || money(x.collected)) + '</td>' +
+      '<td style="padding:4px 2px;text-align:right">' + (Number(x.balance) > 0 ? '<span style="color:#b91c1c;font-weight:600">' + money(x.balance) + '</span>' : money(x.balance)) + '</td>' +
+      '</tr>';
+  }).join('');
+  el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px">' + head + trs + '</table>' +
+    '<div class="t-row" style="margin-top:10px"><span>Facturado (filtro)</span><b>' + money(sum.facturado || 0) + '</b></div>' +
+    '<div class="t-row"><span>Cobrado en rango</span><b>' + money(sum.cobradoRango || 0) + '</b></div>' +
+    '<div class="t-row"><span>Por cobrar (filtrados)</span><b>' + money(sum.porCobrar || 0) + '</b></div>' +
+    (j.syncedAt ? '<div class="muted" style="font-size:11px;margin-top:6px">Datos al ultimo sync del negocio: ' + fmtWhen(j.syncedAt) + '</div>' : '');
+}
+
+function renderMovContent(report) {
+  const f = document.getElementById('mv-from');
+  if (f && !f.value) mvSetRange('month');
+  loadMovimientos(0);
+}
+
+function printMovimientos() {
+  api('/api/client/jobs?' + mvParams('limit=200&offset=0')).then(function (j) {
+    if (!j || !j.ok || !(j.jobs || []).length) { alert('No hay datos para imprimir.'); return; }
+    const biz = (document.getElementById('dash-name') || {}).textContent || 'CotizaTec';
+    const range = (j.from || j.to) ? ((j.from || '...') + ' al ' + (j.to || '...')) : 'todos los registros';
+    const modeTxt = j.mode === 'payment' ? 'por fecha de cobro' : 'por fecha del trabajo';
+    let h = '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Movimientos</title>';
+    h += '<style>body{font-family:Arial,sans-serif;color:#111;max-width:860px;margin:16px auto;font-size:13px}h2{margin:0 0 2px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #999;padding:5px 8px;font-size:12px}th{background:#eee;text-align:left}.a{text-align:right}.box{margin-top:12px}.box div{display:flex;justify-content:space-between;border-bottom:1px dashed #999;padding:4px 0;font-weight:bold}</style></head><body>';
+    h += '<h2>' + esc(biz) + '</h2>';
+    h += '<div>Reporte de movimientos (' + modeTxt + ') — ' + range + (j.status ? ' — estado: ' + esc(j.status) : '') + '</div>';
+    h += '<div>' + (j.count || 0) + ' registro(s) — generado ' + new Date().toLocaleString('es-DO') + '</div>';
+    h += '<table><tr><th>Fecha</th><th>Codigo</th><th>Cliente</th><th>Estado</th><th class="a">Total</th><th class="a">Cobrado</th><th class="a">Saldo</th></tr>';
+    j.jobs.forEach(function (x) {
+      h += '<tr><td>' + fmtDate(x.date) + '</td><td>' + esc(x.code || '') + '</td><td>' + esc(x.clientName || '-') + '</td><td>' + esc(x.status || '') + '</td><td class="a">' + money(x.total) + '</td><td class="a">' + money(x.collected) + '</td><td class="a">' + money(x.balance) + '</td></tr>';
+    });
+    h += '</table>';
+    const t = j.totals || {};
+    h += '<div class="box"><div><span>Facturado</span><span>' + money(t.facturado || 0) + '</span></div><div><span>Cobrado en rango</span><span>' + money(t.cobradoRango || 0) + '</span></div><div><span>Por cobrar</span><span>' + money(t.porCobrar || 0) + '</span></div></div>';
+    h += '<p style="margin-top:16px">Recibi conforme: ______________________________</p></body></html>';
+    const w = window.open('', '_blank');
+    if (!w) { alert('Permite las ventanas emergentes para imprimir.'); return; }
+    w.document.write(h);
+    w.document.close();
+    w.focus();
+    setTimeout(function () { w.print(); }, 400);
+  }).catch(function (e) { alert('No se pudo imprimir: ' + e.message); });
+}
+
+function csvMovimientos() {
+  api('/api/client/jobs?' + mvParams('limit=200&offset=0')).then(function (j) {
+    if (!j || !j.ok || !(j.jobs || []).length) { alert('No hay datos para exportar.'); return; }
+    const cell = function (v) { v = String(v == null ? '' : v); if (/[",\n;]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"'; return v; };
+    let csv = 'Fecha,Codigo,Cliente,Estado,Total,Cobrado,Saldo,Cobros en rango\n';
+    (j.jobs || []).forEach(function (x) {
+      const pays = (x.paymentsInRange || []).map(function (p) { return Number(p.amount) || 0; }).join(' + ');
+      csv += [cell(fmtDate(x.date)), cell(x.code), cell(x.clientName), cell(x.status), cell(x.total), cell(x.collected), cell(x.balance), cell(pays)].join(',') + '\n';
+    });
+    const t = j.totals || {};
+    csv += '\nTOTALES,,,' + ',' + cell(t.facturado || 0) + ',' + cell(t.cobradoRango || 0) + ',' + cell(t.porCobrar || 0) + '\n';
+    try {
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'movimientos-cotizatec.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (e) { alert('No se pudo exportar: ' + e.message); }
+  }).catch(function (e) { alert('No se pudo exportar: ' + e.message); });
+}
+
 let _contabMonthly = [];
 let _contabShowCosts = false;
 let _contabShowMargins = false;
@@ -1155,6 +1342,7 @@ const MOD_DEFS = [
   { key: 'gps', icon: '📡', label: 'GPS', render: renderGpsContent },
   { key: 'contab', icon: '📒', label: 'Contabilidad', render: renderContabContent },
   { key: 'finanzas', icon: '💰', label: 'Finanzas', render: renderFinanzasContent },
+  { key: 'mov', icon: '\ud83d\udccb', label: 'Movimientos', render: renderMovContent },
   { key: 'garantias', icon: '🛡️', label: 'Garantías', render: renderGarantiasContent },
   { key: 'permisos', icon: '🔐', label: 'Permisos', render: renderPermisosContent }
 ];
@@ -1170,6 +1358,7 @@ function renderModTabs(modules, report) {
     if (m.key === 'conduce') return mods.indexOf('conduce') !== -1;
     if (m.key === 'inventario') return mods.indexOf('conduce') !== -1 || mods.indexOf('documentos') !== -1;
     if (m.key === 'gps') return mods.indexOf('gps') !== -1;
+    if (m.key === 'mov') return mods.indexOf('reportes') !== -1 || mods.indexOf('ventas') !== -1;
     if (m.key === 'contab') return mods.indexOf('contabilidad') !== -1;
     if (m.key === 'finanzas') return mods.indexOf('finanzas') !== -1;
     if (m.key === 'garantias') return mods.indexOf('garantias') !== -1;
