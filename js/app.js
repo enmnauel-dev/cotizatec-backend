@@ -791,6 +791,7 @@ function itemsListHtml(j) {
       html += '<button class="chip' + (filter === f[0] ? ' on' : '') + '" data-action="jobsFilter" data-f="' + f[0] + '">' + f[1] + '</button>';
     });
     html += '</div>';
+    html += '<div class="h-search">&#128269;&nbsp;<input data-search="jobs" placeholder="Buscar código, cliente o concepto..."></div>';
 
     if (filter === 'SINCOBRAR') {
       html += '<p class="muted"><small>Filtrando: trabajos sin cobrar ni cancelar</small></p>';
@@ -813,7 +814,7 @@ function itemsListHtml(j) {
     } else {
       jobs.forEach(function (j) {
         const t = DB.jobTotals(j);
-        html += '<div class="job" data-action="navTrabajo" data-id="' + j.id + '">';
+        html += '<div class="job" data-search-item="jobs" data-action="navTrabajo" data-id="' + j.id + '">';
         html += '<div class="job-head"><b>' + escapeAttr(j.code || 'Cotización') + '</b>' + statusPill(j.status) + '</div>';
         html += '<small>' + escapeAttr(j.clientName || 'Sin cliente') + ' · ' + DB.date(j.date) + '</small>';
         html += '<div class="job-money"><div class="m">Total <b>' + money(t.total) + '</b></div><div class="m pend">Saldo <b>' + money(t.balance) + '</b></div></div>';
@@ -2760,9 +2761,10 @@ bioUnlock: function () {
   document.addEventListener('input', function (e) {
     const sr = e.target.closest('[data-search]');
     if (!sr) return;
-    const q = sr.value.toLowerCase();
+    const norm = function (v) { return String(v || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); };
+    const q = norm(sr.value);
     document.querySelectorAll('[data-search-item="' + sr.dataset.search + '"]').forEach(function (row) {
-      if (q && row.textContent.toLowerCase().indexOf(q) < 0) row.setAttribute('hidden', '');
+      if (q && norm(row.textContent).indexOf(q) < 0) row.setAttribute('hidden', '');
       else row.removeAttribute('hidden');
     });
   });
