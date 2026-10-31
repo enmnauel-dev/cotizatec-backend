@@ -6,5 +6,8 @@
   "backgroundColor": "#0b1220",
   "server": {
     "androidScheme": "https"
+  },
+  "android": {
+    "edgeToEdgeEnabled": true
   }
 }
