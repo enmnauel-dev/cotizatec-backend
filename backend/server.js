@@ -526,6 +526,79 @@ app.get('/api/client/data', async (req, res) => {
 
 // Cartera de clientes: facturado, cobrado, saldo pendiente, antigüedad y
 // teléfono para recordar por WhatsApp (módulo 'clientes').
+// ===== Movimientos filtrables (cuadre diario/mensual) =====
+// GET /api/client/jobs?from=YYYY-MM-DD&to=YYYY-MM-DD&mode=date|payment&status=&q=&limit=25&offset=0
+// - mode=date    : filtra por fecha del trabajo; "Cobrado en rango" suma pagos dentro del rango.
+// - mode=payment : muestra trabajos con cobros en el rango (cuadre de caja del dia).
+// Margen/costo solo viajan si es owner o el permiso showMargins/showCosts esta ON.
+app.get('/api/client/jobs', async (req, res) => {
+  const auth = requireClient(req, res);
+  if (!auth) return;
+  const account = auth.account;
+  const client = store.getClient(account.clientId) || {};
+  const perms = client.operatorPermissions || {};
+  const rol = account.role || 'owner';
+  const canMargins = rol === 'owner' || !!perms.showMargins;
+  const canCosts = rol === 'owner' || !!perms.showCosts;
+  try {
+    const data = await readClientData(account.clientId);
+    if (!data.ok || !data.state) return res.json({ ok: true, jobs: [], count: 0, offset: 0, limit: 25, totals: { facturado: 0, cobradoRango: 0, porCobrar: 0 }, syncedAt: null });
+    const st = data.state;
+    const mode = String(req.query.mode || 'date').toLowerCase() === 'payment' ? 'payment' : 'date';
+    const isFullDate = function (v) { return /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(v || '')); };
+    const from = isFullDate(req.query.from) ? String(req.query.from) : '';
+    const to = isFullDate(req.query.to) ? String(req.query.to) : '';
+    const statusF = String(req.query.status || '').trim().toUpperCase();
+    const q = String(req.query.q || '').trim().toLowerCase();
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 25));
+    const offset = Math.max(0, Number(req.query.offset) || 0);
+    const r2 = function (v) { return Math.round((Number(v) || 0) * 100) / 100; };
+    const dstr = function (x) {
+      const d = new Date(x);
+      if (isNaN(d.getTime())) return '';
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    };
+    const inRange = function (x) { const d = dstr(x); if (!d) return false; if (from && d < from) return false; if (to && d > to) return false; return true; };
+    let facturado = 0, cobradoRango = 0, porCobrar = 0;
+    const filt = (st.jobs || []).filter(function (j) {
+      if (statusF && String(j.status || '').toUpperCase() !== statusF) return false;
+      if (q && ((String(j.code || '') + ' ' + String(j.clientName || '') + ' ' + String(j.clientPhone || '')).toLowerCase().indexOf(q) === -1)) return false;
+      const pays = (j.payments || []).filter(function (p) { return inRange(p.date); });
+      let keep;
+      if (!from && !to) keep = true;
+      else if (mode === 'payment') keep = pays.length > 0;
+      else keep = inRange(j.date);
+      if (!keep) return false;
+      const t = jobTotalsWeb(j);
+      j.__t = t; j.__pays = pays;
+      facturado += t.total; porCobrar += t.balance;
+      pays.forEach(function (p) { cobradoRango += Number(p.amount) || 0; });
+      return true;
+    });
+    filt.sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });
+    const rows = filt.slice(offset, offset + limit).map(function (j) {
+      const t = j.__t || { total: 0, collected: 0, balance: 0, margin: 0, cost: 0, expenses: 0 };
+      return {
+        id: j.id, code: j.code || (j.number ? 'V-' + j.number : ''), date: j.date || '',
+        clientName: j.clientName || '', clientPhone: j.clientPhone || '',
+        status: j.status || 'COTIZADO',
+        total: r2(t.total), collected: r2(t.collected), balance: r2(t.balance),
+        margin: canMargins ? r2(t.margin) : null, cost: canCosts ? r2(t.cost) : null,
+        expenses: canCosts ? r2(t.expenses) : null,
+        itemCount: (j.items || []).length,
+        paymentsInRange: (j.__pays || []).map(function (p) { return { amount: r2(p.amount), date: p.date, note: p.note || '' }; })
+      };
+    });
+    res.json({ ok: true, mode: mode, from: from, to: to, status: statusF, q: q,
+      jobs: rows, count: filt.length, offset: offset, limit: limit,
+      totals: { facturado: r2(facturado), cobradoRango: r2(cobradoRango), porCobrar: r2(porCobrar) },
+      syncedAt: data.syncedAt || null });
+  } catch (e) {
+    console.error('[client] jobs error:', e.message);
+    res.status(500).json({ error: 'Error al leer los movimientos.' });
+  }
+});
+
 app.get('/api/client/clients', async (req, res) => {
   const auth = requireClient(req, res);
   if (!auth) return;
@@ -1557,7 +1630,7 @@ async function readClientData(clientId) {
       if (ts > bestTs) { bestTs = ts; state = parsed.data; }
     } catch (e) { /* siguiente dispositivo */ }
   }
-  return { ok: true, state };
+  return { ok: true, state, syncedAt: bestTs > 0 ? new Date(bestTs).toISOString() : null };
 }
 
 function moduleDefs() {
