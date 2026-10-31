@@ -720,7 +720,35 @@ let html = '<form class="card form" data-form="cliente">';
     return html;
   }
 
-  function itemsListHtml(j) {
+  function quoteSaleLocked() {
+  if (!draft || !draft.id) return false;
+  const old = DB.find('jobs', draft.id);
+  if (!old) return false;
+  const eraCot = String(old.status || 'COTIZADO').toUpperCase() === 'COTIZADO';
+  const teniaDinero = (old.payments || []).length > 0;
+  if (eraCot && !teniaDinero) return false;
+  const clave = function (arr) { return (arr || []).map(function (i) { return String(i.desc || '').toLowerCase() + '|' + (Number(i.qty) || 0); }).join(';'); };
+  return clave(old.items) !== clave(draft.items);
+}
+
+function quoteSaveApply() {
+  if (!draft) { toast('Primero crea la cotización'); return; }
+  if (!draft.clientId) { toast('Selecciona un cliente', false); return; }
+  if (!draft.items || !draft.items.length || !draft.items.some(function (i) { return i.desc && Number(i.price) > 0; })) { toast('Agrega al menos un concepto válido', false); return; }
+  if (!draft.id) {
+    const num = DB.incr('job');
+    draft.id = 'j' + num;
+    draft.number = num;
+    draft.code = (DB.state.settings.quotePrefix || 'COT') + '-' + String(num).padStart(4, '0');
+  }
+  DB.saveJob(draft);
+  DB.captureClient(draft);
+  const id = draft.id;
+  toast('Cotización guardada', true);
+  go('#/trabajo/' + id);
+}
+
+function itemsListHtml(j) {
     const items = j.items || [];
     const ro = DB.isStaffMode() ? ' readonly' : '';
     if (!items.length) return '<p class="muted">Sin conceptos todavía. Agrega desde el catálogo o crea una línea manual.</p>';
@@ -1650,7 +1678,9 @@ case 'trabajos': inner = jobsView(); break;
       const noteInput = document.getElementById('abono-note');
       const amount = Number(amtInput ? amtInput.value : '');
       if (!(amount > 0)) { toast('Escribe el monto del abono', false); return; }
-      j.payments.push({ id: 'p' + DB.incr('payment'), note: (noteInput ? noteInput.value.trim() : '') || 'Abono', amount: amount, date: new Date().toISOString() });
+      var tipoPag = String(j.status || 'COTIZADO').toUpperCase() === 'COTIZADO' ? 'anticipo' : 'abono';
+      j.payments.push({ id: 'p' + DB.incr('payment'), note: (noteInput ? noteInput.value.trim() : '') || (tipoPag === 'anticipo' ? 'Anticipo' : 'Abono'), amount: amount, date: new Date().toISOString(), type: tipoPag });
+      if (tipoPag === 'anticipo' && amount > DB.jobTotals(j).total) { toast('Aviso: el anticipo supera el total de esta cotización', false); }
       DB.save();
       if (DB.jobTotals(j).balance <= 0.005) { try { Reminders.cancelForJob(j.id); } catch (e) {} }
       const holder = document.getElementById('sheet-holder');
@@ -1794,20 +1824,20 @@ case 'trabajos': inner = jobsView(); break;
     },
 
     quoteSave: function () {
-      if (!draft) { toast('Primero crea la cotización'); return; }
-      if (!draft.clientId) { toast('Selecciona un cliente', false); return; }
-      if (!draft.items || !draft.items.length || !draft.items.some(function (i) { return i.desc && Number(i.price) > 0; })) { toast('Agrega al menos un concepto válido', false); return; }
-      if (!draft.id) {
-        const num = DB.incr('job');
-        draft.id = 'j' + num;
-        draft.number = num;
-        draft.code = (DB.state.settings.quotePrefix || 'COT') + '-' + String(num).padStart(4, '0');
+      if (DB.isStaffMode() && quoteSaleLocked()) {
+        if (DB.hasStaffPin() && DB.requireSupervisorPin()) {
+          const pin = window.prompt('PIN del dueño para modificar cantidades de esta venta:');
+          if (pin === null) return;
+          DB.verifyStaffPin(String(pin).trim()).then(function (ok) {
+            if (!ok) { toast('PIN incorrecto', false); return; }
+            quoteSaveApply();
+          }).catch(function () { toast('No se pudo verificar el PIN', false); });
+          return;
+        }
+        toast('Solo el dueño puede cambiar cantidades de una venta iniciada o con cobros.', false);
+        return;
       }
-      DB.saveJob(draft);
-      DB.captureClient(draft);
-      const id = draft.id;
-      toast('Cotización guardada', true);
-      go('#/trabajo/' + id);
+      quoteSaveApply();
     },
 
     editQuote: function (el) {
@@ -1930,6 +1960,15 @@ case 'trabajos': inner = jobsView(); break;
 
     newConduce: function (el) {
       if (!DB.canCreateConduce()) { toast('No tienes permiso para crear conduces', false); return; }
+      const _jd = DB.find('jobs', el.dataset.id);
+      if (_jd && String(_jd.status || 'COTIZADO').toUpperCase() === 'COTIZADO') {
+        if (!confirmar('¿echar la venta? Este trabajo aún es solo cotización. Al aceptar pasará a APROBADO (podras generar el conduce y descontar inventario).')) return;
+        _jd.status = 'APROBADO';
+        DB.saveJob(_jd);
+        if (DB.audit) DB.audit('venta.declarar', (_jd.code || _jd.id || '') + ' (desde conduce)');
+        toast('Venta declarada (APROBADO). Ahora genera el conduce.', true);
+        return;
+      }
       const j = DB.find('jobs', el.dataset.id);
       if (!j) return;
       const existing = DB.conducesForJob(j.id)[0];
@@ -2582,7 +2621,8 @@ bioUnlock: function () {
         toast('Gasto registrado', true);
       } else {
         if (Number(amount) <= 0) { toast('Escribe el monto del abono', false); return; }
-        j.payments.push({ id: 'p' + DB.incr('payment'), note: note || 'Abono', amount: Number(amount), date: new Date().toISOString() });
+        var tipoPag2 = String(j.status || 'COTIZADO').toUpperCase() === 'COTIZADO' ? 'anticipo' : 'abono';
+        j.payments.push({ id: 'p' + DB.incr('payment'), note: note || (tipoPag2 === 'anticipo' ? 'Anticipo' : 'Abono'), amount: Number(amount), date: new Date().toISOString(), type: tipoPag2 });
         if (DB.jobTotals(j).balance <= 0.005) { try { Reminders.cancelForJob(j.id); } catch (e) {} }
         toast('Abono registrado', true);
       }
