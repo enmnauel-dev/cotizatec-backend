@@ -556,7 +556,7 @@ app.get('/api/client/jobs', async (req, res) => {
     const dstr = function (x) {
       const d = new Date(x);
       if (isNaN(d.getTime())) return '';
-      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      try { return d.toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' }); } catch (e) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
     };
     const inRange = function (x) { const d = dstr(x); if (!d) return false; if (from && d < from) return false; if (to && d > to) return false; return true; };
     let facturado = 0, cobradoRango = 0, porCobrar = 0;
