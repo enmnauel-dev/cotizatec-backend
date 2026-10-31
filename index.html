@@ -15,6 +15,32 @@
 </head>
 <body>
 <div id="app"></div>
+<!-- safe-area fallback (Android 15/16): mide env(safe-area-inset-top); si da 0 usa un fallback -->
+<script>
+(function () {
+  var FALLBACK = 34; // px estimados de barra de estado; ajusta si hace falta
+  function isNative() { return !!window.Capacitor || /; wv\)/.test(navigator.userAgent); }
+  function run() {
+    try {
+      var probe = document.getElementById('sa-probe-top');
+      if (!probe) {
+        probe = document.createElement('div');
+        probe.id = 'sa-probe-top';
+        probe.setAttribute('aria-hidden', 'true');
+        probe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top,0px)';
+        document.body.appendChild(probe);
+      }
+      var envTop = parseFloat(getComputedStyle(probe).paddingTop) || 0;
+      var v = envTop > 0 ? envTop : (isNative() ? FALLBACK : 0);
+      document.documentElement.style.setProperty('--safe-top', v + 'px');
+    } catch (e) { }
+  }
+  if (document.body) run(); else document.addEventListener('DOMContentLoaded', run);
+  window.addEventListener('load', run);
+  window.addEventListener('resize', run);
+  window.addEventListener('orientationchange', function () { setTimeout(run, 300); });
+})();
+</script>
 <script src="lib/jspdf.umd.min.js"></script>
 <script src="lib/jspdf.plugin.autotable.min.js"></script>
 <script src="js/db.js"></script>

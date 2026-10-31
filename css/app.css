@@ -44,6 +44,7 @@ input, select, textarea { font-family: inherit; font-size: 16px; }
   border-radius: 0 0 26px 26px;
   color: #fff;
   padding: calc(12px + env(safe-area-inset-top)) 18px 18px;
+  padding: calc(12px + max(env(safe-area-inset-top), var(--safe-top, 0px))) 18px 18px;
   border-bottom: 1px solid rgba(255,255,255,.05);
 }
 .bar-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -366,7 +367,8 @@ b { font-weight: 700; }
 }
 .sheet-head {
   display: flex; justify-content: space-between; align-items: center;
-  padding: calc(16px + env(safe-area-inset-top)) 16px 16px; background: var(--slate-d); color: #fff;
+  padding: calc(16px + env(safe-area-inset-top)) 16px 16px;
+  padding: calc(16px + max(env(safe-area-inset-top), var(--safe-top, 0px))) 16px 16px; background: var(--slate-d); color: #fff;
   border-radius: 0 0 22px 22px;
 }
 .sheet-body { flex: 1; overflow-y: auto; padding: 14px; }
