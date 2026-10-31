@@ -349,7 +349,7 @@
       </div>
 
       <div class="card">
-        <div style="font-weight:700; margin-bottom:8px">Trabajos recientes</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:700">Trabajos recientes</div><a href="#mov" onclick="switchMod('mov');return false;" style="font-size:12px;color:#7df5ff;text-decoration:none">Ver todos en Movimientos &#8250;</a></div>
         <div id="recent-list"></div>
       </div>
 
@@ -669,7 +669,7 @@ async function loadReport() {
     // Recent list
     const rl = document.getElementById('recent-list');
     if (rl && r.recent) {
-      rl.innerHTML = r.recent.map(function (j) {
+      rl.innerHTML = r.recent.slice(0, 5).map(function (j) {
         return '<div class="recent-item"><div class="head"><span>' + esc(j.code || '') + ' - ' + esc(j.client || '') + '</span><span>' + money(j.total) + '</span></div><div class="muted" style="font-size:12px">' + (j.date ? new Date(j.date).toLocaleDateString('es-DO') : '') + ' · ' + esc(j.status || '') + (j.costMissing ? ' · sin costo' : '') + '</div></div>';
       }).join('') || '<div class="muted" style="padding:12px 0">Sin trabajos recientes.</div>';
     }
@@ -854,11 +854,15 @@ function renderMovTable(j) {
     (j.syncedAt ? '<div class="muted" style="font-size:11px;margin-top:6px">Datos al ultimo sync del negocio: ' + fmtWhen(j.syncedAt) + '</div>' : '');
 }
 
-function renderMovContent(report) {
+function mvLazy() {
+  if (window._mvBoot) return;
+  window._mvBoot = true;
   const f = document.getElementById('mv-from');
   if (f && !f.value) mvSetRange('month');
   loadMovimientos(0);
 }
+
+function renderMovContent(report) { /* carga perezosa: mvLazy() al abrir la pestana */ }
 
 function printMovimientos() {
   api('/api/client/jobs?' + mvParams('limit=200&offset=0')).then(function (j) {
@@ -1374,6 +1378,7 @@ function renderModTabs(modules, report) {
   document.querySelectorAll('.mod-panel').forEach(function (p) { p.classList.remove('active'); });
   activeMod = available[0].key;
   document.getElementById('mod-' + activeMod).classList.add('active');
+  if (activeMod === 'mov') mvLazy();
   available.forEach(function (m) { m.render(report); });
 }
 
@@ -1383,6 +1388,7 @@ function switchMod(key) {
   document.querySelectorAll('.mod-tab').forEach(function (t) { t.classList.toggle('on', t.getAttribute('data-mod') === key); });
   document.querySelectorAll('.mod-panel').forEach(function (p) { p.classList.remove('active'); });
   document.getElementById('mod-' + key).classList.add('active');
+  if (key === 'mov') mvLazy();
 }
 
 function renderDocsContent(report) {
@@ -1730,6 +1736,7 @@ function doLogout() {
   try { localStorage.removeItem('ct_token'); localStorage.removeItem('ct_role'); } catch (e) {}
   if (gpsTimer) { clearInterval(gpsTimer); gpsTimer = null; }
   activeMod = null;
+  window._mvBoot = false;
   document.getElementById('mods-section').style.display = 'none';
   showAuth();
 }
