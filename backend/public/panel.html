@@ -1398,7 +1398,8 @@ function openPermsModal(userId) {
       '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-stock" ' + (p.canRegisterStockEntry ? 'checked' : '') + '> Permitir registrar entradas de mercancía</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-costs" ' + (p.showCosts ? 'checked' : '') + '> Mostrar costos de compra</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-margins" ' + (p.showMargins ? 'checked' : '') + '> Mostrar márgenes de ganancia</label>' +
-      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-pin" ' + (p.requireSupervisorPin ? 'checked' : '') + '> Requerir PIN de supervisor para anular/modificar precios</label>';
+      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-pin" ' + (p.requireSupervisorPin ? 'checked' : '') + '> Requerir PIN de supervisor para anular/modificar precios</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pm-print" ' + (p.requireDeclaredToPrint ? 'checked' : '') + '> Bloquear al vendedor la impresion de ticket en COTIZADO (debe declarar la venta)';
   }).catch(function (e) { document.getElementById('perms-msg').textContent = e.message; });
 }
 function closePermsModal() { document.getElementById('perms-modal').style.display = 'none'; _permsUserId = null; }
@@ -1408,7 +1409,8 @@ async function savePerms() {
     canRegisterStockEntry: document.getElementById('pm-stock').checked,
     showCosts: document.getElementById('pm-costs').checked,
     showMargins: document.getElementById('pm-margins').checked,
-    requireSupervisorPin: document.getElementById('pm-pin').checked
+    requireSupervisorPin: document.getElementById('pm-pin').checked,
+    requireDeclaredToPrint: document.getElementById('pm-print').checked
   };
   try {
     const j = await api('/api/client/operator-permissions', { method: 'PUT', body: JSON.stringify({ permissions: perms }) });
@@ -1431,6 +1433,7 @@ async function renderPermisosContent(report) {
       '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-costs" ' + (p.showCosts ? 'checked' : '') + '> Mostrar costos de compra</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-margins" ' + (p.showMargins ? 'checked' : '') + '> Mostrar márgenes de ganancia</label>' +
       '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-pin" ' + (p.requireSupervisorPin ? 'checked' : '') + '> Requerir PIN de supervisor para anular/modificar precios</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin:6px 0"><input type="checkbox" id="pp-print" ' + (p.requireDeclaredToPrint ? 'checked' : '') + '> Bloquear al vendedor la impresion de ticket en COTIZADO (debe declarar la venta)</label>' +
       '<div style="margin-top:10px"><button class="btn primary" onclick="savePermsPanel()">Guardar permisos</button></div>' +
       '<div class="msg" id="pp-msg"></div>';
   }
@@ -1443,7 +1446,8 @@ async function savePermsPanel() {
     canRegisterStockEntry: document.getElementById('pp-stock').checked,
     showCosts: document.getElementById('pp-costs').checked,
     showMargins: document.getElementById('pp-margins').checked,
-    requireSupervisorPin: document.getElementById('pp-pin').checked
+    requireSupervisorPin: document.getElementById('pp-pin').checked,
+    requireDeclaredToPrint: document.getElementById('pp-print').checked
   };
   try {
     const j = await api('/api/client/operator-permissions', { method: 'PUT', body: JSON.stringify({ permissions: perms }) });

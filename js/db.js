@@ -1260,6 +1260,7 @@ var DB = (function () {
   function canCreateConduce() { if (!isStaffMode()) return true; return _opPerms().canCreateConduce !== false; }
   function canRegisterStockEntry() { if (!isStaffMode()) return true; return _opPerms().canRegisterStockEntry !== false; }
   function requireSupervisorPin() { if (!isStaffMode()) return false; return _opPerms().requireSupervisorPin !== false; }
+  function requireDeclaredToPrint() { return isStaffMode() && !!_opPerms().requireDeclaredToPrint; }
 
   function boot() {
     return Promise.resolve().then(function () {
@@ -1290,7 +1291,7 @@ var DB = (function () {
      needsUnlock, isEncrypted, isProtected, hasBackupPassword, hasFingerprint, canUnlockByPassword, bioAvailable, mkKeystoreExists,
      unlock, unlockFingerprint, setEncryption, removePassword, disableEncryption, relock, boot, blankState,
      isStaffMode, hasStaffPin, setStaffPin, verifyStaffPin, setStaffMode, clearStaffPin,
-     showCosts, showMargins, canCreateConduce, canRegisterStockEntry, requireSupervisorPin,
+     showCosts, showMargins, canCreateConduce, canRegisterStockEntry, requireSupervisorPin, requireDeclaredToPrint,
      onSave
   });
   return api;

@@ -1052,7 +1052,7 @@ app.get('/api/client/operator-permissions', (req, res) => {
   const auth = requireOwner(req, res);
   if (!auth) return;
   const client = store.getClient(auth.account.clientId) || {};
-  res.json({ ok: true, permissions: client.operatorPermissions || { canCreateConduce: true, canRegisterStockEntry: true, showCosts: false, showMargins: false, requireSupervisorPin: true } });
+  res.json({ ok: true, permissions: client.operatorPermissions || { canCreateConduce: true, canRegisterStockEntry: true, showCosts: false, showMargins: false, requireSupervisorPin: true, requireDeclaredToPrint: false } });
 });
 
 app.put('/api/client/operator-permissions', (req, res) => {
@@ -1066,7 +1066,8 @@ app.put('/api/client/operator-permissions', (req, res) => {
     canRegisterStockEntry: p.canRegisterStockEntry !== false,
     showCosts: !!p.showCosts,
     showMargins: !!p.showMargins,
-    requireSupervisorPin: p.requireSupervisorPin !== false
+    requireSupervisorPin: p.requireSupervisorPin !== false,
+    requireDeclaredToPrint: p.requireDeclaredToPrint === true
   };
   client.updatedAt = Date.now();
   store.updateClient(client.id, { operatorPermissions: client.operatorPermissions, updatedAt: client.updatedAt });

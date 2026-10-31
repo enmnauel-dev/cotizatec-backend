@@ -2108,6 +2108,8 @@ case 'trabajos': inner = jobsView(); break;
       toast('Entrada registrada: +' + qty + ' ' + (it.name || '') + '. Stock actual: ' + (updated ? updated.stock : ''), true);
     },
     printTicket: function (el) {
+      const _jt = DB.find('jobs', el.dataset.id);
+      if (_jt && DB.requireDeclaredToPrint && DB.requireDeclaredToPrint() && String(_jt.status || 'COTIZADO').toUpperCase() === 'COTIZADO') { toast('Impresion bloqueada para el vendedor: declara la venta (APROBADO) antes de imprimir. (Regla ajustable en Permisos)', false); return; }
       const j = DB.find('jobs', el.dataset.id);
       if (!j) return;
       if (!Printer.available()) { toast('La impresión solo funciona en la app instalada', false); return; }
