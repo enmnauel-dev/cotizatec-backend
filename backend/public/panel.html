@@ -148,7 +148,7 @@
 
   /* Módulos — tabs */
   #mods-section { display: none; }
-  .mod-tabs { display: flex; gap: 4px; background: rgba(148,163,184,.08); border-radius: 14px; padding: 4px; margin-bottom: 0; overflow-x: auto; }
+  .mod-tabs { display: flex; gap: 4px; background: rgba(13,20,38,.92); border: 1px solid rgba(157,176,201,.16); border-radius: 14px; padding: 4px; margin-bottom: 0; overflow-x: auto; position: sticky; top: 6px; z-index: 30; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 8px 22px rgba(0,0,0,.35); }
   .mod-tab {
     flex: 1; min-width: 0; border: none; background: transparent; padding: 10px 14px; border-radius: 11px;
     font-weight: 600; font-size: 13px; color: #8ea0bb; cursor: pointer; white-space: nowrap;
@@ -158,7 +158,7 @@
   .mod-tab.on { background: rgba(0,240,255,.1); color: #7df5ff; box-shadow: 0 0 12px rgba(0,240,255,.15); }
   .mod-tab .tab-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .5; }
   .mod-tab.on .tab-dot { opacity: 1; background: #00f0ff; }
-  .mod-panel { display: none; }
+  .mod-panel { display: none; scroll-margin-top: 72px; }
   .mod-panel.active { display: block; }
   .mod-panel .card { margin-top: 10px; }
 
