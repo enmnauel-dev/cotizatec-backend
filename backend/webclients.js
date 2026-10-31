@@ -157,7 +157,15 @@ function computeReport(state) {
     return { subtotal, discount, itbis, tax, total, itemsCost, expenses, cost, collected, balance, margin };
   }
 
-  const nowKey = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  const drParts = function (x) {
+    const d = (x instanceof Date) ? x : new Date(x);
+    if (isNaN(d.getTime())) return null;
+    try {
+      const a = d.toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' }).split('-');
+      return { y: Number(a[0]), m: Number(a[1]), day: Number(a[2]) };
+    } catch (e) { return { y: d.getFullYear(), m: d.getMonth() + 1, day: d.getDate() }; }
+  };
+  const nowKey = (d) => { const p = drParts(d); return p ? (p.y + '-' + String(p.m).padStart(2, '0')) : '1970-01'; };
 
   const totals = {
     facturado: 0,
@@ -237,8 +245,9 @@ function computeReport(state) {
   // (día 1 al mismo día del mes previo), para no comparar un mes incompleto
   // contra otro completo.
   const today = new Date();
-  const y = today.getFullYear(), m = today.getMonth();
-  const dayOfMonth = today.getDate();
+  const _tp = drParts(today) || { y: today.getFullYear(), m: today.getMonth() + 1, day: today.getDate() };
+  const y = _tp.y, m = _tp.m - 1;
+  const dayOfMonth = _tp.day;
   const todayISO = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(dayOfMonth).padStart(2, '0');
   const prevDate = new Date(y, m - 1, 1);
   const prevISO = prevDate.getFullYear() + '-' + String(prevDate.getMonth() + 1).padStart(2, '0') + '-01';
@@ -248,7 +257,8 @@ function computeReport(state) {
   active.forEach((j) => {
     const d = new Date(j.date);
     if (isNaN(d.getTime())) return;
-    const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const dp = drParts(d);
+    const iso = dp.y + '-' + String(dp.m).padStart(2, '0') + '-' + String(dp.day).padStart(2, '0');
     daily[iso] = (daily[iso] || 0) + jobTotals(j).total;
   });
 
