@@ -283,6 +283,7 @@
         <button id="out-btn" class="btn-out" onclick="doLogout()">Salir</button>
       </div>
     </div>
+    <div id="inv-alerts" class="no-print" style="display:none;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 14px"></div>
     <div class="print-header"><h1><span id="ph-name">Reporte de ventas</span></h1><div class="sub" id="ph-date"></div></div>
     <div id="change-pass-card" class="card no-print" style="display:none">
       <div style="font-weight:700; margin-bottom:8px">Cambiar contraseña</div>
@@ -322,30 +323,26 @@
       </div>
       <div id="s-sincosto" style="display:none;margin-bottom:10px;font-size:12px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px"></div>
 
-      <div id="facturado-row" class="card">
-        <div class="t-row">
-          <span>Facturado (total)</span>
-          <span style="display:flex;align-items:center;gap:10px"><b id="s-facturado">0</b><span id="s-facturado-trend" class="trend"></span></span>
-        </div>
+      <div class="grid2" style="margin-top:12px">
+        <div class="stat c-blue"><div class="l">Facturado (total)</div><div class="v"><span id="s-facturado">0</span> <span id="s-facturado-trend" class="trend"></span></div></div>
+        <div class="stat"><div class="l">Operaciones totales</div><div class="v" id="s-trabajos">0</div></div>
+        <div class="stat"><div class="l">Trabajos con saldo pendiente</div><div class="v" id="s-pendientes">0</div></div>
+        <div class="stat"><div class="l">Clientes registrados</div><div class="v" id="s-clientes">0</div></div>
+        <div class="stat"><div class="l">Total gastado (costo)</div><div class="v" id="s-gastado">0</div></div>
+        <div class="stat"><div class="l">Productos y servicios</div><div class="v" id="s-productos">0</div></div>
       </div>
 
-      <div class="card">
+      <div class="card" style="margin-top:12px">
         <div style="font-weight:700; margin-bottom:8px">Actividad (últimos 12 meses)</div>
         <canvas id="chart"></canvas>
         <div class="chart-legend">Facturado por mes (RD$)</div>
       </div>
 
       <div class="card">
-        <div class="t-row"><span>Operaciones totales</span><b id="s-trabajos">0</b></div>
-        <div class="t-row"><span>Trabajos con saldo pendiente</span><b id="s-pendientes">0</b></div>
-        <div class="t-row"><span>Clientes registrados</span><b id="s-clientes">0</b></div>
-        <div class="t-row"><span>Total gastado (costo)</span><b id="s-gastado">0</b></div>
-        <div class="t-row"><span>Productos y servicios</span><b id="s-productos">0</b></div>
-      </div>
-
-      <div class="card">
-        <div style="font-weight:700; margin-bottom:8px">Historial mensual</div>
-        <div id="monthly-table"></div>
+        <details>
+          <summary style="font-weight:700;cursor:pointer">Historial mensual</summary>
+          <div id="monthly-table" style="margin-top:10px"></div>
+        </details>
       </div>
 
       <div class="card">
@@ -615,6 +612,34 @@
 </div>
 <script>
 // ---- loadReport: carga el reporte del negocio y renderiza dashboard + modulos ----
+// Franja de alertas de inventario en el dashboard (solo duenyo; carga perezosa una vez)
+let _alertStripTried = false;
+function loadAlertStrip(force) {
+  if (myRole !== 'owner') return;
+  if (_alertStripTried && !force) return;
+  _alertStripTried = true;
+  api('/api/client/analytics').then(function (d) {
+    const el = document.getElementById('inv-alerts');
+    if (!el) return;
+    const al = (d && d.analytics && d.analytics.alerts) || null;
+    if (!al || !((al.agotados || 0) + (al.bajos || 0) + (al.muertos || 0))) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    let h = '';
+    if (al.agotados) h += '<span style="border:1px solid #ef4444;color:#fca5a5;border-radius:10px;padding:5px 10px;font-size:12px">🔴 ' + al.agotados + ' agotado(s)</span>';
+    if (al.bajos) h += '<span style="border:1px solid #f59e0b;color:#fbbf24;border-radius:10px;padding:5px 10px;font-size:12px">🟡 ' + al.bajos + ' con stock bajo</span>';
+    if (al.muertos) h += '<span style="border:1px solid #64748b;color:#cbd5e1;border-radius:10px;padding:5px 10px;font-size:12px">⚫ ' + al.muertos + ' muerto(s) de inventario</span>';
+    h += '<a href="#" id="inv-alerts-link" style="font-size:12px;color:#7df5ff;text-decoration:none">Ver en Analíticas ›</a>';
+    el.innerHTML = h;
+    el.style.display = 'flex';
+    const lk = document.getElementById('inv-alerts-link');
+    if (lk) lk.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      switchMod('analytics');
+      const mp = document.getElementById('mod-analytics');
+      if (mp) mp.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }).catch(function () { /* sin datos de analiticas: sin franja */ });
+}
+
 async function loadReport() {
   try {
     const j = await api(isView ? viewReportPath() : '/api/client/report');
@@ -694,6 +719,7 @@ async function loadReport() {
     if (empty) empty.style.display = 'none';
     const content = document.getElementById('dash-content');
     if (content) content.style.display = 'block';
+    try { loadAlertStrip(); } catch (e) { /* no bloquear el dashboard */ }
   } catch (e) {
     console.error('[loadReport] error:', e);
     showAuth();
@@ -881,7 +907,7 @@ function mvLazy() {
 function renderMovContent(report) { /* carga perezosa: mvLazy() al abrir la pestana */ }
 
 // ===== Analiticas / rotacion / alertas (Fase 2) =====
-let _anDays = 0, _anPrefs = null, _anData = null, _anChartBound = false, _anFilter = 'todos';
+let _anDays = 0, _anPrefs = null, _anData = null, _anChartBound = false, _anFilter = 'todos', _anShowAll = false;
 function renderAnalyticsContent(report) { /* carga perezosa: anLazy() al abrir la pestana */ }
 function anLazy() { if (window._anBoot) return; window._anBoot = true; loadAnalytics(0); }
 function anMoney(v) { const n = Number(v) || 0; return 'RD$ ' + n.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -892,6 +918,7 @@ function anMin(p) {
 }
 function loadAnalytics(days) {
   if (days) _anDays = Number(days) || 0;
+  _anShowAll = false;
   const body = document.getElementById('an-body');
   if (body) body.innerHTML = '<div class="muted">Cargando analíticas…</div>';
   api('/api/client/analytics' + (_anDays ? ('?days=' + _anDays) : '')).then(function (d) {
@@ -940,6 +967,7 @@ function renderAnalytics() {
   anRenderTable();
 }
 function anSetFilter(v) { _anFilter = v; const sel = document.getElementById('an-filter'); if (sel) sel.value = v; anRenderTable(); }
+function anShowAll() { _anShowAll = true; anRenderTable(); }
 function anBadge(p) {
   if (p.out) return '<span style="color:#fca5a5;font-weight:700">🔴 agotado</span>';
   if (p.dead && p.low) return '<span style="color:#fbbf24;font-weight:700">🟡⚫ bajo+muerto</span>';
@@ -966,6 +994,8 @@ function anRenderTable() {
     el.innerHTML = '<div class="muted" style="font-size:12px">Nada que mostrar con este filtro. Si la lista general está vacía, es porque los productos aún no tienen un número en el campo <b>Stock</b> (sin stock no hay rotación ni capital parado que medir).</div>';
     return;
   }
+  const totalF = ps.length;
+  if (totalF > 40 && !_anShowAll) ps = ps.slice(0, 40);
   let rows = '';
   ps.forEach(function (p) {
     const last = p.daysSinceSale == null ? 'nunca' : (p.daysSinceSale + ' d');
@@ -978,7 +1008,7 @@ function anRenderTable() {
       '<td>' + anBadge(p) + '</td>' +
       '<td style="text-align:right"><button class="btn small ghost an-min" data-id="' + esc(String(p.id)) + '">mín</button></td></tr>';
   });
-  el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>Producto</th><th style="text-align:right">Stock</th><th style="text-align:right">Vend ' + win + 'd</th><th style="text-align:right">Últ venta</th><th style="text-align:right">Cobertura</th><th>Alerta</th><th style="text-align:right">Mín</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>Producto</th><th style="text-align:right">Stock</th><th style="text-align:right">Vend ' + win + 'd</th><th style="text-align:right">Últ venta</th><th style="text-align:right">Cobertura</th><th>Alerta</th><th style="text-align:right">Mín</th></tr></thead><tbody>' + rows + '</tbody></table>' + (totalF > 40 && !_anShowAll ? '<div style="margin-top:8px"><button class="btn small ghost" onclick="anShowAll()">Mostrar los ' + totalF + ' productos con stock ›</button></div>' : '');
   el.querySelectorAll('.an-min').forEach(function (btn) {
     btn.addEventListener('click', function () { anSetMin(btn.getAttribute('data-id')); });
   });
