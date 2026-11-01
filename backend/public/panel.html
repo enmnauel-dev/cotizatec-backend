@@ -1636,6 +1636,18 @@ async function renderConducesContent(report) {
     }).join('') + '</tbody></table>';
 }
 
+function printDocHTML(html) {
+  if (!html) { alert('El documento no trajo contenido.'); return; }
+  const w = window.open('', '_blank');
+  if (!w) { alert('Permite las ventanas emergentes para ver el documento.'); return; }
+  let h = String(html);
+  const bar = '<div style="position:fixed;top:10px;right:10px;z-index:9999;-webkit-print-color-adjust:exact;print-color-adjust:exact"><button onclick="window.print()" style="background:#6366f1;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer">Imprimir / Guardar PDF</button></div>';
+  h = h.indexOf('</body>') >= 0 ? h.replace('</body>', bar + '</body>') : (h + bar);
+  const style = '<style>@media print{div[style*="z-index:9999"]{display:none!important}}</style>';
+  h = h.indexOf('</head>') >= 0 ? h.replace('</head>', style + '</head>') : (style + h);
+  w.document.open(); w.document.write(h); w.document.close(); w.focus();
+}
+
 async function viewConduce(id) {
   try {
     const j = await api('/api/conduces/' + encodeURIComponent(id));
