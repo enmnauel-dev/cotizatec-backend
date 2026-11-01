@@ -102,13 +102,14 @@ function computeAnalytics(state, opts) {
     const minEfectivo = (minStockMap[id] != null && isFinite(Number(minStockMap[id]))) ? num(minStockMap[id]) : lowDefault;
 
     let dead = false, low = false, out = false;
+    const unitCost = num(p.cost) || 0;
+    if (unitCost <= 0) itemsSinCosto++;   // margen ciego: sin costo, tenga o no stock
     if (stockNum != null) {
       if (stockNum <= 0) { out = true; agotados++; }
       else {
         if (stockNum <= minEfectivo) { low = true; bajos++; }
         if (!enVentana && (daysSinceSale == null || daysSinceSale >= deadDays)) { dead = true; muertos++; }
-        const unitCost = num(p.cost) || 0;
-        if (unitCost > 0) valorInventario += stockNum * unitCost; else itemsSinCosto++;
+        if (unitCost > 0) valorInventario += stockNum * unitCost;
       }
     }
 
@@ -121,6 +122,7 @@ function computeAnalytics(state, opts) {
       daysSinceSale: daysSinceSale,
       daysCover: (stockNum != null && stockNum > 0 && unitsPerDay > 0) ? Math.round(stockNum / unitsPerDay) : null,
       dead: dead, low: low, out: out,
+      noCost: unitCost <= 0,
       marginUnknown: !!s.costUnknown
     });
   });
