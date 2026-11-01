@@ -219,6 +219,9 @@ app.post('/api/client/change-password', async (req, res) => {
 app.post('/api/client/login', async (req, res) => {
   try {
     const username = String(req.body.username || '').trim();
+    if (rateLimited(req, res, 'login:' + username.toLowerCase(), 8, 15 * 60 * 1000)) {
+      return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos.', code: 'RATE_LIMITED' });
+    }
     const password = String(req.body.password || '');
     const account = store.getWebAccountByUsername(username);
     if (!account) {
@@ -232,9 +235,27 @@ app.post('/api/client/login', async (req, res) => {
     res.json({ ok: true, token, role: account.role || 'owner', userId: account.userId, name: account.name || (store.getClient(account.clientId) || {}).name || username });
   } catch (e) {
     console.error('[client] login error:', e.message);
-    res.status(500).json({ error: 'Error al iniciar sesiÃ³n.' });
+    res.status(500).json({ error: 'Error al iniciar sesión.' });
   }
 });
+
+// ===== Limitador de intentos en memoria (anti fuerza bruta) =====
+// Render corre una sola instancia, asi que un Map basta; se limpia solo.
+const _rl = new Map();
+function rateLimited(req, res, bucket, max, windowMs) {
+  const ip = String((req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || '?');
+  const key = bucket + '|' + ip;
+  const now = Date.now();
+  const rec = _rl.get(key);
+  if (!rec || now > rec.reset) { _rl.set(key, { n: 1, reset: now + windowMs }); return false; }
+  rec.n++;
+  if (rec.n > max) {
+    res.set('Retry-After', String(Math.max(1, Math.ceil((rec.reset - now) / 1000))));
+    return true;
+  }
+  return false;
+}
+setInterval(function () { const t = Date.now(); _rl.forEach(function (v, k) { if (t > v.reset) _rl.delete(k); }); }, 10 * 60 * 1000).unref();
 
 function requireClient(req, res) {
   const auth = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
@@ -956,6 +977,11 @@ app.get('/api/device/:deviceId/pending', (req, res) => {
 
 // El dispositivo sube sus entradas de stock locales para que el panel web las vea.
 app.post('/api/device/:deviceId/stock-entries', (req, res) => {
+  const _cliS = store.getClientByDeviceId(String(req.params.deviceId || '').trim());
+  if (_cliS && _cliS.operatorPermissions && _cliS.operatorPermissions.canRegisterStockEntry === false) {
+    console.log('[device] stock-entries rechazadas por permiso OFF: ' + req.params.deviceId);
+    return res.status(403).json({ error: 'El dueño tiene desactivado el permiso de registrar entradas de inventario.', code: 'PERM_DENIED' });
+  }
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId || deviceId.length < 8 || deviceId.length > 128) {
     return res.status(400).json({ error: 'deviceId inválido' });
@@ -990,6 +1016,13 @@ app.post('/api/device/:deviceId/stock-entries', (req, res) => {
 
 // El dispositivo sube sus conduces locales para que el panel web los vea.
 app.post('/api/device/:deviceId/conduces', (req, res) => {
+  // Defensa en profundidad: aunque el telefono deba respetar el permiso (app),
+  // el servidor rechaza subidas de conduces si el dueno lo tiene desactivado.
+  const _cliC = store.getClientByDeviceId(String(req.params.deviceId || '').trim());
+  if (_cliC && _cliC.operatorPermissions && _cliC.operatorPermissions.canCreateConduce === false) {
+    console.log('[device] conduces rechazados por permiso OFF: ' + req.params.deviceId);
+    return res.status(403).json({ error: 'El dueño tiene desactivado el permiso de crear conduces.', code: 'PERM_DENIED' });
+  }
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId || deviceId.length < 8 || deviceId.length > 128) {
     return res.status(400).json({ error: 'deviceId inválido' });
